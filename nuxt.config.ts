@@ -107,7 +107,31 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: 'uk' },
-      meta: [{ name: 'viewport', content: 'width=device-width, initial-scale=1' }],
+      meta: [
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'color-scheme', content: 'light dark' },
+      ],
+      script: [
+        {
+          /*
+           * Блокуючий скрипт, що виконується ДО першого малювання.
+           *
+           * Сторінки прередерені, і в їхньому HTML класу .dark немає — його
+           * ставить тільки клієнт. Без цього рядка користувач із темною
+           * темою бачив би білий спалах на КОЖНОМУ завантаженні, поки не
+           * відпрацює гідрація.
+           *
+           * try/catch обов'язковий: у приватному режимі Safari звернення до
+           * localStorage кидає виняток, і без нього сторінка не намалювалася б
+           * узагалі.
+           */
+          innerHTML:
+            "(()=>{try{const s=localStorage.getItem('tatetui-theme');" +
+            "const d=s?s==='dark':matchMedia('(prefers-color-scheme:dark)').matches;" +
+            "if(d)document.documentElement.classList.add('dark')}catch(e){}})()",
+          tagPriority: 'critical',
+        },
+      ],
     },
   },
 })
