@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import UiDrawer from '~/components/ui/UiDrawer.vue'
+import DocsSearch from '~/components/docs/DocsSearch.vue'
 import DocsSidebar from '~/components/docs/DocsSidebar.vue'
 import DocsThemeToggle from '~/components/docs/DocsThemeToggle.vue'
 
@@ -30,7 +31,8 @@ watch(() => route.path, () => (mobileNavOpen.value = false))
 
       <NuxtLink to="/" class="font-semibold tracking-tight">tatetUI</NuxtLink>
 
-      <div class="ml-auto">
+      <div class="ml-auto flex items-center gap-2">
+        <DocsSearch />
         <DocsThemeToggle />
       </div>
     </header>

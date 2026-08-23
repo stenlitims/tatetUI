@@ -54,7 +54,7 @@ export default defineNuxtConfig({
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/'],
+      routes: ['/', '/api/search.json'],
       failOnError: true,
     },
   },
