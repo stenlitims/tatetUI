@@ -26,6 +26,14 @@ const props = withDefaults(
     autoresize?: boolean
     /** Стеля висоти в рядках для `autoresize`. */
     maxRows?: number
+    /**
+     * Додаткові класи на сам `<textarea>`.
+     *
+     * Звичайний `class` осідає на кореневому `<div>` разом із лейблом і
+     * текстом помилки — це правильно для відступів, але не дає, скажімо,
+     * зробити поле моноширинним. Цей проп цілить саме в поле.
+     */
+    inputClass?: string
     name?: string
   }>(),
   { rows: 4, maxRows: 12 },
@@ -59,6 +67,7 @@ const classes = computed(() => [
   hasError.value ? 'border-danger focus-visible:ring-danger' : 'border-line focus-visible:border-accent-solid',
   props.disabled ? 'cursor-not-allowed opacity-50' : '',
   props.autoresize ? 'resize-none overflow-y-auto scrollbar-thin' : 'resize-y',
+  props.inputClass ?? '',
 ])
 
 /*

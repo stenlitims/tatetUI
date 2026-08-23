@@ -23,6 +23,14 @@ export default defineNuxtConfig({
     // Сканувати всі компоненти, не лише глобальні: бібліотека живе в
     // app/components/ui і глобально не реєструється.
     globalsOnly: false,
+    /**
+     * Внутрішні файли редактора в таблицях API не потрібні: сторінка описує
+     * UiRichTextEditor, а RteToolbar чи RteIconBtn — його приватна кухня.
+     *
+     * Без цього vue-component-meta будує окрему TS-програму на КОЖЕН із
+     * десятка SFC, і кожна тягне типи @tiptap — найдорожча частина збірки.
+     */
+    exclude: [/[\\/]ui[\\/]rich-text-editor[\\/]/],
     // `type` вимкнено свідомо: це повний тип компонента, у таблиці API він
     // не потрібен, а в JSON виходить на порядок більшим за все інше разом.
     metaFields: { type: false, props: true, slots: true, events: true, exposed: true },
@@ -60,6 +68,26 @@ export default defineNuxtConfig({
   },
 
   hooks: {
+    /**
+     * Демо редактора не префетчимо.
+     *
+     * Реєстр демо ключується глобами в useDemoRegistry, і всі його
+     * динамічні імпорти лежать у маніфесті ComponentPreview. Виміряно на
+     * зібраній сторінці Button: 63 посилання rel="prefetch" на 258 КБ —
+     * тобто КОЖНЕ демо сайту, включно з CSS скелетона там, де скелетона
+     * немає. Поки чанки по 3-7 КБ, ціна прийнятна. Чанк редактора — ~178 КБ
+     * gzip; віддавати його на сторінці «Токени» не можна навіть на
+     * idle-пріоритеті.
+     *
+     * prefetch: false знімає лише <link>. Чанк лишається окремим і
+     * вантажиться тоді, коли ComponentPreview його справді імпортує.
+     */
+    'build:manifest'(manifest) {
+      for (const [key, entry] of Object.entries(manifest)) {
+        if (key.includes('demos/rich-text-editor/')) entry.prefetch = false
+      }
+    },
+
     /**
      * Кожен .md із content/docs стає маршрутом явно.
      *
