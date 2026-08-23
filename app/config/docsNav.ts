@@ -78,7 +78,10 @@ export const docsNav: NavGroup[] = [
   },
   {
     title: 'Контент',
-    items: [{ title: 'Prose', to: '/docs/components/prose' }],
+    items: [
+      { title: 'Prose', to: '/docs/components/prose' },
+      { title: 'RichTextEditor', to: '/docs/components/rich-text-editor', status: 'wip' },
+    ],
   },
   {
     title: 'Патерни',
