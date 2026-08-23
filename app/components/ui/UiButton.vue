@@ -3,17 +3,15 @@ import { computed, ref } from 'vue'
 import { NuxtLink } from '#components'
 import UiLoadingDots from './UiLoadingDots.vue'
 
-type Variant = 'solid' | 'soft' | 'outline' | 'ghost' | 'danger'
-type Size = 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
-
 const props = withDefaults(
   defineProps<{
     /** Візуальна вага. `solid` — головна дія на екрані, вона має бути одна. */
-    variant?: Variant
+    variant?: 'solid' | 'soft' | 'outline' | 'ghost' | 'danger'
     /** Розмір. `icon` і `icon-sm` — квадратні, для кнопок без тексту. */
-    size?: Size
+    size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
     /** Блокує кліки й показує індикатор, зберігаючи ширину кнопки. */
     loading?: boolean
+    /** Блокує кліки. На відміну від `loading`, не показує індикатора. */
     disabled?: boolean
     /**
      * Робить кнопку посиланням: корінь стає `NuxtLink` замість `button`.
@@ -21,6 +19,7 @@ const props = withDefaults(
      * середній клік, Ctrl+клік і пункт «відкрити в новій вкладці».
      */
     to?: string | Record<string, unknown>
+    /** Тип нативної кнопки. Ігнорується, коли задано `to`. */
     type?: 'button' | 'submit' | 'reset'
     /**
      * Доступна назва. ОБОВ'ЯЗКОВИЙ для кнопок без тексту — інакше кнопка
@@ -29,13 +28,34 @@ const props = withDefaults(
     label?: string
     /** Розтягує кнопку на всю ширину контейнера. */
     block?: boolean
+    /** Нативна підказка при наведенні. Не замінює `label` для скрінрідера. */
     title?: string
   }>(),
   { variant: 'solid', size: 'md', type: 'button' },
 )
 
+/**
+ * Аліаси виводяться З типу props, а не оголошуються окремо перед ним.
+ *
+ * Це не стилістика. nuxt-component-meta друкує в таблиці API те, що
+ * бачить у defineProps: якщо там стоїть посилання на аліас, у колонку
+ * «Тип» потрапляє слово «Variant», а не перелік значень — тобто саме те,
+ * заради чого читач і відкрив таблицю. Інлайновий union розкривається
+ * повністю (перевірено на /api/component-meta/UiButton).
+ */
+type Variant = NonNullable<typeof props.variant>
+type Size = NonNullable<typeof props.size>
+
+/*
+ * JSDoc на подіях nuxt-component-meta НЕ витягує — на відміну від props і
+ * слотів, поле description для events повертається порожнім за будь-якого
+ * синтаксису (перевірено і кортежний `click: [e]`, і call-signature
+ * `(e: 'click'): void`). Тому опис подій у таблиці API береться з
+ * frontmatter сторінки, а наявність цього коментаря стереже check-docs,
+ * читаючи сам SFC. У редакторі підказка все одно працює.
+ */
 const emit = defineEmits<{
-  /** Не спрацьовує, поки кнопка `disabled` або `loading`. */
+  /** Клік по кнопці. Не спрацьовує, поки вона `disabled` або `loading`. */
   click: [event: MouseEvent]
 }>()
 

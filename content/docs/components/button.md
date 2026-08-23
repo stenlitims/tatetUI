@@ -4,6 +4,8 @@ description: Основна кнопка дії з варіантами, роз�
 component: UiButton
 dependsOn:
   - app/components/ui/UiLoadingDots.vue
+emitDescriptions:
+  click: Клік по кнопці. Не спрацьовує, поки вона `disabled` або `loading`.
 status: stable
 order: 1
 ---
@@ -30,6 +32,11 @@ order: 1
 не змінює ширину посеред запиту, тож сусідні елементи не стрибають.
 
 ::component-preview{name="button-loading"}
+::
+
+## API
+
+::component-api
 ::
 
 ## Коли використовувати

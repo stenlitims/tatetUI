@@ -19,6 +19,15 @@ if (!page.value) {
 
 useHead({ title: `${page.value.title} — tatetUI` })
 useSeoMeta({ description: page.value.description })
+
+/**
+ * Ім'я компонента і описи подій віддаємо вниз через provide, щоб у
+ * markdown не доводилось писати `::component-api{name="UiButton"}` —
+ * назва вже стоїть у frontmatter, і дублювати її означало б дати їй шанс
+ * розійтися.
+ */
+provide('docsPageComponent', page.value.component)
+provide('docsPageEmitDescriptions', page.value.emitDescriptions ?? {})
 </script>
 
 <template>

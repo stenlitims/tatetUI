@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
-  modules: ['@nuxt/content'],
+  modules: ['@nuxt/content', 'nuxt-component-meta'],
 
   // ssr: true (за замовчуванням) — НЕ вимикати.
   // Сайт прередериться статикою; у SPA-режимі @nuxt/content змушений
@@ -17,6 +17,13 @@ export default defineNuxtConfig({
 
   vite: {
     plugins: [shikiRaw(), tailwindcss()],
+  },
+
+  componentMeta: {
+    // Сканувати всі компоненти, не лише глобальні: бібліотека живе в
+    // app/components/ui і глобально не реєструється.
+    globalsOnly: false,
+    metaFields: { props: true, slots: true, events: true, exposed: true },
   },
 
   content: {
@@ -76,6 +83,21 @@ export default defineNuxtConfig({
       for (const file of await walk('')) {
         const slug = file.replace(/\.md$/, '').replace(/(^|\/)index$/, '')
         ctx.routes.add(`/docs/${slug}`.replace(/\/$/, ''))
+      }
+
+      /**
+       * Мета кожного компонента бібліотеки — теж маршрут.
+       *
+       * ComponentApi ходить у /api/component-meta/:name через
+       * useAsyncData. Без прередеру цих маршрутів статична збірка
+       * лишилася б без даних, і таблиці API були б порожні — а помітили б
+       * це лише в проді, бо в dev Nitro відповідає наживо.
+       */
+      const uiDir = new URL('./app/components/ui/', import.meta.url)
+      for (const entry of await readdir(uiDir)) {
+        if (entry.endsWith('.vue')) {
+          ctx.routes.add(`/api/component-meta/${entry.replace(/\.vue$/, '')}`)
+        }
       }
     },
   },

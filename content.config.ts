@@ -23,6 +23,17 @@ export default defineContentConfig({
          */
         dependsOn: z.array(z.string()).default([]),
 
+        /**
+         * Описи подій компонента, ключ — ім'я події.
+         *
+         * Єдине місце, де опис пишеться руками: nuxt-component-meta не
+         * витягує JSDoc для events (для props і слотів — витягує).
+         * Щоб це не роз'їхалося, check-docs звіряє набір ключів тут із
+         * реальним списком подій із меты — зайвий або забутий ключ валить
+         * збірку.
+         */
+        emitDescriptions: z.record(z.string(), z.string()).default({}),
+
         status: z.enum(['stable', 'beta', 'wip']).default('stable'),
 
         /** Порядок усередині групи сайдбару (менше — вище). */
