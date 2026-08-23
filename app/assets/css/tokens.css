@@ -1,0 +1,199 @@
+/* ==================================================================== */
+/*  tatetUI — токени дизайн-системи                                     */
+/*                                                                      */
+/*  Це ЧИСТИЙ CSS без жодного синтаксису Tailwind. Файл копіюється у    */
+/*  проєкт на Tailwind v3 і на Tailwind v4 без змін — різниця лише в    */
+/*  тому, як токени реєструються в утилітах:                            */
+/*    v4 → app/assets/css/theme.css   (@theme inline)                   */
+/*    v3 → public/port/tailwind.v3.config.cjs  (withOpacity)            */
+/*                                                                      */
+/*  Кожен колір оголошено ДВІЧІ:                                        */
+/*    --x      — hex, споживає Tailwind v4 (альфа через color-mix)      */
+/*    --x-rgb  — триплет через кому, споживає Tailwind v3 через         */
+/*               rgba(var(--x-rgb), <alpha>) у шимі withOpacity()       */
+/*                                                                      */
+/*  Кома, а не пробіл: chat, tatet-cms і ClayArena вже мають            */
+/*  withOpacity() саме під комовий формат, тож файл падає до них без    */
+/*  правок їхніх tailwind.config.js.                                    */
+/*                                                                      */
+/*  Пари hex↔rgb перевіряє `bun run check:docs` — розійтися вони не     */
+/*  можуть непоміченими.                                                */
+/* ==================================================================== */
+
+/* -------------------------------------------------------------------- */
+/*  Світла тема (за замовчуванням)                                      */
+/* -------------------------------------------------------------------- */
+
+:root {
+  /* Брендова шкала. Бренд — синій.
+     50-200 — світлі підкладки, 400-600 — активні поверхні, 700 — hover
+     суцільних CTA, 800-900 — джерело підкладок з альфою. */
+  --brand-50: #eff6ff;            --brand-50-rgb: 239, 246, 255;
+  --brand-100: #dbeafe;           --brand-100-rgb: 219, 234, 254;
+  --brand-200: #bfdbfe;           --brand-200-rgb: 191, 219, 254;
+  --brand-300: #93c5fd;           --brand-300-rgb: 147, 197, 253;
+  --brand-400: #60a5fa;           --brand-400-rgb: 96, 165, 250;
+  --brand-500: #3b82f6;           --brand-500-rgb: 59, 130, 246;
+  --brand-600: #2563eb;           --brand-600-rgb: 37, 99, 235;
+  --brand-700: #1d4ed8;           --brand-700-rgb: 29, 78, 216;
+  --brand-800: #1e40af;           --brand-800-rgb: 30, 64, 175;
+  --brand-900: #1e3a8a;           --brand-900-rgb: 30, 58, 138;
+
+  /* Текст */
+  --ink: #1a1d21;                 --ink-rgb: 26, 29, 33;
+  --ink-muted: #5b6472;           --ink-muted-rgb: 91, 100, 114;
+
+  /* Поверхні */
+  --bg-main: #f7f8fa;             --bg-main-rgb: 247, 248, 250;
+  --bg-card: #ffffff;             --bg-card-rgb: 255, 255, 255;
+  --bg-input: #ffffff;            --bg-input-rgb: 255, 255, 255;
+  --bg-dropdown: #ffffff;         --bg-dropdown-rgb: 255, 255, 255;
+  --bg-hover: #f1f5f9;            --bg-hover-rgb: 241, 245, 249;
+  --bg-subtle: #f8fafc;           --bg-subtle-rgb: 248, 250, 252;
+
+  /* Межі */
+  --line: #e2e6ec;                --line-rgb: 226, 230, 236;
+  --line-strong: #cbd3dd;         --line-strong-rgb: 203, 211, 221;
+  --scrollbar-thumb: #c3cad4;     --scrollbar-thumb-rgb: 195, 202, 212;
+
+  /* Семантика дії.
+     accent — для ТЕКСТУ та іконок: #1d4ed8 дає 6.29:1 на білому.
+     accent-solid — ЗАЛИВКА кнопки з білим текстом: #2563eb = 4.56:1 (AA).
+     Розділені навмисно: той самий відтінок не може одночасно бути
+     читабельним текстом і достатньо контрастною заливкою під білим. */
+  --accent: #1d4ed8;              --accent-rgb: 29, 78, 216;
+  --accent-solid: #2563eb;        --accent-solid-rgb: 37, 99, 235;
+  --accent-solid-hover: #1d4ed8;  --accent-solid-hover-rgb: 29, 78, 216;
+  --accent-contrast: #ffffff;     --accent-contrast-rgb: 255, 255, 255;
+
+  /* Фокус. Окремі токени, а не «десь взяти accent»: у чотирьох ваших
+     проєктах фокус-кільце написане по-різному в кожному компоненті
+     (focus:ring-primary-500/20, outline: 2px solid var(--accent), …).
+     Без єдиного токена контракт доступності не перевіриш автоматично.
+     ring-offset — колір ПІД елементом, щоб кільце було видно й на
+     суцільній кнопці; тому це тло сторінки, а не картки. */
+  --ring: #2563eb;                --ring-rgb: 37, 99, 235;
+  --ring-offset: #f7f8fa;         --ring-offset-rgb: 247, 248, 250;
+
+  /* Статуси. Текстові відтінки темніші за заливкові з тієї ж причини,
+     що accent ≠ accent-solid. */
+  --success: #15803d;             --success-rgb: 21, 128, 61;
+  --success-bg: #dcfce7;          --success-bg-rgb: 220, 252, 231;
+  --success-line: #bbf7d0;        --success-line-rgb: 187, 247, 208;
+  --warning: #b45309;             --warning-rgb: 180, 83, 9;
+  --warning-bg: #fef3c7;          --warning-bg-rgb: 254, 243, 199;
+  --warning-line: #fde68a;        --warning-line-rgb: 253, 230, 138;
+  --danger: #b91c1c;              --danger-rgb: 185, 28, 28;
+  --danger-bg: #fee2e2;           --danger-bg-rgb: 254, 226, 226;
+  --danger-line: #fecaca;         --danger-line-rgb: 254, 202, 202;
+  --info: #0369a1;                --info-rgb: 3, 105, 161;
+  --info-bg: #e0f2fe;             --info-bg-rgb: 224, 242, 254;
+  --info-line: #bae6fd;           --info-line-rgb: 186, 230, 253;
+  --neutral: #475569;             --neutral-rgb: 71, 85, 105;
+  --neutral-bg: #f1f5f9;          --neutral-bg-rgb: 241, 245, 249;
+  --neutral-line: #e2e8f0;        --neutral-line-rgb: 226, 232, 240;
+
+  /* Семантичні радіуси: контрол / картка / оверлей.
+     Іменовані за РОЛЛЮ, а не за розміром — інакше «зробимо тут трохи
+     кругліше» розповзається по проєкту без жодного правила. */
+  --radius-control: 0.5rem;
+  --radius-card: 0.75rem;
+  --radius-overlay: 1rem;
+
+  /* Семантичні тіні: картка / підняте / оверлей. */
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
+  --shadow-raised: 0 4px 12px rgb(16 24 40 / 0.08), 0 2px 4px rgb(16 24 40 / 0.04);
+  --shadow-overlay: 0 16px 48px rgb(16 24 40 / 0.16), 0 4px 12px rgb(16 24 40 / 0.08);
+
+  /* Каркас застосунку */
+  --header-height: 3.25rem;
+}
+
+/* -------------------------------------------------------------------- */
+/*  Темна тема                                                          */
+/*                                                                      */
+/*  Керується класом .dark на <html>, а не медіазапитом — користувач    */
+/*  має мати змогу перемкнути її вручну.                                */
+/* -------------------------------------------------------------------- */
+
+.dark {
+  /* 50-200 — щільні темні еквіваленти світлих підкладок: у темній темі
+     напівпрозорий світлий синій над #101216 дає брудний сірий, тому
+     потрібні готові непрозорі відтінки.
+     700 лишається ТЕМНІШИМ за 600, бо це hover суцільних CTA з білим
+     текстом — світліший hover роняв би контраст.
+     800-900 навпаки СВІТЛІШАЮТЬ: вони працюють лише як джерело підкладок
+     з альфою (bg-primary-900/30), а темний відтінок під 30% альфи над
+     майже чорним тлом не дав би нічого видимого. */
+  --brand-50: #151b26;            --brand-50-rgb: 21, 27, 38;
+  --brand-100: #16202f;           --brand-100-rgb: 22, 32, 47;
+  --brand-200: #1b2a41;           --brand-200-rgb: 27, 42, 65;
+  --brand-300: #2f4a75;           --brand-300-rgb: 47, 74, 117;
+  --brand-400: #60a5fa;           --brand-400-rgb: 96, 165, 250;
+  --brand-500: #3b82f6;           --brand-500-rgb: 59, 130, 246;
+  --brand-600: #2563eb;           --brand-600-rgb: 37, 99, 235;
+  --brand-700: #1d4ed8;           --brand-700-rgb: 29, 78, 216;
+  --brand-800: #4b8bf5;           --brand-800-rgb: 75, 139, 245;
+  --brand-900: #6ba3f8;           --brand-900-rgb: 107, 163, 248;
+
+  --ink: #f1f3f5;                 --ink-rgb: 241, 243, 245;
+  --ink-muted: #9aa4b2;           --ink-muted-rgb: 154, 164, 178;
+
+  --bg-main: #101216;             --bg-main-rgb: 16, 18, 22;
+  --bg-card: #181b20;             --bg-card-rgb: 24, 27, 32;
+  --bg-input: #1c2026;            --bg-input-rgb: 28, 32, 38;
+  --bg-dropdown: #1c2026;         --bg-dropdown-rgb: 28, 32, 38;
+  --bg-hover: #22262e;            --bg-hover-rgb: 34, 38, 46;
+  --bg-subtle: #14171c;           --bg-subtle-rgb: 20, 23, 28;
+
+  --line: #2a2f38;                --line-rgb: 42, 47, 56;
+  --line-strong: #3a4150;         --line-strong-rgb: 58, 65, 80;
+  --scrollbar-thumb: #3a4150;     --scrollbar-thumb-rgb: 58, 65, 80;
+
+  /* На #101216 світлий синій читається з контрастом 8.4:1, тож акцентний
+     ТЕКСТ світлішає, а ЗАЛИВКА лишається брендовою і світлішає на hover —
+     на темному тлі це природніший напрямок реакції. */
+  --accent: #60a5fa;              --accent-rgb: 96, 165, 250;
+  --accent-solid: #2563eb;        --accent-solid-rgb: 37, 99, 235;
+  --accent-solid-hover: #3b82f6;  --accent-solid-hover-rgb: 59, 130, 246;
+  --accent-contrast: #ffffff;     --accent-contrast-rgb: 255, 255, 255;
+
+  --ring: #60a5fa;                --ring-rgb: 96, 165, 250;
+  --ring-offset: #101216;         --ring-offset-rgb: 16, 18, 22;
+
+  --success: #4ade80;             --success-rgb: 74, 222, 128;
+  --success-bg: #0f2a1a;          --success-bg-rgb: 15, 42, 26;
+  --success-line: #1a4430;        --success-line-rgb: 26, 68, 48;
+  --warning: #fbbf24;             --warning-rgb: 251, 191, 36;
+  --warning-bg: #2b1f08;          --warning-bg-rgb: 43, 31, 8;
+  --warning-line: #453314;        --warning-line-rgb: 69, 51, 20;
+  --danger: #f87171;              --danger-rgb: 248, 113, 113;
+  --danger-bg: #2c1416;           --danger-bg-rgb: 44, 20, 22;
+  --danger-line: #4a2024;         --danger-line-rgb: 74, 32, 36;
+  --info: #38bdf8;                --info-rgb: 56, 189, 248;
+  --info-bg: #0a2233;             --info-bg-rgb: 10, 34, 51;
+  --info-line: #14384f;           --info-line-rgb: 20, 56, 79;
+  --neutral: #94a3b8;             --neutral-rgb: 148, 163, 184;
+  --neutral-bg: #1c2026;          --neutral-bg-rgb: 28, 32, 38;
+  --neutral-line: #2a2f38;        --neutral-line-rgb: 42, 47, 56;
+
+  /* Тіні на темному тлі мусять бути СИЛЬНІШІ: 4% чорного над #101216
+     не видно взагалі, тож картка «злипається» з тлом. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+  --shadow-raised: 0 4px 12px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.3);
+  --shadow-overlay: 0 16px 48px rgb(0 0 0 / 0.6), 0 4px 12px rgb(0 0 0 / 0.4);
+}
+
+/* -------------------------------------------------------------------- */
+/*  Мобільний каркас                                                    */
+/*                                                                      */
+/*  Шапка на телефоні вища: 3.25rem = 48.75px вистачало під кнопки h-8, */
+/*  але мінімальна ціль для пальця — 44px, і вона мусить поміститися    */
+/*  разом із полями шапки. Межа збігається з md: Tailwind.              */
+/* -------------------------------------------------------------------- */
+
+@media (width < 48rem) {
+  :root {
+    --header-height: 3.5rem;
+  }
+}

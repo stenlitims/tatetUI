@@ -1,0 +1,91 @@
+/* ==================================================================== */
+/*  Реєстрація токенів у Tailwind v4                                    */
+/*                                                                      */
+/*  ЄДИНИЙ файл, специфічний для v4. У проєкті на v3 його замінює       */
+/*  public/port/tailwind.v3.config.cjs — а tokens.css лишається тим     */
+/*  самим.                                                              */
+/*                                                                      */
+/*  `inline` — критично. Без нього утиліта копіює ЗНАЧЕННЯ var() у      */
+/*  момент генерації, і перевизначення в .dark перестає діяти: bg-card  */
+/*  назавжди застигає білим. З `inline` утиліта посилається на var(),   */
+/*  тож тему перемикає сам каскад, без dark:-варіантів у компонентах.   */
+/*                                                                      */
+/*  Альфа (bg-primary-900/30) у v4 працює нативно через color-mix(),    */
+/*  тому rgb-триплети з tokens.css тут не потрібні — вони існують суто  */
+/*  заради переносності у v3.                                           */
+/* ==================================================================== */
+
+/* Темна тема — клас, не медіазапит: користувач перемикає її вручну.
+   :where() тримає специфічність на нулі, щоб .dark не вигравав у
+   утиліт, написаних пізніше. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  /* Текст: text-ink / text-muted.
+     Свідомо НЕ text-primary — інакше text-primary (колір тексту) і
+     text-primary-600 (бренд) означали б різні речі під майже
+     однаковою назвою. */
+  --color-ink: var(--ink);
+  --color-muted: var(--ink-muted);
+
+  /* Поверхні: bg-main / bg-card / bg-input / bg-dropdown / bg-hover / bg-subtle */
+  --color-main: var(--bg-main);
+  --color-card: var(--bg-card);
+  --color-input: var(--bg-input);
+  --color-dropdown: var(--bg-dropdown);
+  --color-hover: var(--bg-hover);
+  --color-subtle: var(--bg-subtle);
+
+  /* Межі: border-line / divide-line / border-line-strong */
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* Брендова шкала: bg-primary-600, text-primary-400, bg-primary-900/30 … */
+  --color-primary-50: var(--brand-50);
+  --color-primary-100: var(--brand-100);
+  --color-primary-200: var(--brand-200);
+  --color-primary-300: var(--brand-300);
+  --color-primary-400: var(--brand-400);
+  --color-primary-500: var(--brand-500);
+  --color-primary-600: var(--brand-600);
+  --color-primary-700: var(--brand-700);
+  --color-primary-800: var(--brand-800);
+  --color-primary-900: var(--brand-900);
+
+  /* Дія: bg-accent-solid / text-accent / text-accent-contrast */
+  --color-accent: var(--accent);
+  --color-accent-solid: var(--accent-solid);
+  --color-accent-solid-hover: var(--accent-solid-hover);
+  --color-accent-contrast: var(--accent-contrast);
+
+  /* Фокус: ring-ring / ring-offset-ring-offset */
+  --color-ring: var(--ring);
+  --color-ring-offset: var(--ring-offset);
+
+  /* Статуси: text-success / bg-success-bg / border-success-line */
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-line: var(--success-line);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-line: var(--warning-line);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-line: var(--danger-line);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --color-info-line: var(--info-line);
+  --color-neutral: var(--neutral);
+  --color-neutral-bg: var(--neutral-bg);
+  --color-neutral-line: var(--neutral-line);
+
+  /* Радіуси: rounded-control / rounded-card / rounded-overlay */
+  --radius-control: var(--radius-control);
+  --radius-card: var(--radius-card);
+  --radius-overlay: var(--radius-overlay);
+
+  /* Тіні: shadow-card / shadow-raised / shadow-overlay */
+  --shadow-card: var(--shadow-card);
+  --shadow-raised: var(--shadow-raised);
+  --shadow-overlay: var(--shadow-overlay);
+}

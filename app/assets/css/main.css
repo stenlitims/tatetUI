@@ -1,0 +1,107 @@
+/* ==================================================================== */
+/*  tatetUI — точка входу стилів                                        */
+/*                                                                      */
+/*  Порядок імпортів має значення:                                      */
+/*    1. tailwindcss — ПЕРШИМ, інакше нічого не генерується             */
+/*    2. tokens.css — значення (портативні, чистий CSS)                 */
+/*    3. theme.css  — реєстрація значень в утилітах (лише v4)           */
+/*                                                                      */
+/*  @theme свідомо винесено в окремий файл, а не тримається тут поруч   */
+/*  із @import 'tailwindcss'. У DashClayarena записано, що так робити   */
+/*  не можна — нібито генерація утиліт мовчки зупиняється. На Tailwind  */
+/*  4.3.3 це НЕ відтворюється: перевірено збіркою, .bg-card виходить    */
+/*  як background-color:var(--bg-card), альфа працює через color-mix.   */
+/*  Розділення потрібне заради переносності: tokens.css має лишатися    */
+/*  єдиним файлом, який копіюють у v3-проєкт.                           */
+/* ==================================================================== */
+
+@import 'tailwindcss';
+@import './tokens.css';
+@import './theme.css';
+
+/* -------------------------------------------------------------------- */
+/*  Базовий шар                                                         */
+/* -------------------------------------------------------------------- */
+
+@layer base {
+  html {
+    /* 15px замість 16px: щільність інтерфейсу, як у решті проєктів.
+       Усі rem-розміри нижче рахуються від цього кореня — h-12 = 45px. */
+    font-size: 15px;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--ink);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+      'Helvetica Neue', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Видиме фокус-кільце. Скидати outline без заміни не можна —
+     керування з клавіатури стає сліпим. Це базовий рівень: компоненти
+     можуть замінити його на focus-visible:ring-*, але НЕ прибрати. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Табличні цифри: інакше колонки чисел «стрибають» при оновленні. */
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/*  Утиліти                                                             */
+/*                                                                      */
+/*  @utility — синтаксис Tailwind v4. У проєкті на v3 ці два класи      */
+/*  треба перенести у @layer utilities або плагін; про це попереджає    */
+/*  сторінка /docs/foundations/tokens.                                  */
+/* -------------------------------------------------------------------- */
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 4px;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/*  Зменшений рух                                                       */
+/*                                                                      */
+/*  Глобальний вимикач. Компоненти додатково мають нести               */
+/*  motion-reduce:animate-none там, де анімація несе сенс, а не декор.  */
+/* -------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
