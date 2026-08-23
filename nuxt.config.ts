@@ -1,4 +1,5 @@
 import tailwindcss from '@tailwindcss/vite'
+import { shikiRaw } from './build/vite-shiki-raw'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -15,7 +16,7 @@ export default defineNuxtConfig({
   css: ['~/assets/css/main.css'],
 
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [shikiRaw(), tailwindcss()],
   },
 
   content: {
@@ -46,6 +47,36 @@ export default defineNuxtConfig({
       crawlLinks: true,
       routes: ['/'],
       failOnError: true,
+    },
+  },
+
+  hooks: {
+    /**
+     * Кожен .md із content/docs стає маршрутом явно.
+     *
+     * Самого crawlLinks недостатньо: поки сторінка не потрапила в
+     * сайдбар, на неї немає жодного посилання — краулер її не бачить, і
+     * вона мовчки випадає зі статичної збірки. Помітили б це лише в проді.
+     */
+    async 'prerender:routes'(ctx) {
+      const { readdir } = await import('node:fs/promises')
+      const dir = new URL('./content/docs/', import.meta.url)
+
+      const walk = async (rel: string): Promise<string[]> => {
+        const entries = await readdir(new URL(rel, dir), { withFileTypes: true })
+        const out: string[] = []
+        for (const e of entries) {
+          if (e.isDirectory()) out.push(...(await walk(`${rel}${e.name}/`)))
+          // Файли на _ — службові (шаблон сторінки), маршрутами не є.
+          else if (e.name.endsWith('.md') && !e.name.startsWith('_')) out.push(rel + e.name)
+        }
+        return out
+      }
+
+      for (const file of await walk('')) {
+        const slug = file.replace(/\.md$/, '').replace(/(^|\/)index$/, '')
+        ctx.routes.add(`/docs/${slug}`.replace(/\/$/, ''))
+      }
     },
   },
 
