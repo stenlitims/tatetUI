@@ -23,7 +23,9 @@ export default defineNuxtConfig({
     // Сканувати всі компоненти, не лише глобальні: бібліотека живе в
     // app/components/ui і глобально не реєструється.
     globalsOnly: false,
-    metaFields: { props: true, slots: true, events: true, exposed: true },
+    // `type` вимкнено свідомо: це повний тип компонента, у таблиці API він
+    // не потрібен, а в JSON виходить на порядок більшим за все інше разом.
+    metaFields: { type: false, props: true, slots: true, events: true, exposed: true },
   },
 
   content: {
