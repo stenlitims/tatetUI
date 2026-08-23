@@ -64,7 +64,10 @@ export const docsNav: NavGroup[] = [
   },
   {
     title: 'Дані',
-    items: [{ title: 'Table', to: '/docs/components/table' }],
+    items: [
+      { title: 'Table', to: '/docs/components/table' },
+      { title: 'Menu', to: '/docs/components/menu' },
+    ],
   },
   {
     title: 'Стани',
