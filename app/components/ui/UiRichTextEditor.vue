@@ -3,6 +3,14 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import { CharacterCount, Placeholder } from '@tiptap/extensions'
+import TextAlign from '@tiptap/extension-text-align'
+import { TextStyle, Color } from '@tiptap/extension-text-style'
+import Highlight from '@tiptap/extension-highlight'
+import Subscript from '@tiptap/extension-subscript'
+import Superscript from '@tiptap/extension-superscript'
+import Typography from '@tiptap/extension-typography'
+import RteToolbar from './rich-text-editor/RteToolbar.vue'
+import { provideRteLabels, type RteLabels } from './rich-text-editor/labels'
 
 /**
  * Редактор форматованого тексту на TipTap.
@@ -35,6 +43,13 @@ const props = withDefaults(
     maxChars?: number
     /** Мінімальна висота поля, напр. `"12rem"`. */
     minHeight?: string
+    /**
+     * Перекриття підписів. Задавайте лише ключі, що змінюються.
+     *
+     * У проєкті з i18n це один виклик замість 152: передайте об'єкт із
+     * `t()`, і зміна мови оновить підписи без перемонтування редактора.
+     */
+    labels?: Partial<RteLabels>
   }>(),
   { mode: 'full', minHeight: '10rem', placeholder: 'Почніть писати…' },
 )
@@ -68,6 +83,8 @@ const isEditable = computed(() => !props.readonly && !props.disabled)
  */
 const uiTick = ref(0)
 
+provideRteLabels(() => props.labels)
+
 /*
  * ClientOnly тут НЕ потрібен, і це перевірено, а не припущено.
  *
@@ -86,7 +103,22 @@ const editor = useEditor({
       link: false,
     }),
     Placeholder.configure({ placeholder: () => props.placeholder }),
+    // Typography: друкарські лапки й тире прямо під час набору.
+    Typography,
     ...(props.maxChars ? [CharacterCount.configure({ limit: props.maxChars })] : []),
+    // Повний режим: вирівнювання, кольори, індекси. У simple їх немає не
+    // заради ваги бандла — розширення однаково в ньому, — а щоб тулбар
+    // короткого поля не виглядав як панель текстового процесора.
+    ...(props.mode === 'full'
+      ? [
+          TextAlign.configure({ types: ['heading', 'paragraph'] }),
+          TextStyle,
+          Color,
+          Highlight.configure({ multicolor: true }),
+          Subscript,
+          Superscript,
+        ]
+      : []),
   ],
   editorProps: {
     attributes: {
@@ -149,7 +181,9 @@ defineExpose({
     class="overflow-hidden rounded-card border bg-card transition-colors"
     :class="disabled ? 'opacity-50' : 'border-line focus-within:border-accent-solid'"
   >
-    <slot name="toolbar" :editor="editor" />
+    <slot name="toolbar" :editor="editor">
+      <RteToolbar :editor="editor" :tick="uiTick" :mode="mode" />
+    </slot>
 
     <div class="scrollbar-thin overflow-y-auto px-4 py-3" :style="{ minHeight }">
       <EditorContent :editor="editor" />

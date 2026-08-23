@@ -17,7 +17,20 @@ const { data: page } = await useAsyncData(`docs:${route.path}`, () =>
 )
 
 if (!page.value) {
-  throw createError({ statusCode: 404, statusMessage: 'Сторінку не знайдено', fatal: true })
+  /*
+   * Шлях у повідомленні — не косметика.
+   *
+   * Голе «Сторінку не знайдено» однаково виглядає і для справді відсутньої
+   * сторінки, і для запиту, що потрапив у вікно перезбірки: `nuxt build`
+   * стирає й переписує .output, а `nuxt preview` віддає саме звідти. Без
+   * шляху ці два випадки не розрізнити, і час іде на пошук неіснуючої
+   * поламки.
+   */
+  throw createError({
+    statusCode: 404,
+    statusMessage: `Сторінку не знайдено: ${route.path}`,
+    fatal: true,
+  })
 }
 
 useHead({ title: `${page.value.title} — tatetUI` })
