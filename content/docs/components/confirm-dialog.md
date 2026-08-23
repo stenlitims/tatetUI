@@ -1,0 +1,72 @@
+---
+title: ConfirmDialog
+description: Імперативні діалоги — confirm, alert і prompt через await.
+component: UiConfirmDialog
+dependsOn:
+  - app/composables/useConfirm.ts
+  - app/components/ui/UiModal.vue
+  - app/composables/useOverlayStack.ts
+  - app/composables/useScrollLock.ts
+  - app/composables/useFocusTrap.ts
+  - app/composables/useReducedMotion.ts
+status: stable
+order: 21
+---
+
+## Приклад
+
+::component-preview{name="confirm-basic" stage="min-h-32"}
+::
+
+## Використання
+
+```ts
+const { confirm, alert, prompt } = useConfirm()
+
+if (await confirm('Видалити запис?')) {
+  await removeRecord()
+}
+
+const name = await prompt({
+  title: 'Нова назва',
+  input: { label: 'Назва', required: true },
+})
+if (name !== null) await rename(name)
+```
+
+Рендерер `UiConfirmDialog` монтується **рівно один раз**, зазвичай в
+`app.vue` поруч із `UiToaster`.
+
+## API
+
+::component-api
+::
+
+## Коли використовувати
+
+Перед незворотною дією: видалення, скасування підписки, вихід без
+збереження.
+
+## Коли НЕ використовувати
+
+Не питайте підтвердження перед дією, яку легко скасувати. Зайве
+підтвердження навчає натискати «Так» не читаючи — і тоді воно не спрацює
+там, де справді потрібне. Краще дія + можливість скасувати.
+
+Не використовуйте `window.confirm`: він блокує потік, не стилізується, у
+деяких браузерах вимикається галочкою «більше не показувати» і не працює в
+iframe із sandbox.
+
+## Доступність
+
+Побудований на `UiModal`, а не на власній розмітці — щоб пастка фокуса,
+блокування прокрутки і стек шарів були ті самі. Діалог підтвердження майже
+завжди відкривається **поверх іншого оверлея**, і саме там власна
+реалізація z-index ламалася б.
+
+Фокус ставиться на кнопку підтвердження, а для `prompt` — у поле введення.
+`Enter` у полі підтверджує.
+
+Повторний виклик, поки попередній діалог відкритий, закриває перший як
+«скасовано». Інакше його проміс не зарезолвився б ніколи, і `await` на
+ньому завис би назавжди.
