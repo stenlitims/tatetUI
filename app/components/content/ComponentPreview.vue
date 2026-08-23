@@ -210,4 +210,17 @@ function tabClass(value: 'preview' | 'code') {
 .dark .preview-code .shiki span {
   background: transparent;
 }
+
+/*
+  Рядок = блок. Оголошуємо самі, а не покладаємось на глобальне
+  `pre code .line { display: block }` від @nuxt/content: воно є лише тому,
+  що Content малює власні блоки коду, і зникне разом із ним.
+
+  min-height обов'язковий: порожній рядок вихідного коду не має вмісту,
+  тож його блок мав би нульову висоту і порожні рядки просто зникали б.
+*/
+.preview-code .shiki .line {
+  display: block;
+  min-height: 1.6em;
+}
 </style>

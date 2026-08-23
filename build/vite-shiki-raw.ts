@@ -59,7 +59,25 @@ export function shikiRaw(options?: { langs?: string[] }): Plugin {
         defaultColor: false,
       })
 
-      return `export default ${JSON.stringify(html)}`
+      /*
+       * Прибираємо переноси МІЖ рядковими span.
+       *
+       * Shiki віддає `<span class="line">…</span>\n<span class="line">…`,
+       * тобто окремим текстовим вузлом. Сам по собі він нешкідливий, але
+       * @nuxt/content додає глобальне `pre code .line { display: block }`
+       * для своїх блоків — і воно чіпляється й до нашої розмітки. Тоді
+       * блок уже переносить рядок сам, а вцілілий \n за white-space: pre
+       * утворює ЩЕ один порожній рядок: крок стає 41px замість 20.4px,
+       * тобто рівно подвійний інтервал.
+       *
+       * Content цієї проблеми не має, бо тримає перенос ВСЕРЕДИНІ span.
+       * Ми йдемо простішим шляхом — прибираємо його зовсім і оголошуємо
+       * display: block самі (див. ComponentPreview), щоб не залежати від
+       * чужої таблиці стилів.
+       */
+      const compact = html.replace(/<\/span>\n(?=<span class="line")/g, '</span>')
+
+      return `export default ${JSON.stringify(compact)}`
     },
 
     handleHotUpdate({ file, server, modules }) {
