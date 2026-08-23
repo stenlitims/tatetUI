@@ -1,0 +1,356 @@
+/* ====================================================================
+   UiProse — типографіка редагованого й опублікованого вмісту
+
+   ЄДИНЕ джерело вигляду і для редактора, і для публічної сторінки:
+   UiRichTextEditor ставить рівно цей клас на корінь ProseMirror. Роз'їхатись
+   вони не можуть за побудовою — це і є WYSIWYG.
+
+   ClayArena вивела це болем. Іконки цитат колись малювались як <div>
+   усередині renderHTML — вони існували лише в редакторі, бо серверний
+   санітайзер зносив їх на публічних сторінках, і всі варіанти вироджувались
+   у звичайну цитату. Тому іконка йде з CSS через ::before і mask-image:
+   розмітка редактора і публічної сторінки збігається символ у символ.
+
+   Селектор подвоєний — `.ui-prose.ui-prose`, і це не описка. Демо на сайті
+   документації рендеряться ВСЕРЕДИНІ .docs-prose, чиї правила мають ту саму
+   вагу (0,1,1). За однакової ваги виграв би той, хто нижче в зібраному CSS,
+   тобто порядок @import. Подвоєння дає (0,2,1) і виграє завжди. Помітили б
+   це лише на власному сайті: у чужому проєкті .docs-prose немає, і компонент
+   виглядав би правильно.
+
+   Шар той самий, що й у docs-prose (base): утиліти Tailwind лишаються
+   сильнішими, і клас на конкретному елементі вмісту завжди переважує прозу.
+   ==================================================================== */
+
+@layer base {
+  .ui-prose.ui-prose {
+    line-height: 1.6;
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose > :last-child {
+    margin-bottom: 0;
+  }
+
+  /* ---- Заголовки -------------------------------------------------- */
+
+  /*
+    Декоративні властивості задано ЯВНО, хоч вони й «нульові».
+
+    Стилі вмісту мусять бути самодостатніми: файл копіюють у чужий проєкт,
+    де заголовки вже можуть мати підкреслення чи відступ від якоїсь прози
+    навколо. Перебити те, чого не оголошуєш, неможливо — виміряно на цьому
+    ж сайті: h2 усередині ui-prose лишався з border-bottom від docs-prose,
+    бо ui-prose про рамку просто не згадував.
+  */
+  .ui-prose.ui-prose :is(h1, h2, h3, h4, h5, h6) {
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    padding-bottom: 0;
+    border-bottom: none;
+    font-weight: 700;
+    letter-spacing: normal;
+    color: var(--ink);
+  }
+
+  /* em, а не px: за кореня 15px абсолютні 32px не масштабуються разом із
+     контекстом, у який вмонтовано вміст. */
+  .ui-prose.ui-prose h1 { font-size: 2em; margin-top: 0; }
+  .ui-prose.ui-prose h2 { font-size: 1.5em; }
+  .ui-prose.ui-prose h3 { font-size: 1.25em; }
+
+  /* ---- Абзаци й пресети типографіки ------------------------------- */
+
+  .ui-prose.ui-prose p {
+    margin-bottom: 0.75em;
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose p img {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Пресети з дропдауна «Стиль» у тулбарі. Вигляд задає ВИКЛЮЧНО CSS —
+     раніше він ще й дублювався inline-стилем із розділу renderHTML, з
+     іншими значеннями, і не переживав серверну санітизацію. */
+  .ui-prose.ui-prose p.typography-lead {
+    font-size: 1.25em;
+    line-height: 1.75;
+    margin-bottom: 0.5em;
+  }
+
+  .ui-prose.ui-prose p.typography-small {
+    font-size: 0.875em;
+    line-height: 1.3;
+    margin-bottom: 0.4em;
+    color: var(--ink-muted);
+  }
+
+  .ui-prose.ui-prose p.typography-caption {
+    font-size: 0.75em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    color: var(--ink-muted);
+  }
+
+  .ui-prose.ui-prose p.typography-label {
+    font-size: 0.75em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    font-weight: 600;
+    letter-spacing: -0.025em;
+  }
+
+  .ui-prose.ui-prose p.typography-muted {
+    font-size: 0.75em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    color: var(--ink-muted);
+  }
+
+  .ui-prose.ui-prose p.typography-overline {
+    font-size: 0.75em;
+    line-height: 1.25;
+    margin-bottom: 0.4em;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 500;
+    color: var(--ink-muted);
+  }
+
+  /* ---- Інлайнові марки -------------------------------------------- */
+
+  .ui-prose.ui-prose strong { font-weight: 700; }
+  .ui-prose.ui-prose em { font-style: italic; }
+  .ui-prose.ui-prose u { text-decoration: underline; }
+  .ui-prose.ui-prose :is(s, del, strike) { text-decoration: line-through; }
+
+  /*
+    Єдиний свідомий літерал у файлі.
+
+    Тло маркера приходить із самого документа — користувач обирає його зі
+    світлої палітри в редакторі. Токенний колір тексту був би невидимим на
+    ньому в темній темі, тож тут потрібен фіксований темний. Не «виправляйте»
+    на var(--ink).
+  */
+  .ui-prose.ui-prose mark {
+    padding: 0 0.15em;
+    border-radius: 0.15em;
+    color: rgb(17 24 39);
+  }
+
+  .ui-prose.ui-prose code {
+    padding: 0.125em 0.375em;
+    border: none;
+    border-radius: 0.25em;
+    font-size: 0.875em;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    background-color: var(--bg-subtle);
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose pre {
+    margin: 1em 0;
+    padding: 1em;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-control);
+    overflow-x: auto;
+    background-color: var(--bg-subtle);
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose pre code {
+    padding: 0;
+    border-radius: 0;
+    background-color: transparent;
+    color: inherit;
+  }
+
+  .ui-prose.ui-prose hr {
+    margin: 2em 0;
+    border: none;
+    border-top: 2px solid var(--line);
+  }
+
+  /* ---- Списки ------------------------------------------------------ */
+
+  /* Preflight Tailwind робить ol,ul{margin:0;padding:0;list-style:none}.
+     Наш селектор специфічніший, тож !important не потрібен — саме він
+     раніше й блокував маркери вкладених рівнів. */
+  .ui-prose.ui-prose :is(ul, ol) {
+    margin-bottom: 1em;
+    padding-left: 1.5em;
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose ul { list-style-type: disc; }
+  .ui-prose.ui-prose ul ul { list-style-type: circle; }
+  .ui-prose.ui-prose ul ul ul { list-style-type: square; }
+  .ui-prose.ui-prose ol { list-style-type: decimal; }
+  .ui-prose.ui-prose ol ol { list-style-type: lower-alpha; }
+  .ui-prose.ui-prose ol ol ol { list-style-type: lower-roman; }
+
+  /* Вкладені списки не мають подвійного нижнього відступу. */
+  .ui-prose.ui-prose li > :is(ul, ol) { margin-bottom: 0; }
+  .ui-prose.ui-prose li > p:last-child { margin-bottom: 0; }
+
+  /* ---- Цитати ------------------------------------------------------ */
+
+  .ui-prose.ui-prose blockquote {
+    margin: 1.5em 0;
+    padding: 0.75em 1em;
+    border-left: 4px solid var(--line-strong);
+    border-radius: 0.25em;
+    background-color: var(--bg-subtle);
+    color: var(--ink-muted);
+  }
+
+  .ui-prose.ui-prose blockquote > p:last-child { margin-bottom: 0; }
+
+  /*
+    Варіанти цитат. Ключ — data-blockquote-type, який переживає серверну
+    санітизацію: у allowlist сануйзерів є data-атрибути, але немає ні div,
+    ні mask-image. Саме тому іконка тут, а не в розмітці.
+
+    Вісім варіантів ClayArena зведено до п'яти — рівно стільки статусних
+    родин токенів у бібліотеці. Три зайві (note, tip, caution) лягали на ті
+    самі кольори, тобто були синонімами, які існували лише щоб їх плутали.
+    Старі назви лишаються псевдонімами НА ВХОДІ, у розширенні редактора.
+  */
+  .ui-prose.ui-prose blockquote[data-blockquote-type] {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75em;
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type]::before {
+    content: '';
+    flex-shrink: 0;
+    width: 1.5em;
+    height: 1.5em;
+    user-select: none;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-size: contain;
+    mask-size: contain;
+  }
+
+  .ui-prose.ui-prose blockquote[data-show-icon='false']::before {
+    display: none;
+  }
+
+  /* min-width: 0 — інакше довге слово всередині flex-цитати не переноситься
+     і розтягує її за межі контейнера. */
+  .ui-prose.ui-prose blockquote[data-blockquote-type] > * {
+    min-width: 0;
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='quote'] {
+    background-color: var(--neutral-bg);
+    border-left-color: var(--neutral);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='quote']::before {
+    background-color: var(--neutral);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6%2017h3l2-4V7H5v6h3zm8%200h3l2-4V7h-6v6h3z' fill='black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6%2017h3l2-4V7H5v6h3zm8%200h3l2-4V7h-6v6h3z' fill='black'/%3E%3C/svg%3E");
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='info'] {
+    background-color: var(--info-bg);
+    border-left-color: var(--info);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='info']::before {
+    background-color: var(--info);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11%207h2v2h-2zm0%204h2v6h-2zm1-9C6.48%202%202%206.48%202%2012s4.48%2010%2010%2010%2010-4.48%2010-10S17.52%202%2012%202zm0%2018c-4.41%200-8-3.59-8-8s3.59-8%208-8%208%203.59%208%208-3.59%208-8%208z' fill='black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11%207h2v2h-2zm0%204h2v6h-2zm1-9C6.48%202%202%206.48%202%2012s4.48%2010%2010%2010%2010-4.48%2010-10S17.52%202%2012%202zm0%2018c-4.41%200-8-3.59-8-8s3.59-8%208-8%208%203.59%208%208-3.59%208-8%208z' fill='black'/%3E%3C/svg%3E");
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='success'] {
+    background-color: var(--success-bg);
+    border-left-color: var(--success);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='success']::before {
+    background-color: var(--success);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12%202C6.48%202%202%206.48%202%2012s4.48%2010%2010%2010%2010-4.48%2010-10S17.52%202%2012%202zm-2%2015l-5-5%201.41-1.41L10%2014.17l7.59-7.59L19%208l-9%209z' fill='black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12%202C6.48%202%202%206.48%202%2012s4.48%2010%2010%2010%2010-4.48%2010-10S17.52%202%2012%202zm-2%2015l-5-5%201.41-1.41L10%2014.17l7.59-7.59L19%208l-9%209z' fill='black'/%3E%3C/svg%3E");
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='warning'] {
+    background-color: var(--warning-bg);
+    border-left-color: var(--warning);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='warning']::before {
+    background-color: var(--warning);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1%2021h22L12%202%201%2021zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z' fill='black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1%2021h22L12%202%201%2021zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z' fill='black'/%3E%3C/svg%3E");
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='danger'] {
+    background-color: var(--danger-bg);
+    border-left-color: var(--danger);
+  }
+
+  .ui-prose.ui-prose blockquote[data-blockquote-type='danger']::before {
+    background-color: var(--danger);
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M15.73%203H8.27L3%208.27v7.46L8.27%2021h7.46L21%2015.73V8.27L15.73%203zM12%2017.3c-.72%200-1.3-.58-1.3-1.3%200-.72.58-1.3%201.3-1.3.72%200%201.3.58%201.3%201.3%200%20.72-.58%201.3-1.3%201.3zm1-4.3h-2V7h2v6z' fill='black'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M15.73%203H8.27L3%208.27v7.46L8.27%2021h7.46L21%2015.73V8.27L15.73%203zM12%2017.3c-.72%200-1.3-.58-1.3-1.3%200-.72.58-1.3%201.3-1.3.72%200%201.3.58%201.3%201.3%200%20.72-.58%201.3-1.3%201.3zm1-4.3h-2V7h2v6z' fill='black'/%3E%3C/svg%3E");
+  }
+
+  /* ---- Посилання й таблиці ----------------------------------------- */
+
+  .ui-prose.ui-prose a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .ui-prose.ui-prose a:hover {
+    text-decoration: underline;
+  }
+
+  /* display: block + overflow-x: auto — щоб широка таблиця прокручувалась
+     сама, а не розтягувала сторінку. */
+  .ui-prose.ui-prose table {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 1em;
+    border-collapse: collapse;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .ui-prose.ui-prose :is(th, td) {
+    padding: 0.5em;
+    border: 1px solid var(--line);
+    text-align: left;
+    color: var(--ink);
+  }
+
+  .ui-prose.ui-prose :is(th, td) > p:last-child { margin-bottom: 0; }
+
+  .ui-prose.ui-prose th {
+    background-color: var(--bg-subtle);
+    font-weight: 700;
+  }
+
+  .ui-prose.ui-prose tr:nth-child(even) {
+    background-color: var(--bg-hover);
+  }
+
+  /* Зображення не мають вилазити за контейнер. */
+  .ui-prose.ui-prose img {
+    max-width: 100%;
+    height: auto;
+  }
+}

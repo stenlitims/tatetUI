@@ -77,6 +77,10 @@ export const docsNav: NavGroup[] = [
     ],
   },
   {
+    title: 'Контент',
+    items: [{ title: 'Prose', to: '/docs/components/prose' }],
+  },
+  {
     title: 'Патерни',
     items: [{ title: 'Оверлеї та фокус', to: '/docs/patterns/overlays' }],
   },
