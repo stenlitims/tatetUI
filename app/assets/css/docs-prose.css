@@ -1,0 +1,124 @@
+/* ==================================================================== */
+/*  Типографіка документації                                            */
+/*                                                                      */
+/*  Написано на токенах, а не на @tailwindcss/typography: плагін тягне  */
+/*  власну палітру, яку однаково довелося б перевизначати цілком, і     */
+/*  його prose-invert не знає про наш .dark.                            */
+/*                                                                      */
+/*  Область дії — .docs-prose, щоб ці правила не текли в демо-сцени:    */
+/*  усередині ComponentPreview рендеряться справжні компоненти, і       */
+/*  успадкований від прози margin зіпсував би їхній вигляд.             */
+/* ==================================================================== */
+
+.docs-prose {
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.docs-prose > * + * {
+  margin-top: 1.25em;
+}
+
+.docs-prose h2 {
+  margin-top: 2.5em;
+  margin-bottom: 0.75em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--line);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  scroll-margin-top: calc(var(--header-height) + 1rem);
+}
+
+.docs-prose h3 {
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  font-size: 1.15rem;
+  font-weight: 600;
+  scroll-margin-top: calc(var(--header-height) + 1rem);
+}
+
+.docs-prose p,
+.docs-prose ul,
+.docs-prose ol {
+  color: var(--ink);
+}
+
+.docs-prose ul,
+.docs-prose ol {
+  padding-left: 1.5em;
+}
+
+.docs-prose ul { list-style: disc; }
+.docs-prose ol { list-style: decimal; }
+
+.docs-prose li + li {
+  margin-top: 0.4em;
+}
+
+.docs-prose a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.docs-prose a:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* Інлайн-код. :not(pre code) — інакше правило перебиває токени Shiki
+   всередині блоків і підсвітка перетворюється на однотонний текст. */
+.docs-prose :not(pre) > code {
+  padding: 0.15em 0.4em;
+  border-radius: 0.3rem;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--line);
+  font-size: 0.875em;
+  font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+}
+
+.docs-prose pre {
+  overflow-x: auto;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  /* Не bg-card: блок коду має читатись як вкладена поверхня, інакше на
+     сторінці зливається з карткою прикладу навколо нього. */
+  background-color: var(--bg-subtle);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  tab-size: 2;
+}
+
+.docs-prose pre code {
+  font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+}
+
+.docs-prose blockquote {
+  padding-left: 1rem;
+  border-left: 3px solid var(--accent);
+  color: var(--ink-muted);
+}
+
+.docs-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.docs-prose th,
+.docs-prose td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  text-align: left;
+}
+
+.docs-prose th {
+  background-color: var(--bg-subtle);
+  font-weight: 600;
+}
+
+.docs-prose hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+}
