@@ -1,124 +1,157 @@
-/* ==================================================================== */
-/*  Типографіка документації                                            */
-/*                                                                      */
-/*  Написано на токенах, а не на @tailwindcss/typography: плагін тягне  */
-/*  власну палітру, яку однаково довелося б перевизначати цілком, і     */
-/*  його prose-invert не знає про наш .dark.                            */
-/*                                                                      */
-/*  Область дії — .docs-prose, щоб ці правила не текли в демо-сцени:    */
-/*  усередині ComponentPreview рендеряться справжні компоненти, і       */
-/*  успадкований від прози margin зіпсував би їхній вигляд.             */
-/* ==================================================================== */
+/* ====================================================================
+   Типографіка документації
 
-.docs-prose {
-  line-height: 1.7;
-  color: var(--ink);
-}
+   Написано на токенах, а не на @tailwindcss/typography: плагін тягне
+   власну палітру, яку однаково довелося б перевизначати цілком, і його
+   prose-invert не знає про наш .dark.
 
-.docs-prose > * + * {
-  margin-top: 1.25em;
-}
+   Увесь блок лежить у @layer base — і це головне в цьому файлі.
 
-.docs-prose h2 {
-  margin-top: 2.5em;
-  margin-bottom: 0.75em;
-  padding-bottom: 0.35em;
-  border-bottom: 1px solid var(--line);
-  font-size: 1.5rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  scroll-margin-top: calc(var(--header-height) + 1rem);
-}
+   Демо рендеряться ВСЕРЕДИНІ .docs-prose. Поки ці правила були поза
+   шарами, `.docs-prose td` перебивав утиліту `py-2.5` на комірках UiTable:
+   виміряно 7.5px замість 9.375px, тобто перемикач щільності візуально
+   нічого не робив. Специфічність тут ні до чого — нешарований CSS виграє
+   в шарованого ЗАВЖДИ, а утиліти Tailwind лежать у @layer utilities.
 
-.docs-prose h3 {
-  margin-top: 2em;
-  margin-bottom: 0.5em;
-  font-size: 1.15rem;
-  font-weight: 600;
-  scroll-margin-top: calc(var(--header-height) + 1rem);
-}
+   Саме `base`, а не `components`: Tailwind v4 шару components не оголошує
+   взагалі (перевірено — у зібраному CSS є лише properties, theme, base,
+   utilities). Неоголошений шар стає в порядку першої появи, тобто ПІСЛЯ
+   utilities, і проза знову вигравала б.
 
-.docs-prose p,
-.docs-prose ul,
-.docs-prose ol {
-  color: var(--ink);
-}
+   Ламалося це ЛИШЕ на сайті документації — у чужому проєкті docs-prose
+   немає, і компонент виглядав би правильно. Найгірша форма помилки: та,
+   де бреше саме еталон.
+   ==================================================================== */
 
-.docs-prose ul,
-.docs-prose ol {
-  padding-left: 1.5em;
-}
+@layer base {
+  .docs-prose`, а не `.docs-prose` — і це
+     головне в цьому файлі.
 
-.docs-prose ul { list-style: disc; }
-.docs-prose ol { list-style: decimal; }
+     Демо рендеряться ВСЕРЕДИНІ .docs-prose. Правило `.docs-prose td` має
+     вагу (0,1,1) і перебивало утиліту `py-2.5` (0,1,0) на комірках UiTable:
+     виміряно 7.5px замість 9.375px, тобто перемикач щільності візуально
+     нічого не робив. Шари тут не рятують — Tailwind v4 розгортає @layer на
+     етапі збірки, і в зібраному CSS жодного @layer немає.
 
-.docs-prose li + li {
-  margin-top: 0.4em;
-}
+     `:where()` дає нуль ваги, тож `.docs-prose td` — це (0,0,1),
+     і будь-яка утиліта класом виграє. На саму прозу це не впливає: у
+     markdown-таблиць власних класів немає, конкурувати нема з чим.
 
-.docs-prose a {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
+     Ламалося це ЛИШЕ на сайті документації — у чужому проєкті docs-prose
+     немає, і компонент виглядав би правильно. Найгірша форма помилки: та,
+     де бреше саме еталон.
+     ==================================================================== */
 
-.docs-prose a:hover {
-  text-decoration-thickness: 2px;
-}
+  .docs-prose {
+    line-height: 1.7;
+    color: var(--ink);
+  }
 
-/* Інлайн-код. :not(pre code) — інакше правило перебиває токени Shiki
-   всередині блоків і підсвітка перетворюється на однотонний текст. */
-.docs-prose :not(pre) > code {
-  padding: 0.15em 0.4em;
-  border-radius: 0.3rem;
-  background-color: var(--bg-subtle);
-  border: 1px solid var(--line);
-  font-size: 0.875em;
-  font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
-}
+  .docs-prose > * + * {
+    margin-top: 1.25em;
+  }
 
-.docs-prose pre {
-  overflow-x: auto;
-  padding: 1rem 1.15rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-card);
-  /* Не bg-card: блок коду має читатись як вкладена поверхня, інакше на
-     сторінці зливається з карткою прикладу навколо нього. */
-  background-color: var(--bg-subtle);
-  font-size: 0.85rem;
-  line-height: 1.6;
-  tab-size: 2;
-}
+  .docs-prose h2 {
+    margin-top: 2.5em;
+    margin-bottom: 0.75em;
+    padding-bottom: 0.35em;
+    border-bottom: 1px solid var(--line);
+    font-size: 1.5rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
 
-.docs-prose pre code {
-  font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
-}
+  .docs-prose h3 {
+    margin-top: 2em;
+    margin-bottom: 0.5em;
+    font-size: 1.15rem;
+    font-weight: 600;
+    scroll-margin-top: calc(var(--header-height) + 1rem);
+  }
 
-.docs-prose blockquote {
-  padding-left: 1rem;
-  border-left: 3px solid var(--accent);
-  color: var(--ink-muted);
-}
+  .docs-prose p,
+  .docs-prose ul,
+  .docs-prose ol {
+    color: var(--ink);
+  }
 
-.docs-prose table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
+  .docs-prose ul,
+  .docs-prose ol {
+    padding-left: 1.5em;
+  }
 
-.docs-prose th,
-.docs-prose td {
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--line);
-  text-align: left;
-}
+  .docs-prose ul { list-style: disc; }
+  .docs-prose ol { list-style: decimal; }
 
-.docs-prose th {
-  background-color: var(--bg-subtle);
-  font-weight: 600;
-}
+  .docs-prose li + li {
+    margin-top: 0.4em;
+  }
 
-.docs-prose hr {
-  border: 0;
-  border-top: 1px solid var(--line);
+  .docs-prose a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .docs-prose a:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  /* Інлайн-код. :not(pre code) — інакше правило перебиває токени Shiki
+     всередині блоків і підсвітка перетворюється на однотонний текст. */
+  .docs-prose :not(pre) > code {
+    padding: 0.15em 0.4em;
+    border-radius: 0.3rem;
+    background-color: var(--bg-subtle);
+    border: 1px solid var(--line);
+    font-size: 0.875em;
+    font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+  }
+
+  .docs-prose pre {
+    overflow-x: auto;
+    padding: 1rem 1.15rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-card);
+    /* Не bg-card: блок коду має читатись як вкладена поверхня, інакше на
+       сторінці зливається з карткою прикладу навколо нього. */
+    background-color: var(--bg-subtle);
+    font-size: 0.85rem;
+    line-height: 1.6;
+    tab-size: 2;
+  }
+
+  .docs-prose pre code {
+    font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
+  }
+
+  .docs-prose blockquote {
+    padding-left: 1rem;
+    border-left: 3px solid var(--accent);
+    color: var(--ink-muted);
+  }
+
+  .docs-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+
+  .docs-prose th,
+  .docs-prose td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--line);
+    text-align: left;
+  }
+
+  .docs-prose th {
+    background-color: var(--bg-subtle);
+    font-weight: 600;
+  }
+
+  .docs-prose hr {
+    border: 0;
+    border-top: 1px solid var(--line);
+  }
 }

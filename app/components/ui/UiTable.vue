@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends Record<string, unknown>">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import UiMenu from './UiMenu.vue'
 import UiSkeleton from './UiSkeleton.vue'
 
 export interface TableHeader {
@@ -7,9 +8,33 @@ export interface TableHeader {
   value: string
   text: string
   sortable?: boolean
-  /** Ширина колонки, напр. "12rem" або "20%". */
-  width?: string
+  /**
+   * Ширина в ПІКСЕЛЯХ (число, не рядок).
+   *
+   * Для `flex: true` трактується як МІНІМАЛЬНА: колонка починається з неї
+   * і росте на залишок.
+   *
+   * Число, бо ширини живуть у `<colgroup>` і беруть участь в арифметиці
+   * ресайзу, збереження і підрахунку переповнення. CSS-рядок цього не дає.
+   */
+  width?: number
+  /**
+   * Колонка забирає весь залишок ширини. Дозволена ОДНА на таблицю.
+   * Сума фіксованих ширин має вміщатись у контейнер.
+   */
+  flex?: boolean
   align?: 'left' | 'center' | 'right'
+  /** Перенос у комірці: 1 — обрізати, 2–6 — стільки рядків, false — без обмежень. */
+  clamp?: 1 | 2 | 3 | 4 | 5 | 6 | false
+  /** Повна назва: підказка на заголовку і підпис у меню налаштувань. */
+  title?: string
+  /** Напрям ПЕРШОГО кліку по сортуванню. Типово `asc`. */
+  defaultSortDir?: 'asc' | 'desc'
+  /** Колонку не можна приховати. */
+  required?: boolean
+  /** Заборонити ресайз. Типово можна все, крім `flex`. */
+  resizable?: boolean
+  visible?: boolean
 }
 
 export interface TableSort {
@@ -21,23 +46,26 @@ const props = withDefaults(
   defineProps<{
     headers: TableHeader[]
     items: T[]
-    /** Поле-ідентифікатор рядка для :key. */
+    /** Поле-ідентифікатор рядка для `:key`. */
     keyRow?: string
     /** Поточне сортування. Використовуйте через `v-model:sort`. */
     sort?: TableSort | null
     /**
      * Сортувати на сервері: компонент лише повідомляє про намір через
-     * `update:sort`, але сам порядок рядків не чіпає.
+     * `update:sort`, але порядок рядків не чіпає.
      */
     serverSort?: boolean
     loading?: boolean
-    /** Скільки рядків-заглушок показати під час першого завантаження. */
+    /** Скільки рядків-заглушок показати під час ПЕРШОГО завантаження. */
     skeletonRows?: number
-    /** Текст, коли даних немає. */
     emptyText?: string
     density?: 'sm' | 'md'
-    /** Робить рядки клікабельними й вмикає подію `rowClick`. */
+    /** Показати перемикач щільності в меню налаштувань. */
+    densityToggle?: boolean
+    /** Робить рядки клікабельними: додає роль, фокус і обробку Enter/Space. */
     rowClickable?: boolean
+    /** Клас на рядок — для підсвітки виділених, помилкових тощо. */
+    rowClass?: (item: T) => string | undefined
     /**
      * Нижче `md` таблиця ховається, а замість неї рендериться список
      * карток — із ТИХ САМИХ слотів `cell-*`. Одне API, дві верстки.
@@ -45,8 +73,19 @@ const props = withDefaults(
     mobileCards?: boolean
     /** Закріпити шапку. Вимагає `maxHeight`, інакше не діє. */
     stickyHeader?: boolean
-    /** Напр. "24rem". Без нього `stickyHeader` не має де закріплюватись. */
+    /** Напр. `"24rem"`. Без нього `stickyHeader` не має де закріплюватись. */
     maxHeight?: string
+    /**
+     * Вмикає меню налаштувань і збереження розкладки в localStorage під
+     * ключем `table_settings_${tableId}`. Без нього таблиця некерована
+     * користувачем і нічого не запам'ятовує.
+     */
+    tableId?: string
+    /**
+     * Версія ВАШИХ дефолтів. Змінили ширини чи видимість у `headers` —
+     * підніміть число, і збережений вибір користувача скинеться.
+     */
+    settingsVersion?: number
   }>(),
   {
     keyRow: 'id',
@@ -54,11 +93,14 @@ const props = withDefaults(
     skeletonRows: 5,
     emptyText: 'Даних немає',
     density: 'md',
+    densityToggle: true,
+    settingsVersion: 0,
   },
 )
 
 const emit = defineEmits<{
   'update:sort': [value: TableSort | null]
+  'update:headers': [value: TableHeader[]]
   rowClick: [item: T]
 }>()
 
@@ -66,9 +108,6 @@ const emit = defineEmits<{
  * defineSlots із generic="T" обов'язковий: для генеричних компонентів
  * vue-component-meta не читає слоти з шаблону (language-tools#3429), і
  * таблиця API лишилася б без секції «Слоти».
- *
- * Динамічні `cell-*` / `header-*` тут описати неможливо — їхні імена
- * залежать від headers. Тому вони згадані у slot-описах як шаблон.
  */
 defineSlots<{
   /** `cell-<value>` — власний рендер комірки. Приклад: `#cell-status`. */
@@ -81,20 +120,426 @@ defineSlots<{
   empty?: () => unknown
 }>()
 
+const slots = useSlots()
+
+/* ---------------------------------------------------------------- */
+/*  Константи                                                       */
+/* ---------------------------------------------------------------- */
+
+/** Формат збереженого payload. Піднімає САМ компонент, не споживач. */
+const SETTINGS_SCHEMA = 1
+const SETTINGS_COLUMN_WIDTH = 40
+const MIN_WIDTH = 40
+const MAX_WIDTH = 800
+const DEFAULT_WIDTH = 120
+
+// Літерали, а не інтерполяція: інакше JIT Tailwind цих класів не побачить.
+const CLAMP_CLASSES = {
+  1: 'truncate',
+  2: 'line-clamp-2',
+  3: 'line-clamp-3',
+  4: 'line-clamp-4',
+  5: 'line-clamp-5',
+  6: 'line-clamp-6',
+} as const
+
+const ALIGN_TH = {
+  left: 'text-left',
+  center: 'text-center',
+  // tabular-nums на числових колонках: без нього цифри різної ширини
+  // змушують колонку «дихати» при кожному оновленні даних.
+  right: 'text-right',
+} as const
+
+const DENSITY_CLASSES = {
+  sm: 'px-2.5 py-1.5 text-xs',
+  md: 'px-3 py-2.5 text-sm',
+} as const
+
+/* ---------------------------------------------------------------- */
+/*  Стан колонок                                                    */
+/* ---------------------------------------------------------------- */
+
+interface StoredSettings {
+  schema: number
+  /** Версія дефолтів споживача — приходить із props.settingsVersion. */
+  defaults: number
+  density?: 'sm' | 'md'
+  headers: { value: string; width?: number; visible?: boolean }[]
+}
+
+const localHeaders = ref<TableHeader[]>([])
+const localDensity = ref<'sm' | 'md'>(props.density)
+
+/*
+ * Збережена розкладка застосовується ЛИШЕ після монтування.
+ *
+ * Сторінки прередеряться, і на сервері localStorage немає — там розкладка
+ * завжди з props. Якби клієнт читав сховище вже в setup, ПЕРШИЙ його рендер
+ * не збігся б із надісланим HTML: інша кількість <col>, інший порядок
+ * заголовків. Vue лаявся б «Hydration completed but contains mismatches», а
+ * DOM лишався б частково пропатченим — виміряно: колонка з ширинами сусідки
+ * і жолоб налаштувань завширшки 220px.
+ *
+ * Ціна — короткий проблиск дефолтної розкладки до застосування збереженої.
+ * Уникнути його на прередереній сторінці неможливо: сервер не знає, що
+ * лежить у сховищі конкретного браузера.
+ */
+const isMounted = ref(false)
+
+const visibleHeaders = computed(() => localHeaders.value.filter((h) => h.visible !== false))
+const showSettings = computed(() => !!props.tableId)
+
+function normalize(header: TableHeader, saved?: StoredSettings['headers'][number]): TableHeader {
+  return {
+    ...header,
+    width: saved?.width ?? header.width ?? DEFAULT_WIDTH,
+    visible: saved?.visible ?? header.visible !== false,
+  }
+}
+
+function storageKey() {
+  return `table_settings_${props.tableId}`
+}
+
+function loadSettings(): StoredSettings | null {
+  if (!isMounted.value || typeof localStorage === 'undefined' || !props.tableId) return null
+  try {
+    const raw = localStorage.getItem(storageKey())
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<StoredSettings>
+    if (!Array.isArray(parsed.headers)) return null
+
+    // Споживач змінив свої дефолти — збережене більше не описує ту саму
+    // таблицю, і тримати його означало б показувати чужу розкладку.
+    if ((parsed.defaults ?? 0) !== props.settingsVersion) return null
+
+    // Старий формат payload. Порядок і видимість — вибір КОРИСТУВАЧА,
+    // лишаємо; ширини й щільність належать компоненту, і саме вони
+    // змінились — скидаємо до свіжих дефолтів.
+    if (parsed.schema !== SETTINGS_SCHEMA) {
+      return {
+        schema: SETTINGS_SCHEMA,
+        defaults: props.settingsVersion,
+        headers: parsed.headers.map((h) => ({ value: h.value, visible: h.visible })),
+      }
+    }
+    return parsed as StoredSettings
+  } catch {
+    return null
+  }
+}
+
+function saveSettings() {
+  if (typeof localStorage === 'undefined' || !props.tableId) return
+  const payload: StoredSettings = {
+    schema: SETTINGS_SCHEMA,
+    defaults: props.settingsVersion,
+    density: localDensity.value,
+    headers: localHeaders.value.map((h) => ({
+      value: h.value,
+      width: h.width,
+      visible: h.visible,
+    })),
+  }
+  try {
+    localStorage.setItem(storageKey(), JSON.stringify(payload))
+  } catch {
+    // Квота або приватний режим — не привід валити обробник кліку.
+  }
+}
+
+function commitHeaders() {
+  saveSettings()
+  emit('update:headers', localHeaders.value)
+}
+
+/**
+ * Зведення збереженої розкладки зі свіжими `headers`.
+ *
+ * Нова колонка вставляється ПІСЛЯ найближчого лівого сусіда, а не в
+ * кінець. Інакше колонка, додана через пів року, стрибала б у хвіст у
+ * кожного користувача, який колись міняв порядок.
+ */
+function reconcile(incoming: TableHeader[]) {
+  const settings = loadSettings()
+  if (!settings) {
+    localHeaders.value = incoming.map((h) => normalize(h))
+    if (settings === null && props.tableId) localDensity.value = props.density
+    return
+  }
+
+  localDensity.value = settings.density ?? props.density
+
+  const pool = new Map(incoming.map((h) => [h.value, h]))
+  const ordered: TableHeader[] = []
+
+  // Спершу — у збереженому порядку (перевпорядкування користувача живе).
+  for (const saved of settings.headers) {
+    const original = pool.get(saved.value)
+    if (!original) continue
+    ordered.push(normalize(original, saved))
+    pool.delete(saved.value)
+  }
+
+  // Далі — нові колонки, кожна поруч зі своїм сусідом із props.
+  for (const header of incoming) {
+    if (!pool.has(header.value)) continue
+    let insertAt = ordered.length
+    const idx = incoming.findIndex((h) => h.value === header.value)
+    for (let i = idx - 1; i >= 0; i--) {
+      const prev = ordered.findIndex((h) => h.value === incoming[i]?.value)
+      if (prev !== -1) {
+        insertAt = prev + 1
+        break
+      }
+    }
+    ordered.splice(insertAt, 0, normalize(header))
+    pool.delete(header.value)
+  }
+
+  localHeaders.value = ordered
+}
+
+// tableId у джерелах watch обов'язковий: його часто передають динамічно
+// (`group-${id}`) при сталих headers — без цього наступна сутність
+// відкривалася б із розкладкою попередньої.
+watch(
+  [() => props.headers, () => props.tableId, isMounted],
+  ([incoming]) => reconcile(incoming as TableHeader[]),
+  { immediate: true, deep: true },
+)
+
+/* ---------------------------------------------------------------- */
+/*  Геометрія                                                       */
+/* ---------------------------------------------------------------- */
+
+const densityClass = computed(() => DENSITY_CLASSES[localDensity.value])
+
+/*
+ * Ширина flex-колонки входить у мінімум, а не виключається з нього.
+ *
+ * За table-layout: fixed колонка без width отримує ЗАЛИШОК. Якщо мінімум
+ * рахувати лише по фіксованих, він дорівнює їхній сумі — залишку не
+ * лишається взагалі, і flex-колонка схлопується в нуль. Виміряно: у демо
+ * каталогу «Назва» мала ширину 0px, поки її 220px не потрапили в суму.
+ */
+const tableMinWidth = computed(() => {
+  const columns = visibleHeaders.value.reduce((sum, h) => sum + (h.width ?? DEFAULT_WIDTH), 0)
+  return columns + (showSettings.value ? SETTINGS_COLUMN_WIDTH : 0)
+})
+
+function alignClass(header: TableHeader) {
+  return ALIGN_TH[header.align ?? 'left']
+}
+
+function clampClass(header: TableHeader) {
+  if (header.clamp === false) return ''
+  return CLAMP_CLASSES[header.clamp ?? 1]
+}
+
+/**
+ * Підказка ставиться лише для колонок БЕЗ слота і лише для примітивів.
+ * Інакше вона показувала б `[object Object]` для об'єктних полів і сирий
+ * код статусу замість підпису.
+ */
+function cellTitle(item: T, header: TableHeader): string | undefined {
+  if (slots[`cell-${header.value}`]) return undefined
+  const value = item[header.value]
+  if (value == null || typeof value === 'object') return undefined
+  return String(value) || undefined
+}
+
+function isResizable(header: TableHeader) {
+  return showSettings.value && !header.flex && header.resizable !== false
+}
+
+/* ---------------------------------------------------------------- */
+/*  Афорданси горизонтальної прокрутки                              */
+/* ---------------------------------------------------------------- */
+
+const scrollEl = ref<HTMLElement | null>(null)
+const scrollLeft = ref(0)
+const viewportWidth = ref(0)
+
+/*
+ * Переповнення рахуємо як `tableMinWidth − viewport`, а не через
+ * scrollWidth. Так афорданс реагує і на зміну ширини КОЛОНКИ, від якої
+ * розмір контейнера не міняється — самого ResizeObserver було б замало.
+ */
+function measure() {
+  const el = scrollEl.value
+  if (!el) return
+  scrollLeft.value = el.scrollLeft
+  viewportWidth.value = el.clientWidth
+}
+
+const canScrollLeft = computed(() => scrollLeft.value > 1)
+const canScrollRight = computed(
+  () => viewportWidth.value > 0 && tableMinWidth.value - viewportWidth.value - scrollLeft.value > 1,
+)
+
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  // Вмикає читання сховища і перезапускає reconcile через watch вище.
+  isMounted.value = true
+  void nextTick(measure)
+  // ResizeObserver ловить те, чого не ловить resize вікна: згортання
+  // сайдбара міняє ширину контейнера без жодної події вікна.
+  if (typeof ResizeObserver !== 'undefined' && scrollEl.value) {
+    resizeObserver = new ResizeObserver(measure)
+    resizeObserver.observe(scrollEl.value)
+  }
+  window.addEventListener('resize', measure, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  window.removeEventListener('resize', measure)
+})
+
+watch([tableMinWidth, () => props.items], () => void nextTick(measure))
+
+/* ---------------------------------------------------------------- */
+/*  Ресайз колонок                                                  */
+/* ---------------------------------------------------------------- */
+
+const resizing = ref<{ value: string; startX: number; startWidth: number } | null>(null)
+
+function clampWidth(width: number) {
+  return Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, Math.round(width)))
+}
+
+function patchHeader(value: string, patch: Partial<TableHeader>) {
+  const index = localHeaders.value.findIndex((h) => h.value === value)
+  if (index === -1) return
+  localHeaders.value[index] = { ...localHeaders.value[index]!, ...patch }
+}
+
+function onResizeStart(event: PointerEvent, header: TableHeader) {
+  if (!isResizable(header)) return
+  // Без цього pointerdown на хваті долетить до кнопки сортування в тому
+  // самому <th>, і кожен ресайз перемикав би сортування.
+  event.preventDefault()
+  event.stopPropagation()
+  try {
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+  } catch {
+    // Захоплення — оптимізація, а не умова роботи: без нього жест теж
+    // доїде, просто перестане ловити рух за межами хвата.
+  }
+  resizing.value = {
+    value: header.value,
+    startX: event.clientX,
+    startWidth: header.width ?? DEFAULT_WIDTH,
+  }
+}
+
+function onResizeMove(event: PointerEvent) {
+  const state = resizing.value
+  if (!state) return
+  patchHeader(state.value, { width: clampWidth(state.startWidth + (event.clientX - state.startX)) })
+}
+
+function onResizeEnd() {
+  if (!resizing.value) return
+  resizing.value = null
+  // Один запис у localStorage на весь жест, а не на кожен pointermove.
+  commitHeaders()
+}
+
+function resetWidth(header: TableHeader) {
+  const original = props.headers.find((h) => h.value === header.value)
+  patchHeader(header.value, { width: original?.width ?? DEFAULT_WIDTH })
+  commitHeaders()
+}
+
+/* ---------------------------------------------------------------- */
+/*  Меню налаштувань                                                */
+/* ---------------------------------------------------------------- */
+
+function isLastVisible(header: TableHeader) {
+  return visibleHeaders.value.length === 1 && visibleHeaders.value[0]?.value === header.value
+}
+
+function canHide(header: TableHeader) {
+  // Приховати останню видиму колонку не можна: це давало colspan="0" і
+  // таблицю без жодного шляху назад.
+  return !header.required && !isLastVisible(header)
+}
+
+function toggleVisibility(header: TableHeader) {
+  if (header.visible !== false && !canHide(header)) return
+  patchHeader(header.value, { visible: header.visible === false })
+  commitHeaders()
+}
+
+function setWidth(header: TableHeader, raw: string) {
+  const parsed = Number.parseInt(raw, 10)
+  if (Number.isNaN(parsed)) return
+  patchHeader(header.value, { width: clampWidth(parsed) })
+  commitHeaders()
+}
+
+function showAll() {
+  localHeaders.value = localHeaders.value.map((h) => ({ ...h, visible: true }))
+  commitHeaders()
+}
+
+function resetAll() {
+  if (typeof localStorage !== 'undefined' && props.tableId) {
+    try {
+      localStorage.removeItem(storageKey())
+    } catch {
+      // див. saveSettings
+    }
+  }
+  localDensity.value = props.density
+  localHeaders.value = props.headers.map((h) => normalize(h))
+  emit('update:headers', localHeaders.value)
+}
+
+function setDensity(next: 'sm' | 'md') {
+  localDensity.value = next
+  saveSettings()
+}
+
+/* Перевпорядкування рідним HTML5-drag, без vuedraggable. */
+const dragIndex = ref<number | null>(null)
+
+function onDragStart(index: number, event: DragEvent) {
+  dragIndex.value = index
+  // Firefox не почне перетягування без setData.
+  event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
+}
+
+function onDrop(index: number) {
+  const from = dragIndex.value
+  dragIndex.value = null
+  if (from === null || from === index) return
+  const next = [...localHeaders.value]
+  const [moved] = next.splice(from, 1)
+  if (!moved) return
+  next.splice(index, 0, moved)
+  localHeaders.value = next
+  commitHeaders()
+}
+
+/* ---------------------------------------------------------------- */
+/*  Сортування                                                      */
+/* ---------------------------------------------------------------- */
+
 const internalSort = ref<TableSort | null>(props.sort)
 watch(() => props.sort, (value) => (internalSort.value = value))
-
-const densityClasses = computed(() =>
-  props.density === 'sm' ? 'px-2.5 py-1.5 text-xs' : 'px-3 py-2.5 text-sm',
-)
 
 /**
  * Порівняння з урахуванням чисел і локалі.
  *
- * Наївні `<` і `>` дають «Файл 10» перед «Файл 9», а кирилицю сортують за
- * кодами символів. `numeric: true` розв'язує перше, `localeCompare` — друге.
- * Порожні значення завжди в кінці, незалежно від напрямку: рядок без даних
- * не має витісняти заповнені з початку списку.
+ * Наївні `<` і `>` ставлять «Розділ 10» перед «Розділ 9», а кирилицю
+ * сортують за кодами символів. Порожні значення завжди в кінці, незалежно
+ * від напрямку: рядок без даних не має витісняти заповнені з початку.
  */
 function compareValues(a: unknown, b: unknown): number {
   const aEmpty = a === null || a === undefined || a === ''
@@ -121,8 +566,9 @@ function toggleSort(header: TableHeader) {
   if (!header.sortable) return
   const current = internalSort.value
   let next: TableSort | null
-  if (current?.by !== header.value) next = { by: header.value, dir: 'asc' }
-  else if (current.dir === 'asc') next = { by: header.value, dir: 'desc' }
+  if (current?.by !== header.value) next = { by: header.value, dir: header.defaultSortDir ?? 'asc' }
+  else if (current.dir === (header.defaultSortDir ?? 'asc'))
+    next = { by: header.value, dir: current.dir === 'asc' ? 'desc' : 'asc' }
   // Третій клік скидає сортування — інакше повернутися до вихідного
   // порядку можна лише перезавантаженням сторінки.
   else next = null
@@ -137,129 +583,323 @@ function ariaSort(header: TableHeader): 'ascending' | 'descending' | 'none' | un
   return internalSort.value.dir === 'asc' ? 'ascending' : 'descending'
 }
 
-const alignClass = (header: TableHeader) =>
-  header.align === 'right' ? 'text-right' : header.align === 'center' ? 'text-center' : 'text-left'
+/* ---------------------------------------------------------------- */
+/*  Рядки                                                           */
+/* ---------------------------------------------------------------- */
+
+function onRowActivate(item: T) {
+  if (props.rowClickable) emit('rowClick', item)
+}
+
+function onRowKeydown(event: KeyboardEvent, item: T) {
+  if (!props.rowClickable) return
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  // Space без preventDefault прокручує сторінку замість активації рядка.
+  event.preventDefault()
+  emit('rowClick', item)
+}
 
 const showSkeleton = computed(() => props.loading && props.items.length === 0)
 const showEmpty = computed(() => !props.loading && sortedItems.value.length === 0)
 </script>
 
 <template>
-  <div>
-    <!-- Десктопна таблиця -->
-    <div
-      class="scrollbar-thin relative overflow-auto rounded-card border border-line"
-      :class="mobileCards ? 'hidden md:block' : ''"
-      :style="maxHeight ? { maxHeight } : undefined"
-    >
-      <table class="w-full border-collapse">
-        <thead>
-          <tr class="border-b border-line bg-subtle">
-            <th
-              v-for="header in headers"
-              :key="header.value"
-              scope="col"
-              :style="header.width ? { width: header.width } : undefined"
-              :aria-sort="ariaSort(header)"
-              class="font-medium text-muted"
-              :class="[
-                densityClasses,
-                alignClass(header),
-                stickyHeader && maxHeight ? 'sticky top-0 z-10 bg-subtle' : '',
-              ]"
-            >
-              <slot :name="`header-${header.value}`" :header="header">
-                <button
-                  v-if="header.sortable"
-                  type="button"
-                  class="inline-flex items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  @click="toggleSort(header)"
-                >
-                  {{ header.text }}
-                  <svg
-                    class="h-3 w-3 transition-opacity"
-                    :class="internalSort?.by === header.value ? 'opacity-100' : 'opacity-30'"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    aria-hidden="true"
-                  >
-                    <path
-                      :d="
-                        internalSort?.by === header.value && internalSort.dir === 'desc'
-                          ? 'M6 9l6 6 6-6'
-                          : 'M6 15l6-6 6 6'
-                      "
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                    />
-                  </svg>
-                </button>
-                <span v-else>{{ header.text }}</span>
-              </slot>
-            </th>
-          </tr>
-        </thead>
-
-        <tbody>
+  <div :class="{ 'select-none': !!resizing }">
+    <div class="relative">
+      <div
+        ref="scrollEl"
+        class="scrollbar-thin relative overflow-auto rounded-card border border-line"
+        :class="mobileCards ? 'hidden md:block' : ''"
+        :style="maxHeight ? { maxHeight } : undefined"
+        @scroll.passive="measure"
+      >
+        <table class="w-full border-collapse" :style="{ tableLayout: 'fixed', minWidth: `${tableMinWidth}px` }">
           <!--
-            v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
-            елементі у Vue 3 v-if має вищий пріоритет і не бачить змінної
-            циклу — тут воно спрацювало б випадково (умова не залежить від
-            row), але наступна правка мовчки зламала б рендер.
+            Ширини живуть ТУТ, а не на кожній комірці. За table-layout: fixed
+            враховується лише перший рядок, тож інлайновий width на кожному
+            <td> був би мертвим стилем, помноженим на кількість рядків.
+            Колонка без width (flex) забирає залишок — це весь механізм, без JS.
           -->
-          <template v-if="showSkeleton">
-            <tr v-for="row in skeletonRows" :key="`sk-${row}`" class="border-b border-line last:border-0">
-              <td v-for="header in headers" :key="header.value" :class="densityClasses">
-                <!-- Ширина заглушки детермінована, а не Math.random(): інакше
-                     вона мінялася б на кожному рендері й миготіла. -->
-                <UiSkeleton
-                  class="h-3"
-                  :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
-                />
-              </td>
-            </tr>
-          </template>
+          <colgroup>
+            <col
+              v-for="header in visibleHeaders"
+              :key="header.value"
+              :style="header.flex ? undefined : { width: `${header.width ?? 120}px` }"
+            />
+            <col v-if="showSettings" :style="{ width: '40px' }" />
+          </colgroup>
 
-          <tr v-else-if="showEmpty">
-            <td :colspan="headers.length" class="p-0">
-              <slot name="empty">
-                <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
-              </slot>
-            </td>
-          </tr>
-
-          <template v-else>
-            <tr
-              v-for="item in sortedItems"
-              :key="String(item[keyRow])"
-              class="border-b border-line transition-colors last:border-0"
-              :class="rowClickable ? 'cursor-pointer hover:bg-hover' : ''"
-              @click="rowClickable && emit('rowClick', item)"
-            >
-              <td
-                v-for="header in headers"
+          <thead>
+            <tr class="border-b border-line bg-subtle">
+              <th
+                v-for="header in visibleHeaders"
                 :key="header.value"
-                :class="[densityClasses, alignClass(header), 'text-ink']"
+                scope="col"
+                :aria-sort="ariaSort(header)"
+                :title="header.title"
+                class="relative font-medium text-muted"
+                :class="[
+                  densityClass,
+                  alignClass(header),
+                  stickyHeader && maxHeight ? 'sticky top-0 z-10 bg-subtle' : '',
+                ]"
               >
-                <slot :name="`cell-${header.value}`" :item="item" :header="header">
-                  {{ item[header.value] ?? '—' }}
+                <slot :name="`header-${header.value}`" :header="header">
+                  <button
+                    v-if="header.sortable"
+                    type="button"
+                    class="group inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    @click="toggleSort(header)"
+                  >
+                    <span class="truncate">{{ header.text }}</span>
+                    <!-- Привид-шеврон: підказка, що колонка взагалі сортується. -->
+                    <svg
+                      class="h-3 w-3 shrink-0 transition-opacity"
+                      :class="
+                        internalSort?.by === header.value
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40'
+                      "
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        :d="
+                          internalSort?.by === header.value && internalSort.dir === 'desc'
+                            ? 'M6 9l6 6 6-6'
+                            : 'M6 15l6-6 6 6'
+                        "
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </button>
+                  <span v-else class="block truncate">{{ header.text }}</span>
+                </slot>
+
+                <!-- Хват ресайзу. touch-none обов'язковий: без нього браузер
+                     забирає горизонтальний жест собі як прокрутку. -->
+                <span
+                  v-if="isResizable(header)"
+                  class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none hover:bg-accent/40"
+                  :class="resizing?.value === header.value ? 'bg-accent/60' : ''"
+                  @pointerdown="onResizeStart($event, header)"
+                  @pointermove="onResizeMove"
+                  @pointerup="onResizeEnd"
+                  @pointercancel="onResizeEnd"
+                  @dblclick.stop="resetWidth(header)"
+                  @click.stop
+                />
+              </th>
+
+              <!-- Жолоб налаштувань: власна комірка, а не абсолют поверх
+                   останнього заголовка. -->
+              <th
+                v-if="showSettings"
+                scope="col"
+                class="sticky right-0 z-20 bg-subtle p-0"
+                :class="stickyHeader && maxHeight ? 'top-0 z-30' : ''"
+              >
+                <UiMenu width="17rem" placement="bottom-end">
+                  <template #trigger="{ toggle }">
+                    <button
+                      type="button"
+                      class="flex h-full w-10 items-center justify-center text-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      aria-label="Налаштування колонок"
+                      @click="toggle"
+                    >
+                      <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path
+                          d="M4 6h16M4 12h16M4 18h16M8 6v0M16 12v0M10 18v0"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                        <circle cx="8" cy="6" r="2" fill="currentColor" />
+                        <circle cx="16" cy="12" r="2" fill="currentColor" />
+                        <circle cx="10" cy="18" r="2" fill="currentColor" />
+                      </svg>
+                    </button>
+                  </template>
+
+                  <template #content>
+                    <div v-if="densityToggle" class="border-b border-line px-3 py-2">
+                      <p class="mb-1.5 text-xs font-medium text-muted">Щільність</p>
+                      <div class="flex gap-1">
+                        <button
+                          v-for="option in (['sm', 'md'] as const)"
+                          :key="option"
+                          type="button"
+                          class="flex-1 rounded-control border px-2 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          :class="
+                            localDensity === option
+                              ? 'border-primary-200 bg-primary-50 text-accent'
+                              : 'border-line text-muted hover:bg-hover'
+                          "
+                          @click="setDensity(option)"
+                        >
+                          {{ option === 'sm' ? 'Щільно' : 'Звичайно' }}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="max-h-72 overflow-y-auto scrollbar-thin py-1">
+                      <div
+                        v-for="(header, index) in localHeaders"
+                        :key="header.value"
+                        class="flex items-center gap-2 px-2 py-1.5 hover:bg-hover"
+                        draggable="true"
+                        @dragstart="onDragStart(index, $event)"
+                        @dragover.prevent
+                        @drop.prevent="onDrop(index)"
+                      >
+                        <span class="cursor-grab text-muted active:cursor-grabbing" aria-hidden="true">
+                          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                            <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                            <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                          </svg>
+                        </span>
+
+                        <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink">
+                          <input
+                            type="checkbox"
+                            class="shrink-0 accent-[var(--accent-solid)]"
+                            :checked="header.visible !== false"
+                            :disabled="header.visible !== false && !canHide(header)"
+                            @change="toggleVisibility(header)"
+                          />
+                          <span class="truncate">{{ header.title || header.text || header.value }}</span>
+                        </label>
+
+                        <input
+                          v-if="!header.flex"
+                          type="number"
+                          class="w-16 shrink-0 rounded border border-line bg-input px-1.5 py-1 text-right text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          :value="header.width"
+                          :min="40"
+                          :max="800"
+                          aria-label="Ширина колонки, px"
+                          @change="setWidth(header, ($event.target as HTMLInputElement).value)"
+                        />
+                      </div>
+                    </div>
+
+                    <div class="flex gap-1 border-t border-line px-2 py-2">
+                      <button
+                        type="button"
+                        class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        @click="showAll"
+                      >
+                        Показати всі
+                      </button>
+                      <button
+                        type="button"
+                        class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        @click="resetAll"
+                      >
+                        Скинути
+                      </button>
+                    </div>
+                  </template>
+                </UiMenu>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <!--
+              v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
+              елементі у Vue 3 v-if має вищий пріоритет і не бачить змінної
+              циклу.
+            -->
+            <template v-if="showSkeleton">
+              <tr v-for="row in skeletonRows" :key="`sk-${row}`" class="border-b border-line last:border-0">
+                <td v-for="header in visibleHeaders" :key="header.value" :class="densityClass">
+                  <!-- Ширина заглушки детермінована, а не Math.random(): інакше
+                       вона мінялася б на кожному рендері й миготіла. -->
+                  <UiSkeleton
+                    class="h-3"
+                    :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
+                  />
+                </td>
+                <td v-if="showSettings" />
+              </tr>
+            </template>
+
+            <tr v-else-if="showEmpty">
+              <td :colspan="visibleHeaders.length + (showSettings ? 1 : 0)" class="p-0">
+                <slot name="empty">
+                  <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
                 </slot>
               </td>
             </tr>
-          </template>
-        </tbody>
-      </table>
 
-      <!-- Оверлей оновлення: дані вже є, але йде повторний запит. Заміняти
-           їх скелетоном було б гірше — таблиця блимала б на кожному фільтрі. -->
-      <div
-        v-if="loading && items.length > 0"
-        class="absolute inset-0 flex items-start justify-center bg-card/60 pt-10"
-        aria-hidden="true"
-      >
-        <span class="text-sm text-muted">Оновлення…</span>
+            <template v-else>
+              <tr
+                v-for="item in sortedItems"
+                :key="String(item[keyRow])"
+                class="border-b border-line transition-colors last:border-0"
+                :class="[
+                  rowClickable
+                    ? 'cursor-pointer hover:bg-hover focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-ring'
+                    : '',
+                  rowClass?.(item),
+                ]"
+                :role="rowClickable ? 'button' : undefined"
+                :tabindex="rowClickable ? 0 : undefined"
+                @click="onRowActivate(item)"
+                @keydown="onRowKeydown($event, item)"
+              >
+                <td
+                  v-for="header in visibleHeaders"
+                  :key="header.value"
+                  :title="cellTitle(item, header)"
+                  class="text-ink"
+                  :class="[
+                    densityClass,
+                    alignClass(header),
+                    header.align === 'right' ? 'tabular-nums' : '',
+                  ]"
+                >
+                  <div :class="clampClass(header)">
+                    <slot :name="`cell-${header.value}`" :item="item" :header="header">
+                      {{ item[header.value] ?? '—' }}
+                    </slot>
+                  </div>
+                </td>
+                <td v-if="showSettings" class="sticky right-0 bg-card" />
+              </tr>
+            </template>
+          </tbody>
+        </table>
+
+        <!-- Оверлей оновлення: дані вже є, але йде повторний запит. Заміняти
+             їх скелетоном було б гірше — таблиця блимала б на кожному фільтрі. -->
+        <div
+          v-if="loading && items.length > 0"
+          class="absolute inset-0 flex items-start justify-center bg-card/60 pt-10"
+          aria-hidden="true"
+        >
+          <span class="text-sm text-muted">Оновлення…</span>
+        </div>
       </div>
+
+      <!-- Афорданси прокрутки: без них не видно, що праворуч є ще колонки. -->
+      <div
+        v-if="canScrollLeft"
+        class="pointer-events-none absolute inset-y-0 left-0 w-6 rounded-l-card bg-gradient-to-r from-card to-transparent"
+        :class="mobileCards ? 'hidden md:block' : ''"
+        aria-hidden="true"
+      />
+      <div
+        v-if="canScrollRight"
+        class="pointer-events-none absolute inset-y-0 w-6 bg-gradient-to-l from-card to-transparent"
+        :class="[mobileCards ? 'hidden md:block' : '', showSettings ? 'right-10' : 'right-0']"
+        aria-hidden="true"
+      />
     </div>
 
     <!-- Мобільні картки з ТИХ САМИХ слотів cell-* -->
@@ -271,12 +911,19 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
         v-for="item in showEmpty ? [] : sortedItems"
         :key="`m-${String(item[keyRow])}`"
         class="rounded-card border border-line bg-card p-3"
-        :class="rowClickable ? 'cursor-pointer' : ''"
-        @click="rowClickable && emit('rowClick', item)"
+        :class="[rowClickable ? 'cursor-pointer' : '', rowClass?.(item)]"
+        :role="rowClickable ? 'button' : undefined"
+        :tabindex="rowClickable ? 0 : undefined"
+        @click="onRowActivate(item)"
+        @keydown="onRowKeydown($event, item)"
       >
         <slot name="mobile-card" :item="item">
           <dl class="space-y-1.5">
-            <div v-for="header in headers" :key="header.value" class="flex justify-between gap-3 text-sm">
+            <div
+              v-for="header in visibleHeaders"
+              :key="header.value"
+              class="flex justify-between gap-3 text-sm"
+            >
               <dt class="shrink-0 text-muted">{{ header.text }}</dt>
               <dd class="min-w-0 text-right text-ink">
                 <slot :name="`cell-${header.value}`" :item="item" :header="header">

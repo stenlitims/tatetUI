@@ -11,9 +11,9 @@ interface Page extends Record<string, unknown> {
 }
 
 const headers: TableHeader[] = [
-  { value: 'title', text: 'Сторінка', sortable: true },
-  { value: 'views', text: 'Перегляди', sortable: true, align: 'right', width: '9rem' },
-  { value: 'status', text: 'Статус', width: '9rem' },
+  { value: 'title', text: 'Сторінка', sortable: true, width: 200, flex: true },
+  { value: 'views', text: 'Перегляди', sortable: true, align: 'right', width: 130, defaultSortDir: 'desc' },
+  { value: 'status', text: 'Статус', width: 140 },
 ]
 
 // «Файл 10» проти «Файл 9» — саме те, на чому наївне сортування помиляється.

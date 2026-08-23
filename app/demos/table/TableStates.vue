@@ -4,8 +4,8 @@ import UiButton from '~/components/ui/UiButton.vue'
 import UiTable, { type TableHeader } from '~/components/ui/UiTable.vue'
 
 const headers: TableHeader[] = [
-  { value: 'name', text: 'Назва' },
-  { value: 'size', text: 'Розмір', align: 'right', width: '8rem' },
+  { value: 'name', text: 'Назва', width: 200, flex: true },
+  { value: 'size', text: 'Розмір', align: 'right', width: 120 },
 ]
 
 const loading = ref(true)
