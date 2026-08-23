@@ -18,6 +18,8 @@ const UI_DIR = join(ROOT, 'app/components/ui')
 const DEMOS_DIR = join(ROOT, 'app/demos')
 const TOKENS_FILE = join(ROOT, 'app/assets/css/tokens.css')
 const NAV_FILE = join(ROOT, 'app/config/docsNav.ts')
+const DOCS_PAGE = join(ROOT, 'app/pages/docs/[...slug].vue')
+const CSS_DIR = join(ROOT, 'app/assets/css')
 
 const errors: string[] = []
 const fail = (file: string, message: string) => errors.push(`${file}: ${message}`)
@@ -251,6 +253,97 @@ async function main() {
   }
 
   /* ---------------------------------------------------------------- */
+  /*  9. Клас .docs-prose стоїть просто на ContentRenderer             */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * ContentRenderer рендерить власний кореневий <div>. Поки .docs-prose
+   * висів на обгортці НАВКОЛО нього, між класом і блоками документа стояв
+   * зайвий рівень, і `.docs-prose > * + *` не збігалося ні з чим: усі <p>
+   * і <pre> лишалися з margin-top: 0. Сторінка при цьому виглядала майже
+   * нормально — вертикальний ритм тримали заголовки, у яких власні
+   * марджини, — тож помітно стало аж на сторінці з трьома блоками коду
+   * підряд.
+   */
+  const docsPageSource = (await readFile(DOCS_PAGE, 'utf8')).replace(/<!--[\s\S]*?-->/g, '')
+  const proseMentions = docsPageSource.match(/docs-prose/g)?.length ?? 0
+
+  if (proseMentions !== 1) {
+    fail(
+      'app/pages/docs/[...slug].vue',
+      `docs-prose згадано ${proseMentions} раз(ів), очікується рівно один — на <ContentRenderer>`,
+    )
+  } else if (!/<ContentRenderer[^>]*\bclass="[^"]*\bdocs-prose\b/.test(docsPageSource)) {
+    fail(
+      'app/pages/docs/[...slug].vue',
+      'клас docs-prose має стояти на самому <ContentRenderer>, а не на обгортці: ' +
+        'зайвий рівень вкладеності мовчки вимикає `.docs-prose > * + *`',
+    )
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  10. CSS справді парситься                                        */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * Тут ловиться конкретна поламка: коментар, що втратив свій `/*`.
+   * Парсер CSS з'їдає осиротілий текст як селектор аж до наступної `{` і
+   * мовчки викидає ціле правило разом із ним. Так загинуло
+   * `.docs-prose { line-height: 1.7 }` — виявилося тільки вимірюванням
+   * computed-стилю.
+   *
+   * Дві ознаки, обидві дешеві: непарні межі коментарів і кирилиця в
+   * селекторі. Кирилиця в селекторі в цьому проєкті означає рівно одне —
+   * що в нього затік текст коментаря.
+   */
+  let selectorsChecked = 0
+
+  for (const name of await readdir(CSS_DIR)) {
+    if (!name.endsWith('.css')) continue
+
+    const where = `app/assets/css/${name}`
+    const raw = await readFile(join(CSS_DIR, name), 'utf8')
+
+    const opens = raw.match(/\/\*/g)?.length ?? 0
+    const closes = raw.match(/\*\//g)?.length ?? 0
+    if (opens !== closes) {
+      fail(where, `межі коментарів непарні: ${opens} разів /* і ${closes} разів */`)
+      continue
+    }
+
+    // Пробіли замість вмісту, щоб номери рядків лишалися чесними.
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, ' '))
+
+    let buffer = ''
+    let line = 1
+    let selectorLine = 1
+
+    for (const char of css) {
+      if (char === '\n') line += 1
+
+      if (char === '{') {
+        const selector = buffer.trim()
+        selectorsChecked += 1
+        if (/[\u0400-\u04FF]/.test(selector) || selector.includes('*/')) {
+          fail(
+            `${where}:${selectorLine}`,
+            `у селекторі текст коментаря: "${selector.replace(/\s+/g, ' ').slice(0, 60)}…"`,
+          )
+        }
+        buffer = ''
+        selectorLine = line
+      } else if (char === '}' || char === ';') {
+        buffer = ''
+        selectorLine = line
+      } else if (!buffer && /\s/.test(char)) {
+        selectorLine = line
+      } else {
+        buffer += char
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
 
   if (errors.length) {
     console.error(`\n✗ Знайдено проблем: ${errors.length}\n`)
@@ -260,7 +353,8 @@ async function main() {
   }
 
   console.log(
-    `✓ Перевірки пройдено: ${pages.length} сторінок, ${demoFiles.length} демо, ${pairsChecked} пар токенів`,
+    `✓ Перевірки пройдено: ${pages.length} сторінок, ${demoFiles.length} демо, ` +
+      `${pairsChecked} пар токенів, ${selectorsChecked} селекторів`,
   )
 }
 

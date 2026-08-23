@@ -52,9 +52,16 @@ provide('docsPageEmitDescriptions', page.value.emitDescriptions ?? {})
       <h1 class="text-3xl font-semibold tracking-tight text-ink">{{ page.title }}</h1>
       <p class="mt-2 text-lg text-muted">{{ page.description }}</p>
 
-      <div class="docs-prose mt-8">
-        <ContentRenderer :value="page" />
-      </div>
+      <!--
+        Клас стоїть на самому ContentRenderer, а не на обгортці навколо
+        нього. ContentRenderer рендерить власний кореневий <div>, тож зайвий
+        рівень вкладеності робив `.docs-prose > * + *` селектором, який не
+        збігається ні з чим: усі <p> і <pre> лишалися з margin-top: 0, і
+        сторінка втрачала весь вертикальний ритм між блоками. Помітно було
+        лише там, де підряд ідуть абзаци й блоки коду — заголовки мають
+        власні марджини й тримали вигляд решти сторінок.
+      -->
+      <ContentRenderer :value="page" class="docs-prose mt-8" />
 
       <DocsPager />
     </article>
