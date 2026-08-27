@@ -51,7 +51,7 @@ export const helperTextClass = 'mt-1 text-sm text-muted'
 /* ------------------------------------------------------------------ */
 
 export const dropdownPanelClass =
-  'absolute z-[1100] mt-1 w-full max-h-60 overflow-y-auto scrollbar-thin rounded-control ' +
+  'absolute z-[1100] mt-1 w-full min-w-max max-h-80 overflow-y-auto scrollbar-thin rounded-control ' +
   'border border-line bg-dropdown shadow-overlay'
 
 export const dropdownEmptyClass = 'px-3 py-2 text-center text-sm text-muted'

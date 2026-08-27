@@ -35,6 +35,7 @@
   --color-dropdown: var(--bg-dropdown);
   --color-hover: var(--bg-hover);
   --color-subtle: var(--bg-subtle);
+  --color-backdrop: var(--backdrop);
 
   /* Межі: border-line / divide-line / border-line-strong */
   --color-line: var(--line);

@@ -50,7 +50,12 @@ export const docsNav: NavGroup[] = [
       { title: 'Input', to: '/docs/components/input' },
       { title: 'Textarea', to: '/docs/components/textarea' },
       { title: 'Select', to: '/docs/components/select' },
+      { title: 'MultiSelect', to: '/docs/components/multi-select' },
+      { title: 'Combobox', to: '/docs/components/combobox' },
       { title: 'Switch', to: '/docs/components/switch' },
+      { title: 'Slider', to: '/docs/components/slider' },
+      { title: 'DatePicker', to: '/docs/components/date-picker' },
+      { title: 'InlineEdit', to: '/docs/components/inline-edit' },
     ],
   },
   {
@@ -67,6 +72,20 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Table', to: '/docs/components/table' },
       { title: 'Menu', to: '/docs/components/menu' },
+      { title: 'Pagination', to: '/docs/components/pagination' },
+      { title: 'Avatar', to: '/docs/components/avatar' },
+      { title: 'Tree', to: '/docs/components/tree' },
+      { title: 'VirtualList', to: '/docs/components/virtual-list' },
+    ],
+  },
+  {
+    title: 'Структура',
+    items: [
+      { title: 'Tabs', to: '/docs/components/tabs' },
+      { title: 'Breadcrumb', to: '/docs/components/breadcrumb' },
+      { title: 'Card', to: '/docs/components/card' },
+      { title: 'Accordion', to: '/docs/components/accordion' },
+      { title: 'Stepper', to: '/docs/components/stepper' },
     ],
   },
   {
@@ -74,6 +93,19 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Skeleton', to: '/docs/components/skeleton' },
       { title: 'EmptyState', to: '/docs/components/empty-state' },
+      { title: 'Progress', to: '/docs/components/progress' },
+      { title: 'Alert', to: '/docs/components/alert' },
+      { title: 'Tooltip', to: '/docs/components/tooltip' },
+    ],
+  },
+  {
+    title: 'Дрібниці',
+    items: [
+      { title: 'Kbd', to: '/docs/components/kbd' },
+      { title: 'CopyButton', to: '/docs/components/copy-button' },
+      { title: 'ToggleGroup', to: '/docs/components/toggle-group' },
+      { title: 'FileUpload', to: '/docs/components/file-upload' },
+      { title: 'CommandPalette', to: '/docs/components/command-palette' },
     ],
   },
   {

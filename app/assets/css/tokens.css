@@ -50,6 +50,7 @@
   --bg-dropdown: #ffffff;         --bg-dropdown-rgb: 255, 255, 255;
   --bg-hover: #f1f5f9;            --bg-hover-rgb: 241, 245, 249;
   --bg-subtle: #f8fafc;           --bg-subtle-rgb: 248, 250, 252;
+  --backdrop: #0f1115;            --backdrop-rgb: 15, 17, 21;
 
   /* Межі */
   --line: #e2e6ec;                --line-rgb: 226, 230, 236;
@@ -96,9 +97,9 @@
   /* Семантичні радіуси: контрол / картка / оверлей.
      Іменовані за РОЛЛЮ, а не за розміром — інакше «зробимо тут трохи
      кругліше» розповзається по проєкту без жодного правила. */
-  --radius-control: 0.5rem;
-  --radius-card: 0.75rem;
-  --radius-overlay: 1rem;
+  --radius-control: 0.375rem;
+  --radius-card: 0.5rem;
+  --radius-overlay: 0.75rem;
 
   /* Семантичні тіні: картка / підняте / оверлей. */
   --shadow-card: 0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.06);
@@ -145,6 +146,7 @@
   --bg-dropdown: #1c2026;         --bg-dropdown-rgb: 28, 32, 38;
   --bg-hover: #22262e;            --bg-hover-rgb: 34, 38, 46;
   --bg-subtle: #14171c;           --bg-subtle-rgb: 20, 23, 28;
+  --backdrop: #000000;            --backdrop-rgb: 0, 0, 0;
 
   --line: #2a2f38;                --line-rgb: 42, 47, 56;
   --line-strong: #3a4150;         --line-strong-rgb: 58, 65, 80;

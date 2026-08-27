@@ -84,7 +84,7 @@ const variants: Record<Variant, string> = {
   soft: 'bg-primary-50 text-accent hover:bg-primary-100 active:bg-primary-100 border border-primary-200',
   outline: 'border border-line bg-card text-ink hover:bg-hover active:bg-hover',
   ghost: 'text-muted hover:text-ink hover:bg-hover active:bg-hover active:text-ink',
-  danger: 'bg-danger text-white hover:brightness-110 active:brightness-110 shadow-card',
+  danger: 'bg-danger text-accent-contrast hover:brightness-110 active:brightness-110 shadow-card',
 }
 
 /**
@@ -106,7 +106,7 @@ const sizes: Record<Size, string> = {
 const isDisabled = computed(() => props.disabled || props.loading)
 
 const classes = computed(() => [
-  'relative inline-flex items-center rounded-control font-medium transition-colors select-none',
+  'relative inline-flex items-center rounded-control font-medium transition duration-150 select-none active:scale-[0.98]',
   // Видиме фокус-кільце. У всіх чотирьох вихідних проєктах focus:outline-none
   // стоїть майже всюди без заміни — керування з клавіатури стає сліпим.
   // ring-offset відриває кільце від заливки, інакше на solid-кнопці воно

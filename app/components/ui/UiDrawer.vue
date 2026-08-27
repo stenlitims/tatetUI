@@ -334,7 +334,7 @@ onBeforeUnmount(() => {
         @pointerdown="onRootPointerDown"
         @click="onRootClick"
       >
-        <div ref="backdropEl" class="ui-drawer-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div ref="backdropEl" class="ui-drawer-backdrop absolute inset-0 bg-backdrop/50 backdrop-blur-sm" />
 
         <div
           ref="panelEl"

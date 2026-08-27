@@ -62,15 +62,32 @@
     color: var(--ink);
   }
 
-  .docs-prose ul,
-  .docs-prose ol {
+  .docs-prose > ul,
+  .docs-prose > ol {
     padding-left: 1.5em;
   }
 
-  .docs-prose ul { list-style: disc; }
-  .docs-prose ol { list-style: decimal; }
+  /* Селектор `>` критичний: без нього `list-style: decimal` діставався б
+     <ol> УСЕРЕДИНІ демо — і UiBreadcrumb (власне <ol> крихт) рендерився б
+     на сторінці документації як нумерований список «1. 2. 3.». Той самий
+     захист, що в td вище: проза має стилізувати власну розмітку
+     документа, а не компоненти в демо. */
+  .docs-prose > ul { list-style: disc; }
+  .docs-prose > ol { list-style: decimal; }
 
-  .docs-prose li + li {
+  /* Вкладені списки прози (внутрішні <li> → <ul>/<ol>) — без маркерів
+     вони виглядали б зламаними, тож стилізуємо і їх, але лише в межах
+     списків ПЕРШОГО рівня prose. */
+  .docs-prose > ul ul,
+  .docs-prose > ol ol,
+  .docs-prose > ul ol,
+  .docs-prose > ol ul {
+    list-style: circle;
+    margin-top: 0.4em;
+  }
+
+  .docs-prose > ul > li + li,
+  .docs-prose > ol > li + li {
     margin-top: 0.4em;
   }
 

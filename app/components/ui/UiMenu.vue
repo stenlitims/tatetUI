@@ -175,7 +175,7 @@ defineExpose({
   <div ref="containerEl" class="relative inline-block">
     <div
       ref="triggerEl"
-      :aria-haspopup="true"
+      :aria-haspopup="'menu'"
       :aria-expanded="isOpen"
       :aria-controls="isOpen ? panelId : undefined"
     >

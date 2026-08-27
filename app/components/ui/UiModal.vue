@@ -214,7 +214,7 @@ onBeforeUnmount(() => {
         @pointerdown="onRootPointerDown"
         @click="onRootClick"
       >
-        <div ref="backdropEl" class="ui-modal-backdrop absolute inset-0 bg-black/50 backdrop-blur-sm" />
+        <div ref="backdropEl" class="ui-modal-backdrop absolute inset-0 bg-backdrop/50 backdrop-blur-sm" />
 
         <!-- Знизу до sm — bottom sheet, вище — центроване вікно. Це не
              декор: на телефоні центроване вікно з клавіатурою не вміщається. -->

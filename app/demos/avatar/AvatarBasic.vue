@@ -1,0 +1,14 @@
+<script setup lang="ts">
+import UiAvatar from '~/components/ui/UiAvatar.vue'
+</script>
+
+<template>
+  <div class="flex flex-wrap items-center gap-3">
+    <UiAvatar name="Ігор Шевченко" :size="24" />
+    <UiAvatar name="Марія Ковалишин" :size="32" />
+    <UiAvatar name="Олег Марченко" :size="48" />
+    <!-- Битий URL навмисно: демонструє падіння на ініціали -->
+    <UiAvatar src="https://example.invalid/no-photo.png" name="Немає фото" :size="32" />
+    <UiAvatar tone="neutral" name="Сервісний акаунт" :size="32" />
+  </div>
+</template>

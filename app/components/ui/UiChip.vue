@@ -51,7 +51,7 @@ const classes = computed(() => [
   tones[props.tone],
   sizes[props.size],
   props.clickable
-    ? 'transition-[filter] hover:brightness-95 dark:hover:brightness-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    ? 'cursor-pointer transition-[filter] hover:brightness-95 dark:hover:brightness-125 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
     : '',
 ])
 </script>
