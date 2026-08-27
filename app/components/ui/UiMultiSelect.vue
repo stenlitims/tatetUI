@@ -4,7 +4,9 @@ import {
   nextTick,
   onBeforeUnmount,
   onBeforeUpdate,
+  onMounted,
   ref,
+  shallowRef,
   useId,
   watch,
 } from 'vue'
@@ -22,6 +24,8 @@ import {
   labelClass,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+import { orderSelection } from '~/utils/multiSelect'
+import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 
 export interface MultiSelectOption {
   value: string | number
@@ -49,6 +53,8 @@ const props = withDefaults(
     error?: string
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   {
@@ -74,7 +80,7 @@ defineSlots<{
 }>()
 
 const generatedId = useId()
-const triggerId = computed(() => props.name ?? `${generatedId}-multiselect`)
+const triggerId = computed(() => props.id ?? `${generatedId}-multiselect`)
 const listboxId = `${generatedId}-listbox`
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
@@ -89,6 +95,7 @@ const optionEls = ref<(HTMLElement | null)[]>([])
 const isOpen = ref(false)
 const query = ref('')
 const highlightedIndex = ref(-1)
+const teleportReady = shallowRef(false)
 
 const hasError = computed(() => !!props.error)
 
@@ -169,6 +176,7 @@ function updatePosition() {
     top: `${Math.max(margin, top)}px`,
     left: `${rect.left}px`,
     width: `${rect.width}px`,
+    zIndex: String(getOverlayChildZIndex(anchor)),
   }
 }
 
@@ -192,7 +200,7 @@ async function open() {
   if (props.disabled || isOpen.value) return
   isOpen.value = true
   query.value = ''
-  highlightedIndex.value = -1
+  highlightedIndex.value = firstEnabledIndex(props.options)
   attachReposition()
   await nextTick()
   updatePosition()
@@ -226,27 +234,29 @@ function toggleOption(option: MultiSelectOption) {
   if (next.has(option.value)) next.delete(option.value)
   else next.add(option.value)
   // Віддаємо в порядку options: споживач отримує стабільний масив.
-  const ordered = props.options.filter((o) => next.has(o.value)).map((o) => o.value)
+  const ordered = orderSelection(props.options, next)
   internalValue.value = ordered
   emit('update:modelValue', ordered)
 }
 
 function selectAll() {
   const merged = new Set(internalValue.value)
-  for (const option of filteredOptions.value) merged.add(option.value)
-  const ordered = props.options.filter((o) => merged.has(o.value)).map((o) => o.value)
+  for (const option of filteredOptions.value) {
+    if (!option.disabled) merged.add(option.value)
+  }
+  const ordered = orderSelection(props.options, merged)
   internalValue.value = ordered
   emit('update:modelValue', ordered)
 }
 
 function clearAll() {
-  // Із відкритим пошуком знімаємо лише відфільтроване, без пошуку — усе.
-  if (query.value.trim()) {
-    const filteredSet = new Set(filteredOptions.value.map((o) => o.value))
-    internalValue.value = internalValue.value.filter((v) => !filteredSet.has(v))
-  } else {
-    internalValue.value = []
+  // Disabled-значення не змінюємо масовою дією: їх можна лише показати.
+  const next = new Set(internalValue.value)
+  const candidates = query.value.trim() ? filteredOptions.value : props.options
+  for (const option of candidates) {
+    if (!option.disabled) next.delete(option.value)
   }
+  internalValue.value = orderSelection(props.options, next)
   emit('update:modelValue', [...internalValue.value])
 }
 
@@ -270,13 +280,37 @@ function moveHighlight(step: 1 | -1) {
   void nextTick(scrollHighlightedIntoView)
 }
 
+function firstEnabledIndex(list: MultiSelectOption[], fromEnd = false) {
+  if (fromEnd) {
+    for (let index = list.length - 1; index >= 0; index--) {
+      if (!list[index]?.disabled) return index
+    }
+    return -1
+  }
+  return list.findIndex((option) => !option.disabled)
+}
+
 function onTriggerKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
-    toggle()
-  } else if (event.key === 'ArrowDown') {
+    if (!isOpen.value) return void open()
+    if (!showSearch.value) {
+      const option = filteredOptions.value[highlightedIndex.value]
+      if (option) toggleOption(option)
+    }
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
     event.preventDefault()
-    void open()
+    const step = event.key === 'ArrowDown' ? 1 : -1
+    if (!isOpen.value) {
+      void open().then(() => {
+        highlightedIndex.value = firstEnabledIndex(filteredOptions.value, step === -1)
+        scrollHighlightedIntoView()
+      })
+    } else if (!showSearch.value) moveHighlight(step)
+  } else if ((event.key === 'Home' || event.key === 'End') && isOpen.value && !showSearch.value) {
+    event.preventDefault()
+    highlightedIndex.value = firstEnabledIndex(filteredOptions.value, event.key === 'End')
+    void nextTick(scrollHighlightedIntoView)
   } else if (event.key === 'Escape' && isOpen.value) {
     event.stopPropagation()
     close()
@@ -291,7 +325,9 @@ function onSearchKeydown(event: KeyboardEvent) {
       const step = event.key === 'ArrowDown' ? 1 : -1
       const list = filteredOptions.value
       if (!list.length) return
-      if (highlightedIndex.value === -1) highlightedIndex.value = step === 1 ? 0 : list.length - 1
+      if (highlightedIndex.value === -1) {
+        highlightedIndex.value = firstEnabledIndex(list, step === -1)
+      }
       else {
         let next = highlightedIndex.value
         for (let i = 0; i < list.length; i++) {
@@ -306,14 +342,14 @@ function onSearchKeydown(event: KeyboardEvent) {
     case 'Home':
       event.preventDefault()
       if (filteredOptions.value.length) {
-        highlightedIndex.value = 0
+        highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
         void nextTick(scrollHighlightedIntoView)
       }
       return
     case 'End':
       event.preventDefault()
       if (filteredOptions.value.length) {
-        highlightedIndex.value = filteredOptions.value.length - 1
+        highlightedIndex.value = firstEnabledIndex(filteredOptions.value, true)
         void nextTick(scrollHighlightedIntoView)
       }
       return
@@ -342,9 +378,14 @@ function onDocumentPointerDown(event: PointerEvent) {
   close()
 }
 
-if (typeof document !== 'undefined') {
+watch(query, () => {
+  highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
+})
+
+onMounted(() => {
+  teleportReady.value = true
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
-}
+})
 
 onBeforeUnmount(() => {
   detachReposition()
@@ -368,11 +409,15 @@ defineExpose({
         :id="triggerId"
         ref="triggerEl"
         type="button"
+        role="combobox"
         :disabled="disabled"
         :class="triggerClasses"
         aria-haspopup="listbox"
         :aria-expanded="isOpen"
         :aria-controls="isOpen ? listboxId : undefined"
+        :aria-activedescendant="
+          isOpen && !showSearch && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
+        "
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
         @click="toggle"
@@ -403,14 +448,11 @@ defineExpose({
       </span>
     </div>
 
-    <Teleport to="body">
+    <Teleport to="body" :disabled="!teleportReady">
       <Transition v-bind="dropdownTransitionProps">
         <div
           v-if="isOpen"
-          :id="listboxId"
           ref="dropdownEl"
-          role="listbox"
-          aria-multiselectable="true"
           :class="dropdownPanelClass"
           :style="panelStyle"
         >
@@ -419,6 +461,12 @@ defineExpose({
               ref="searchEl"
               v-model="query"
               type="text"
+              role="combobox"
+              aria-expanded="true"
+              aria-autocomplete="list"
+              :aria-controls="listboxId"
+              :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
+              aria-label="Пошук опцій"
               placeholder="Пошук…"
               :class="dropdownSearchInputClass"
               @keydown="onSearchKeydown"
@@ -464,8 +512,20 @@ defineExpose({
             </span>
           </div>
 
-          <ul class="scrollbar-thin max-h-52 overflow-y-auto py-1">
-            <li v-if="filteredOptions.length === 0" :class="dropdownEmptyClass">Нічого не знайдено</li>
+          <ul
+            :id="listboxId"
+            role="listbox"
+            aria-multiselectable="true"
+            class="scrollbar-thin max-h-52 overflow-y-auto py-1"
+          >
+            <li
+              v-if="filteredOptions.length === 0"
+              role="option"
+              aria-disabled="true"
+              :class="dropdownEmptyClass"
+            >
+              Нічого не знайдено
+            </li>
             <template v-else>
               <li
                 v-for="(option, index) in filteredOptions"
@@ -522,6 +582,16 @@ defineExpose({
         </div>
       </Transition>
     </Teleport>
+
+    <template v-if="name">
+      <input
+        v-for="value in internalValue"
+        :key="`${name}-${value}`"
+        type="hidden"
+        :name="name"
+        :value="value"
+      />
+    </template>
 
     <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>

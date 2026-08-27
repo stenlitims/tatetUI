@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, ref, useId, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onMounted,
+  ref,
+  shallowRef,
+  useId,
+  watch,
+} from 'vue'
+import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
   dropdownEmptyClass,
   dropdownPanelClass,
@@ -47,6 +58,8 @@ const props = withDefaults(
     minChars?: number
     /** Дозволяє скинути вибір хрестиком. */
     clearable?: boolean
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
   }>(),
   {
     placeholder: 'Пошук…',
@@ -70,7 +83,7 @@ defineSlots<{
 }>()
 
 const generatedId = useId()
-const inputId = computed(() => props.name ?? `${generatedId}-combobox`)
+const inputId = computed(() => props.id ?? `${generatedId}-combobox`)
 const listboxId = `${generatedId}-listbox`
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
@@ -84,6 +97,7 @@ const optionEls = ref<(HTMLElement | null)[]>([])
 const isOpen = ref(false)
 const query = ref('')
 const highlightedIndex = ref(-1)
+const teleportReady = shallowRef(false)
 
 const hasError = computed(() => !!props.error)
 
@@ -120,6 +134,7 @@ function updatePosition() {
     top: `${Math.max(margin, top)}px`,
     left: `${rect.left}px`,
     width: `${rect.width}px`,
+    zIndex: String(getOverlayChildZIndex(anchor)),
   }
 }
 
@@ -142,7 +157,11 @@ function detachReposition() {
 async function open() {
   if (props.disabled || isOpen.value) return
   isOpen.value = true
-  highlightedIndex.value = props.options.findIndex((o) => o.value === props.modelValue)
+  const selectedIndex = props.options.findIndex((option) => option.value === props.modelValue)
+  highlightedIndex.value =
+    selectedIndex >= 0 && !props.options[selectedIndex]?.disabled
+      ? selectedIndex
+      : firstEnabledIndex(props.options)
   attachReposition()
   await nextTick()
   updatePosition()
@@ -166,6 +185,17 @@ function syncQueryToSelection() {
 
 watch(() => props.modelValue, syncQueryToSelection, { immediate: true })
 
+watch(
+  () => props.options,
+  (options) => {
+    if (!isOpen.value) return
+    const current = options[highlightedIndex.value]
+    if (current && !current.disabled) return
+    highlightedIndex.value = firstEnabledIndex(options)
+  },
+  { deep: true },
+)
+
 function selectOption(option: ComboboxOption) {
   if (option.disabled) return
   emit('update:modelValue', option.value)
@@ -181,11 +211,15 @@ function clear() {
 
 function onInput(event: Event) {
   query.value = (event.target as HTMLInputElement).value
-  highlightedIndex.value = 0
+  highlightedIndex.value = firstEnabledIndex(props.options)
   if (query.value.length >= props.minChars) emit('search', query.value)
   // Панель відкривається на ввід лише коли запит достатньо довгий;
   // короткий запит лишає поле чистим для подальшого набору.
-  if (!isOpen.value && query.value.length >= props.minChars) void open()
+  if (query.value.length < props.minChars) {
+    close()
+    return
+  }
+  if (!isOpen.value) void open()
 }
 
 /* ---------------------------------------------------------------- */
@@ -206,6 +240,16 @@ function moveHighlight(step: 1 | -1) {
   }
   highlightedIndex.value = next
   void nextTick(scrollHighlightedIntoView)
+}
+
+function firstEnabledIndex(list: ComboboxOption[], fromEnd = false) {
+  if (fromEnd) {
+    for (let index = list.length - 1; index >= 0; index--) {
+      if (!list[index]?.disabled) return index
+    }
+    return -1
+  }
+  return list.findIndex((option) => !option.disabled)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -231,6 +275,16 @@ function onKeydown(event: KeyboardEvent) {
       event.stopPropagation()
       close()
       return
+    case 'Home':
+      if (!isOpen.value) return
+      event.preventDefault()
+      highlightedIndex.value = firstEnabledIndex(props.options)
+      return void nextTick(scrollHighlightedIntoView)
+    case 'End':
+      if (!isOpen.value) return
+      event.preventDefault()
+      highlightedIndex.value = firstEnabledIndex(props.options, true)
+      return void nextTick(scrollHighlightedIntoView)
     case 'Tab':
       close()
   }
@@ -248,12 +302,13 @@ function onDocumentPointerDown(event: PointerEvent) {
   close()
 }
 
-if (typeof document !== 'undefined') {
-  document.addEventListener('pointerdown', onDocumentPointerDown, true)
-}
-
 onBeforeUpdate(() => {
   optionEls.value = []
+})
+
+onMounted(() => {
+  teleportReady.value = true
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
 })
 
 onBeforeUnmount(() => {
@@ -281,7 +336,6 @@ defineExpose({
         :id="inputId"
         ref="inputEl"
         :value="query"
-        :name="name"
         :placeholder="placeholder"
         :disabled="disabled"
         :required="required"
@@ -334,21 +388,23 @@ defineExpose({
       </span>
     </div>
 
-    <Teleport to="body">
+    <Teleport to="body" :disabled="!teleportReady">
       <Transition v-bind="dropdownTransitionProps">
         <div
           v-if="isOpen"
-          :id="listboxId"
           ref="dropdownEl"
-          role="listbox"
           :class="dropdownPanelClass"
           :style="panelStyle"
         >
-          <div v-if="loading" :class="dropdownEmptyClass">Завантаження…</div>
-          <div v-else-if="!options.length" :class="dropdownEmptyClass">Нічого не знайдено</div>
-          <ul v-else class="py-1">
+          <ul :id="listboxId" role="listbox" class="py-1">
+            <li v-if="loading" role="option" aria-disabled="true" :class="dropdownEmptyClass">
+              Завантаження…
+            </li>
+            <li v-else-if="!options.length" role="option" aria-disabled="true" :class="dropdownEmptyClass">
+              Нічого не знайдено
+            </li>
             <li
-              v-for="(option, index) in options"
+              v-for="(option, index) in loading ? [] : options"
               :id="optionId(index)"
               :key="option.value"
               :ref="(el) => (optionEls[index] = el as HTMLElement)"
@@ -388,6 +444,8 @@ defineExpose({
         </div>
       </Transition>
     </Teleport>
+
+    <input v-if="name" type="hidden" :name="name" :value="modelValue ?? ''" />
 
     <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>

@@ -18,10 +18,19 @@ const props = withDefaults(
 
 defineSlots<Record<string, never>>()
 
-const percent = computed(() => {
+const normalizedMax = computed(() =>
+  Number.isFinite(props.max) && props.max > 0 ? props.max : 100,
+)
+
+const normalizedValue = computed(() => {
   if (props.modelValue == null) return null
-  const value = Math.min(Math.max(props.modelValue, 0), props.max)
-  return Math.round((value / props.max) * 100)
+  if (!Number.isFinite(props.modelValue)) return 0
+  return Math.min(Math.max(props.modelValue, 0), normalizedMax.value)
+})
+
+const percent = computed(() => {
+  if (normalizedValue.value == null) return null
+  return Math.round((normalizedValue.value / normalizedMax.value) * 100)
 })
 </script>
 
@@ -35,8 +44,8 @@ const percent = computed(() => {
       role="progressbar"
       :aria-label="label ?? undefined"
       :aria-valuemin="0"
-      :aria-valuemax="max"
-      :aria-valuenow="percent ?? undefined"
+      :aria-valuemax="normalizedMax"
+      :aria-valuenow="normalizedValue ?? undefined"
       class="w-full overflow-hidden rounded-full bg-line"
       :class="size === 'md' ? 'h-2.5' : 'h-1.5'"
     >

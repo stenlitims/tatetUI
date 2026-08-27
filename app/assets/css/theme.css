@@ -73,6 +73,9 @@
   --color-danger: var(--danger);
   --color-danger-bg: var(--danger-bg);
   --color-danger-line: var(--danger-line);
+  --color-danger-solid: var(--danger-solid);
+  --color-danger-solid-hover: var(--danger-solid-hover);
+  --color-danger-contrast: var(--danger-contrast);
   --color-info: var(--info);
   --color-info-bg: var(--info-bg);
   --color-info-line: var(--info-line);

@@ -29,6 +29,8 @@ const props = withDefaults(
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
     autocomplete?: string
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   { type: 'text', size: 'md' },
@@ -48,7 +50,7 @@ defineSlots<{
 }>()
 
 const generatedId = useId()
-const inputId = computed(() => props.name ?? `${generatedId}-input`)
+const inputId = computed(() => props.id ?? `${generatedId}-input`)
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 

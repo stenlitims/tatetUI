@@ -5,6 +5,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  shallowRef,
   useAttrs,
   useId,
   useSlots,
@@ -95,6 +96,9 @@ const wrapperAttrs = computed(() => {
 })
 
 const hasCustomHeader = computed(() => !!slots.header)
+const hasHeader = computed(() => hasCustomHeader.value || !!props.title || props.closable)
+const hasAccessibleHeader = computed(() => hasCustomHeader.value || !!props.title)
+const teleportReady = shallowRef(false)
 
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
@@ -309,6 +313,7 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 onMounted(() => {
+  teleportReady.value = true
   document.addEventListener('keydown', onKeyDown)
   if (props.modelValue) void handleOpen()
 })
@@ -323,10 +328,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="!teleportReady">
     <Transition name="ui-drawer" :duration="transitionDuration" @after-leave="onAfterLeave">
       <div
         v-if="modelValue"
+        data-ui-overlay
         class="ui-drawer fixed inset-0 flex"
         :class="[POSITION_CLASSES[position], positionModifierClass, attrs.class]"
         :style="{ zIndex: layer.zIndex.value }"
@@ -353,8 +359,8 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           tabindex="-1"
-          :aria-labelledby="hasCustomHeader ? undefined : titleId"
-          :aria-label="hasCustomHeader ? title || undefined : undefined"
+          :aria-labelledby="hasAccessibleHeader ? titleId : undefined"
+          :aria-label="hasAccessibleHeader ? undefined : 'Бічна панель'"
         >
           <!-- Ручка свайпу. touch-none обов'язковий: без нього браузер
                забирає вертикальний жест собі як прокрутку сторінки. -->
@@ -367,14 +373,17 @@ onBeforeUnmount(() => {
           </div>
 
           <div
-            v-if="title || $slots.header"
+            v-if="hasHeader"
             class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-subtle px-4 py-3"
             :class="showDragHandle ? 'touch-none' : ''"
             @pointerdown="onHeaderPointerDown"
           >
-            <div class="flex min-w-0 flex-1 items-center gap-3">
+            <div
+              :id="hasAccessibleHeader ? titleId : undefined"
+              class="flex min-w-0 flex-1 items-center gap-3"
+            >
               <slot name="header">
-                <h3 :id="titleId" class="m-0 truncate text-lg font-semibold tracking-tight text-ink">
+                <h3 class="m-0 truncate text-lg font-semibold tracking-tight text-ink">
                   {{ title }}
                 </h3>
               </slot>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, useId } from 'vue'
+import { isFileAccepted } from '~/utils/fileUpload'
 import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
 
 /**
@@ -49,8 +50,13 @@ const emit = defineEmits<{
 }>()
 
 defineSlots<{
-  /** Замінює зону цілком. */
-  default?: () => unknown
+  /** Замінює зону цілком; `open` відкриває системний file picker. */
+  default?: (props: {
+    open: () => void
+    dragActive: boolean
+    loading: boolean
+    disabled: boolean
+  }) => unknown
   /** Власне прев'ю замість зображення. */
   preview?: (props: { fileUrl: string; fileName: string }) => unknown
 }>()
@@ -89,32 +95,23 @@ function clearPreview() {
 
 onBeforeUnmount(clearPreview)
 
-/** Зіставлення accept: список через кому, MIME (`image/*`) або `.ext`. */
-function matchesAccept(file: File, accept: string): boolean {
-  const rules = accept.split(',').map((rule) => rule.trim().toLowerCase())
-  const name = file.name.toLowerCase()
-  const type = file.type.toLowerCase()
-  return rules.some((rule) => {
-    if (!rule) return false
-    if (rule.startsWith('.')) return name.endsWith(rule)
-    if (rule.endsWith('/*')) return type.startsWith(rule.slice(0, -1))
-    return type === rule
-  })
-}
-
 function onFiles(fileList: FileList | null) {
   localError.value = null
   if (!fileList?.length) return
-  const files = Array.from(fileList)
+  const files = props.multiple ? Array.from(fileList) : Array.from(fileList).slice(0, 1)
   const valid: File[] = []
 
   for (const file of files) {
-    if (props.accept && !matchesAccept(file, props.accept)) {
-      emit('error', `«${file.name}» — недопустимий тип файлу`)
+    if (!isFileAccepted(file, props.accept)) {
+      const message = `«${file.name}» — недопустимий тип файлу`
+      localError.value ??= message
+      emit('error', message)
       continue
     }
     if (file.size > props.maxSizeMb * 1024 * 1024) {
-      emit('error', `«${file.name}» більший за ${props.maxSizeMb} МБ`)
+      const message = `«${file.name}» більший за ${props.maxSizeMb} МБ`
+      localError.value ??= message
+      emit('error', message)
       continue
     }
     valid.push(file)
@@ -148,11 +145,18 @@ function removeFile() {
   clearPreview()
   inputEl.value && (inputEl.value.value = '')
 }
+
+defineExpose({
+  /** Відкрити системний вибір файлу. */
+  open: openDialog,
+})
 </script>
 
 <template>
   <div>
-    <label v-if="label && !$slots.default" :class="labelClass">{{ label }}</label>
+    <label v-if="label && !$slots.default" :for="inputId" :class="labelClass">
+      {{ label }}
+    </label>
 
     <!-- Прев'ю зображення -->
     <div v-if="objectUrl && !$slots.default" class="mb-2 flex items-center gap-3">
@@ -177,10 +181,16 @@ function removeFile() {
       </slot>
     </div>
 
-    <slot>
+    <slot
+      :open="openDialog"
+      :drag-active="dragActive"
+      :loading="loading"
+      :disabled="disabled"
+    >
       <div
         role="button"
-        tabindex="0"
+        :tabindex="disabled ? -1 : 0"
+        :aria-busy="loading || undefined"
         :aria-disabled="disabled || undefined"
         :aria-label="typeof label === 'string' ? label : 'Завантажити файл'"
         class="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-card border-2 border-dashed p-6 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -212,13 +222,22 @@ function removeFile() {
         </p>
 
         <!-- Прогрес upload споживача -->
-        <div v-if="progress != null" class="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-line">
+        <div
+          v-if="progress != null"
+          role="progressbar"
+          aria-label="Прогрес завантаження"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-valuenow="Math.min(100, Math.max(0, progress))"
+          class="mt-2 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-line"
+        >
           <div class="h-full rounded-full bg-accent-solid transition-[width] duration-300" :style="{ width: `${Math.min(100, Math.max(0, progress))}%` }" />
         </div>
       </div>
     </slot>
 
     <input
+      :id="inputId"
       ref="inputEl"
       type="file"
       class="hidden"

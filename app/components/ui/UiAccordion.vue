@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
+import { nextTick, onBeforeUpdate, ref, useId, watch } from 'vue'
 
 export interface AccordionItem {
   id: string
@@ -43,6 +43,15 @@ defineSlots<{
 const generatedId = useId()
 const baseId = `${generatedId}-acc`
 
+const headerButtonEls = ref<(HTMLElement | null)[]>([])
+
+// Template-refs у v-for накопичуються між рендерами: без скидання масив
+// тримав би хибні елементи після зміни набору секцій (той самий патерн,
+// що в UiTabs і UiSelect).
+onBeforeUpdate(() => {
+  headerButtonEls.value = []
+})
+
 /*
  * Некерований режим: modelValue не задано → стан живе тут. Керований:
  * кожен тоггл емітовиться, стан приходить згори.
@@ -68,20 +77,50 @@ function toggle(item: AccordionItem) {
   if (open) emit('open', item.id)
   else emit('close', item.id)
 }
+
+/*
+ * Навігація між заголовками: ↑/↓ — попередній/наступний, Home/End —
+ * перший/останній. Нативна disabled-кнопка не може отримати фокус, тому
+ * навігація пропускає вимкнені секції та циклічно обходить лише доступні.
+ */
+function onHeaderKeydown(event: KeyboardEvent, index: number) {
+  const enabled = props.items
+    .map((item, itemIndex) => ({ item, index: itemIndex }))
+    .filter(({ item }) => !item.disabled)
+  if (!enabled.length) return
+  const current = enabled.findIndex((entry) => entry.index === index)
+
+  const go = (target: number) => {
+    event.preventDefault()
+    void nextTick(() => headerButtonEls.value[enabled[target]?.index ?? 0]?.focus())
+  }
+
+  if (event.key === 'ArrowDown') {
+    go((current + 1 + enabled.length) % enabled.length)
+  } else if (event.key === 'ArrowUp') {
+    go((current - 1 + enabled.length) % enabled.length)
+  } else if (event.key === 'Home') {
+    go(0)
+  } else if (event.key === 'End') {
+    go(enabled.length - 1)
+  }
+}
 </script>
 
 <template>
   <div class="divide-y divide-line rounded-card border border-line bg-card">
-    <div v-for="item in items" :key="item.id">
+    <div v-for="(item, index) in items" :key="item.id">
       <h3 class="m-0">
         <button
           :id="`${baseId}-${item.id}-button`"
+          :ref="(el) => (headerButtonEls[index] = el as HTMLElement)"
           :aria-expanded="isOpen(item.id)"
           :aria-controls="`${baseId}-${item.id}-panel`"
           :disabled="item.disabled"
           class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           :class="item.disabled ? 'text-muted' : 'text-ink hover:bg-hover'"
           @click="toggle(item)"
+          @keydown="onHeaderKeydown($event, index)"
         >
           <slot name="label" :item="item" :open="isOpen(item.id)">{{ item.label }}</slot>
           <svg
@@ -103,6 +142,8 @@ function toggle(item: AccordionItem) {
         :id="`${baseId}-${item.id}-panel`"
         role="region"
         :aria-labelledby="`${baseId}-${item.id}-button`"
+        :aria-hidden="!isOpen(item.id)"
+        :inert="!isOpen(item.id)"
         class="grid transition-[grid-template-rows] duration-200 ease-out"
         :style="{ gridTemplateRows: isOpen(item.id) ? '1fr' : '0fr' }"
       >

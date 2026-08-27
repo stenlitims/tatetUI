@@ -15,8 +15,8 @@ const items = [
 <template>
   <div class="flex flex-col items-center gap-3">
     <UiMenu width="12rem" placement="bottom-end">
-      <template #trigger="{ toggle, isOpen }">
-        <UiButton variant="outline" @click="toggle">
+      <template #trigger="{ toggle, isOpen, triggerAttrs }">
+        <UiButton v-bind="triggerAttrs" variant="outline" @click="toggle">
           Дії {{ isOpen ? '▴' : '▾' }}
         </UiButton>
       </template>

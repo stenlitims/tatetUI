@@ -2,6 +2,13 @@ import { ref } from 'vue'
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info'
 
+export interface ToastAction {
+  /** Напис на кнопці. */
+  label: string
+  /** Дія кнопки. Тост НЕ закривається сам — закривайте через `dismiss(id)`, коли потрібно. */
+  onClick: () => void
+}
+
 export interface ToastOptions {
   /** Жирний рядок над повідомленням. Необов'язковий. */
   title?: string
@@ -9,6 +16,13 @@ export interface ToastOptions {
   type?: ToastType
   /** Скільки тримати на екрані, мс. `0` — не ховати автоматично. */
   duration?: number
+  /**
+   * Рядок кнопок під повідомленням (зазвичай «Скасувати», «Повторити»).
+   * Слотом не зробити: useToast() викликається з будь-якого місця
+   * застосунку, а не з шаблону, тож дії — лише дані. Кнопки малює
+   * контейнер.
+   */
+  actions?: ToastAction[]
 }
 
 export interface Toast {
@@ -16,8 +30,7 @@ export interface Toast {
   title?: string
   message: string
   type: ToastType
-  /** false вмикає leave-анімацію; сам запис видаляється через 300 мс. */
-  isVisible: boolean
+  actions?: ToastAction[]
 }
 
 /**
@@ -53,14 +66,10 @@ export function useToast() {
   /** Прибрати тост негайно, з анімацією виходу. */
   function dismiss(id: number) {
     clearTimer(id)
-    const toast = toasts.value.find((item) => item.id === id)
-    if (!toast) return
-    toast.isVisible = false
-    // Двофазне зникнення: спершу гасимо, потім видаляємо — інакше
-    // leave-анімація не встигає програтись.
-    setTimeout(() => {
-      toasts.value = toasts.value.filter((item) => item.id !== id)
-    }, 300)
+    // TransitionGroup тримає вилучений vnode до завершення leave-анімації.
+    // Окремий 300ms setTimeout лише затримував старт анімації і залишав
+    // другий таймер, який уже не належав черзі.
+    toasts.value = toasts.value.filter((item) => item.id !== id)
   }
 
   /** Показати тост. Повертає його id — його можна передати в `dismiss`. */
@@ -71,7 +80,7 @@ export function useToast() {
       title: options.title,
       message: options.message,
       type: options.type ?? 'info',
-      isVisible: true,
+      actions: options.actions,
     })
 
     const duration = options.duration ?? 3000

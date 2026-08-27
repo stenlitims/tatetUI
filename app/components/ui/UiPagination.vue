@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { computeVisiblePages } from '~/utils/pagination'
 
 const props = withDefaults(
   defineProps<{
@@ -33,41 +34,36 @@ const emit = defineEmits<{
 
 defineSlots<Record<string, never>>()
 
+const normalizedTotalPages = computed(() =>
+  Number.isFinite(props.totalPages) ? Math.max(1, Math.floor(props.totalPages)) : 1,
+)
+const normalizedPage = computed(() =>
+  Math.min(
+    normalizedTotalPages.value,
+    Number.isFinite(props.page) ? Math.max(1, Math.floor(props.page)) : 1,
+  ),
+)
+
 /**
  * Завжди видно першу й останню сторінку, навколо активної —
  * `siblingCount` сусідів, між блоками — розрив «…».
  */
-const visiblePages = computed<(number | 'gap')[]>(() => {
-  const total = Math.max(0, props.totalPages)
-  const current = props.page
-  const span = Math.max(1, props.siblingCount)
-
-  if (total <= span * 2 + 5) {
-    return Array.from({ length: total }, (_, i) => i + 1)
-  }
-
-  const start = Math.max(2, current - span)
-  const end = Math.min(total - 1, current + span)
-  const pages: (number | 'gap')[] = [1]
-  if (start > 2) pages.push('gap')
-  for (let i = start; i <= end; i++) pages.push(i)
-  if (end < total - 1) pages.push('gap')
-  pages.push(total)
-  return pages
-})
+const visiblePages = computed<(number | 'gap')[]>(() =>
+  computeVisiblePages(normalizedTotalPages.value, normalizedPage.value, props.siblingCount),
+)
 
 const rangeText = computed(() => {
   if (props.totalItems == null) return ''
   if (props.totalItems === 0) return 'Немає записів'
   if (!props.pageSize) return `Всього: ${props.totalItems.toLocaleString('uk')}`
-  const start = (props.page - 1) * props.pageSize + 1
-  const end = Math.min(props.page * props.pageSize, props.totalItems)
+  const start = Math.min((normalizedPage.value - 1) * props.pageSize + 1, props.totalItems)
+  const end = Math.min(normalizedPage.value * props.pageSize, props.totalItems)
   return `${start}–${end} з ${props.totalItems.toLocaleString('uk')}`
 })
 
 function goTo(target: number) {
-  const clamped = Math.min(Math.max(1, target), Math.max(1, props.totalPages))
-  if (props.disabled || clamped === props.page) return
+  const clamped = Math.min(Math.max(1, target), normalizedTotalPages.value)
+  if (props.disabled || clamped === normalizedPage.value) return
   emit('update:page', clamped)
 }
 
@@ -78,7 +74,7 @@ function onPageSizeChange(event: Event) {
 </script>
 
 <template>
-  <div v-if="totalPages > 1 || pageSizeOptions?.length" class="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+  <div v-if="normalizedTotalPages > 1 || pageSizeOptions?.length" class="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
     <div class="flex items-center gap-3 text-sm text-muted">
       <span v-if="rangeText">{{ rangeText }}</span>
       <label v-if="pageSizeOptions?.length" class="flex items-center gap-1.5 text-xs">
@@ -94,13 +90,13 @@ function onPageSizeChange(event: Event) {
       </label>
     </div>
 
-    <nav v-if="totalPages > 1" aria-label="Пагінація" class="flex items-center gap-1">
+    <nav v-if="normalizedTotalPages > 1" aria-label="Пагінація" class="flex items-center gap-1">
       <button
         type="button"
         aria-label="Попередня сторінка"
-        :disabled="page <= 1 || disabled"
+        :disabled="normalizedPage <= 1 || disabled"
         class="flex h-11 w-11 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
-        @click="goTo(page - 1)"
+        @click="goTo(normalizedPage - 1)"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
@@ -108,7 +104,9 @@ function onPageSizeChange(event: Event) {
       </button>
 
       <!-- Мобільний: тільки «X з Y» -->
-      <span class="px-3 text-sm text-muted sm:hidden">{{ page }} з {{ totalPages }}</span>
+      <span class="px-3 text-sm text-muted sm:hidden">
+        {{ normalizedPage }} з {{ normalizedTotalPages }}
+      </span>
 
       <!-- Десктоп: номери -->
       <template v-for="(p, idx) in visiblePages" :key="`${p}-${idx}`">
@@ -117,10 +115,10 @@ function onPageSizeChange(event: Event) {
           v-else
           type="button"
           :disabled="disabled"
-          :aria-current="p === page ? 'page' : undefined"
-          class="hidden h-11 min-w-11 items-center justify-center rounded-control px-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed md:h-8 md:min-w-8"
+          :aria-current="p === normalizedPage ? 'page' : undefined"
+          class="hidden h-11 min-w-11 items-center justify-center rounded-control px-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed sm:flex md:h-8 md:min-w-8"
           :class="
-            p === page
+            p === normalizedPage
               ? 'bg-accent-solid text-accent-contrast'
               : 'border border-line text-muted hover:bg-hover hover:text-ink'
           "
@@ -133,9 +131,9 @@ function onPageSizeChange(event: Event) {
       <button
         type="button"
         aria-label="Наступна сторінка"
-        :disabled="page >= totalPages || disabled"
+        :disabled="normalizedPage >= normalizedTotalPages || disabled"
         class="flex h-11 w-11 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
-        @click="goTo(page + 1)"
+        @click="goTo(normalizedPage + 1)"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />

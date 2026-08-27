@@ -39,18 +39,29 @@ defineSlots<{
   label?: (props: { step: StepItem; state: 'done' | 'active' | 'upcoming' }) => unknown
 }>()
 
+const currentIndex = computed(() =>
+  Math.min(
+    Math.max(0, Number.isFinite(props.modelValue) ? Math.floor(props.modelValue) : 0),
+    Math.max(0, props.steps.length - 1),
+  ),
+)
+
 const stateOf = (index: number): 'done' | 'active' | 'upcoming' =>
-  index < props.modelValue ? 'done' : index === props.modelValue ? 'active' : 'upcoming'
+  index < currentIndex.value ? 'done' : index === currentIndex.value ? 'active' : 'upcoming'
 
 // У режимі visited дозволено йти назад по пройдених і на один крок уперед.
-const maxReachable = computed(() => Math.min(props.steps.length - 1, props.modelValue + 1))
+const maxReachable = computed(() => Math.min(props.steps.length - 1, currentIndex.value + 1))
+
+function isStepDisabled(step: StepItem, index: number) {
+  if (step.disabled) return true
+  if (props.clickMode === 'none') return index !== currentIndex.value
+  return props.clickMode === 'visited' && index > maxReachable.value
+}
 
 function onStepClick(index: number) {
   const step = props.steps[index]
-  if (!step || step.disabled) return
-  if (props.clickMode === 'none' && index !== props.modelValue) return
-  if (props.clickMode === 'visited' && index > maxReachable.value) return
-  if (index === props.modelValue) return
+  if (!step || isStepDisabled(step, index)) return
+  if (index === currentIndex.value) return
   emit('update:modelValue', index)
   emit('change', index)
 }
@@ -79,16 +90,16 @@ const stepClass = (index: number) => {
       >
         <span
           class="h-px w-full transition-colors"
-          :class="index <= modelValue ? 'bg-accent-solid' : 'bg-line'"
+          :class="index <= currentIndex ? 'bg-accent-solid' : 'bg-line'"
         />
       </div>
 
       <button
         type="button"
-        :disabled="step.disabled || (clickMode === 'none' && index !== modelValue)"
+        :disabled="isStepDisabled(step, index)"
         class="group flex items-start gap-2.5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset disabled:cursor-not-allowed"
-        :class="step.disabled ? 'cursor-not-allowed opacity-50' : ''"
-        :aria-current="index === modelValue ? 'step' : undefined"
+        :class="isStepDisabled(step, index) ? 'cursor-not-allowed opacity-50' : ''"
+        :aria-current="index === currentIndex ? 'step' : undefined"
         @click="onStepClick(index)"
       >
         <span :class="stepClass(index)">

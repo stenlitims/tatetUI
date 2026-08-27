@@ -1,6 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
-import { errorTextClass, fieldClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
+import { computed, useId } from 'vue'
+import {
+  errorTextClass,
+  fieldClass,
+  helperTextClass,
+  labelClass,
+  type FieldSize,
+} from '~/utils/uiFieldStyles'
 
 /**
  * Нативний date/datetime-local/time у стилі полів бібліотеки. Власний
@@ -28,6 +34,8 @@ const props = withDefaults(
     error?: string
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   {
@@ -55,7 +63,7 @@ const emit = defineEmits<{
 defineSlots<Record<string, never>>()
 
 const generatedId = useId()
-const inputId = computed(() => props.name ?? `${generatedId}-date`)
+const inputId = computed(() => props.id ?? `${generatedId}-date`)
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 

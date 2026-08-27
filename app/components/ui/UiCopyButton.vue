@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 /**
  * Резервне копіювання через прихований textarea: navigator.clipboard
@@ -62,11 +62,17 @@ defineSlots<{
 const state = ref<'idle' | 'copied' | 'failed'>('idle')
 let timer: ReturnType<typeof setTimeout> | undefined
 
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer)
+  timer = undefined
+})
+
 // Новий text — новий стан: без цього «Скопійовано» липне до нової кнопки.
 watch(
   () => props.text,
   () => {
     if (timer) clearTimeout(timer)
+    timer = undefined
     state.value = 'idle'
   },
 )
@@ -88,7 +94,10 @@ async function copy() {
   else emit('failed')
 
   if (timer) clearTimeout(timer)
-  timer = setTimeout(() => (state.value = 'idle'), 2000)
+  timer = setTimeout(() => {
+    state.value = 'idle'
+    timer = undefined
+  }, 2000)
 }
 
 const classes = computed(() => [
@@ -110,6 +119,8 @@ const classes = computed(() => [
          UiButton під час loading). -->
     <span
       v-if="state !== 'idle'"
+      :role="state === 'failed' ? 'alert' : 'status'"
+      :aria-live="state === 'failed' ? 'assertive' : 'polite'"
       class="absolute inset-0 flex items-center justify-center gap-1.5 px-2.5"
     >
       <svg v-if="state === 'copied'" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">

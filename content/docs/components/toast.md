@@ -25,10 +25,16 @@ const toast = useToast()
 toast.success('Зміни збережено')
 toast.error('Не вдалося зберегти')
 
-// show() повертає id — його можна закрити достроково
-const id = toast.info('Синхронізація…', { duration: 0 })
-await sync()
-toast.dismiss(id)
+// Кнопки дій під повідомленням: дії — дані тоста, а не слот, бо черга
+// живе в composable поза шаблоном. Клік по дії сам тост не закриває —
+// закривайте через dismiss(id), коли потрібно.
+const id = toast.info('Файл завеликий', {
+  duration: 0,
+  actions: [
+    { label: 'Стиснути', onClick: () => compress() },
+    { label: 'Закрити', onClick: () => toast.dismiss(id) },
+  ],
+})
 ```
 
 Контейнер `UiToaster` монтується **рівно один раз**, зазвичай в `app.vue`.

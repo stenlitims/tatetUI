@@ -64,7 +64,14 @@ const props = withDefaults(
     densityToggle?: boolean
     /** Робить рядки клікабельними: додає роль, фокус і обробку Enter/Space. */
     rowClickable?: boolean
-    /** Клас на рядок — для підсвітки виділених, помилкових тощо. */
+    /**
+     * Клас на рядок — для підсвітки виділених, помилкових тощо.
+     *
+     * З `tableId` рядок отримує власне тло `bg-card` (його успадковує жолоб
+     * налаштувань), тож заливка звідси має бути утилітою, яка в CSS іде
+     * після `bg-card` — усі семантичні токени (`bg-warning-bg`,
+     * `bg-danger-bg`, `bg-primary-50`) підходять.
+     */
     rowClass?: (item: T) => string | undefined
     /**
      * Нижче `md` таблиця ховається, а замість неї рендериться список
@@ -379,6 +386,21 @@ const canScrollRight = computed(
   () => viewportWidth.value > 0 && tableMinWidth.value - viewportWidth.value - scrollLeft.value > 1,
 )
 
+/**
+ * Межа жолоба налаштувань — рівно поки під нього заїжджає вміст.
+ *
+ * Жолоб липкий, тож при неповній прокрутці він стоїть ПОВЕРХ останньої
+ * видимої колонки й ріже її текст посередині слова. Без межі це виглядає
+ * як зламана колонка, а не як закріплений стовпчик.
+ *
+ * `box-shadow`, а не `border-left`: межа збільшила б ширину колонки,
+ * ширина змінює переповнення, а переповнення вмикає саму цю межу — вийшла
+ * б петля, що смикає таблицю на 1px під час прокрутки.
+ */
+const gutterEdgeStyle = computed(() =>
+  canScrollRight.value ? { boxShadow: 'inset 1px 0 0 0 var(--line)' } : undefined,
+)
+
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -527,6 +549,17 @@ function onDrop(index: number) {
   commitHeaders()
 }
 
+function moveHeader(index: number, step: -1 | 1) {
+  const target = index + step
+  if (target < 0 || target >= localHeaders.value.length) return
+  const next = [...localHeaders.value]
+  const [moved] = next.splice(index, 1)
+  if (!moved) return
+  next.splice(target, 0, moved)
+  localHeaders.value = next
+  commitHeaders()
+}
+
 /* ---------------------------------------------------------------- */
 /*  Сортування                                                      */
 /* ---------------------------------------------------------------- */
@@ -541,25 +574,30 @@ watch(() => props.sort, (value) => (internalSort.value = value))
  * сортують за кодами символів. Порожні значення завжди в кінці, незалежно
  * від напрямку: рядок без даних не має витісняти заповнені з початку.
  */
-function compareValues(a: unknown, b: unknown): number {
+function compareValues(a: unknown, b: unknown, direction: 1 | -1): number {
   const aEmpty = a === null || a === undefined || a === ''
   const bEmpty = b === null || b === undefined || b === ''
   if (aEmpty && bEmpty) return 0
   if (aEmpty) return 1
   if (bEmpty) return -1
 
-  if (typeof a === 'number' && typeof b === 'number') return a - b
-  if (typeof a === 'boolean' && typeof b === 'boolean') return Number(a) - Number(b)
+  if (typeof a === 'number' && typeof b === 'number') return direction * (a - b)
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return direction * (Number(a) - Number(b))
+  }
 
-  return String(a).localeCompare(String(b), 'uk', { numeric: true, sensitivity: 'base' })
+  return direction * String(a).localeCompare(String(b), 'uk', {
+    numeric: true,
+    sensitivity: 'base',
+  })
 }
 
 const sortedItems = computed(() => {
   const sort = internalSort.value
   if (!sort || props.serverSort) return props.items
-  const factor = sort.dir === 'asc' ? 1 : -1
+  const direction = sort.dir === 'asc' ? 1 : -1
   // Копія: сортування на місці мутувало б масив, переданий ззовні.
-  return [...props.items].sort((a, b) => factor * compareValues(a[sort.by], b[sort.by]))
+  return [...props.items].sort((a, b) => compareValues(a[sort.by], b[sort.by], direction))
 })
 
 function toggleSort(header: TableHeader) {
@@ -606,9 +644,17 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
 <template>
   <div :class="{ 'select-none': !!resizing }">
     <div class="relative">
+      <!--
+        bg-card на контейнері обов'язковий, а не косметика: компонент і сам
+        малює card у трьох місцях — жолоб налаштувань, градієнт прокрутки і
+        оверлей «Оновлення…». Без власної поверхні вони лягають на те, що
+        просвічує крізь прозорі рядки (типово bg-main), і жолоб стає світлою
+        смугою вздовж останньої колонки. Виміряно: рядки #101216, жолоб
+        #181b20 у темній темі.
+      -->
       <div
         ref="scrollEl"
-        class="scrollbar-thin relative overflow-auto rounded-card border border-line"
+        class="scrollbar-thin relative overflow-auto rounded-card border border-line bg-card"
         :class="mobileCards ? 'hidden md:block' : ''"
         :style="maxHeight ? { maxHeight } : undefined"
         @scroll.passive="measure"
@@ -699,12 +745,19 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
               <th
                 v-if="showSettings"
                 scope="col"
-                class="sticky right-0 z-20 bg-subtle p-0"
-                :class="stickyHeader && maxHeight ? 'top-0 z-30' : ''"
+                :style="gutterEdgeStyle"
+                class="sticky right-0 bg-subtle p-0 text-right"
+                :class="stickyHeader && maxHeight ? 'top-0 z-30' : 'z-20'"
               >
-                <UiMenu width="17rem" placement="bottom-end">
-                  <template #trigger="{ toggle }">
+                <UiMenu
+                  width="20rem"
+                  placement="bottom-end"
+                  panel-role="dialog"
+                  aria-label="Налаштування колонок"
+                >
+                  <template #trigger="{ toggle, triggerAttrs }">
                     <button
+                      v-bind="triggerAttrs"
                       type="button"
                       class="flex h-full w-10 items-center justify-center text-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       aria-label="Налаштування колонок"
@@ -774,6 +827,27 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                           <span class="truncate">{{ header.title || header.text || header.value }}</span>
                         </label>
 
+                        <div class="flex shrink-0 gap-0.5">
+                          <button
+                            type="button"
+                            class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="index === 0"
+                            :aria-label="`Перемістити «${header.title || header.text || header.value}» вище`"
+                            @click="moveHeader(index, -1)"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                            :disabled="index === localHeaders.length - 1"
+                            :aria-label="`Перемістити «${header.title || header.text || header.value}» нижче`"
+                            @click="moveHeader(index, 1)"
+                          >
+                            ↓
+                          </button>
+                        </div>
+
                         <input
                           v-if="!header.flex"
                           type="number"
@@ -816,7 +890,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
               циклу.
             -->
             <template v-if="showSkeleton">
-              <tr v-for="row in skeletonRows" :key="`sk-${row}`" class="border-b border-line last:border-0">
+              <tr
+                v-for="row in skeletonRows"
+                :key="`sk-${row}`"
+                class="border-b border-line last:border-0"
+                :class="showSettings ? 'bg-card' : ''"
+              >
                 <td v-for="header in visibleHeaders" :key="header.value" :class="densityClass">
                   <!-- Ширина заглушки детермінована, а не Math.random(): інакше
                        вона мінялася б на кожному рендері й миготіла. -->
@@ -825,7 +904,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                     :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
                   />
                 </td>
-                <td v-if="showSettings" />
+                <td v-if="showSettings" class="sticky right-0 bg-inherit" :style="gutterEdgeStyle" />
               </tr>
             </template>
 
@@ -843,6 +922,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                 :key="String(item[keyRow])"
                 class="border-b border-line transition-colors last:border-0"
                 :class="[
+                  showSettings ? 'bg-card' : '',
                   rowClickable
                     ? 'cursor-pointer hover:bg-hover focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-ring'
                     : '',
@@ -870,7 +950,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                     </slot>
                   </div>
                 </td>
-                <td v-if="showSettings" class="sticky right-0 bg-card" />
+                <!--
+                  bg-inherit, а не bg-card: жолоб мусить показувати тло СВОГО
+                  рядка. З жорстким card наведений або підсвічений через
+                  rowClass рядок обривався за 40px до правого краю.
+                -->
+                <td v-if="showSettings" class="sticky right-0 bg-inherit" :style="gutterEdgeStyle" />
               </tr>
             </template>
           </tbody>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUpdate, ref, watch } from 'vue'
 
 export interface TreeNode {
   id: string
@@ -70,8 +70,10 @@ function emitExpanded() {
 
 function toggle(id: string) {
   const next = new Set(expandedIds.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
+  if (next.has(id)) {
+    next.delete(id)
+    activeId.value = id
+  } else next.add(id)
   expandedIds.value = next
   emitExpanded()
 }
@@ -105,13 +107,23 @@ const flatRows = computed<FlatRow[]>(() => {
 /*  Клавіатура: roving tabindex по видимих рядах                     */
 /* ---------------------------------------------------------------- */
 
-const activeRow = ref(0)
-
 const rowEls = ref<(HTMLElement | null)[]>([])
+const activeId = ref<string | null>(props.modelValue ?? flatRows.value[0]?.node.id ?? null)
+
+onBeforeUpdate(() => {
+  rowEls.value = []
+})
+
+watch(flatRows, (rows) => {
+  if (rows.some((row) => row.node.id === activeId.value)) return
+  activeId.value = rows[0]?.node.id ?? null
+})
 
 function focusRow(index: number) {
-  activeRow.value = index
-  rowEls.value[index]?.focus()
+  const row = flatRows.value[index]
+  if (!row) return
+  activeId.value = row.node.id
+  void nextTick(() => rowEls.value[index]?.focus())
 }
 
 function onRowKeydown(event: KeyboardEvent, row: FlatRow, index: number) {
@@ -158,6 +170,7 @@ function onRowKeydown(event: KeyboardEvent, row: FlatRow, index: number) {
 }
 
 function onRowClick(row: FlatRow) {
+  activeId.value = row.node.id
   onRowActivate(row)
 }
 
@@ -165,8 +178,8 @@ function onRowActivate(row: FlatRow) {
   if (row.node.disabled) return
   if (props.selectable) {
     emit('update:modelValue', row.node.id)
-    emit('itemClick', { node: row.node, depth: row.depth })
   }
+  emit('itemClick', { node: row.node, depth: row.depth })
   if (props.expandOnClick && row.hasChildren) toggle(row.node.id)
 }
 </script>
@@ -178,7 +191,7 @@ function onRowActivate(row: FlatRow) {
       :key="row.node.id"
       :ref="(el) => (rowEls[index] = el as HTMLElement)"
       role="treeitem"
-      :tabindex="index === activeRow ? 0 : -1"
+      :tabindex="row.node.id === activeId ? 0 : -1"
       :aria-level="row.depth + 1"
       :aria-expanded="row.hasChildren ? row.expanded : undefined"
       :aria-selected="selectable ? row.selected : undefined"
@@ -196,8 +209,7 @@ function onRowActivate(row: FlatRow) {
       <span
         v-if="row.hasChildren"
         class="flex h-5 w-5 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink"
-        role="button"
-        :aria-label="row.expanded ? 'Згорнути' : 'Розгорнути'"
+        aria-hidden="true"
         @click.stop="toggle(row.node.id)"
       >
         <slot name="toggle" :expanded="row.expanded" :has-children="row.hasChildren">

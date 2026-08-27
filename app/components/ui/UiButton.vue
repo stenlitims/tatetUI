@@ -84,7 +84,8 @@ const variants: Record<Variant, string> = {
   soft: 'bg-primary-50 text-accent hover:bg-primary-100 active:bg-primary-100 border border-primary-200',
   outline: 'border border-line bg-card text-ink hover:bg-hover active:bg-hover',
   ghost: 'text-muted hover:text-ink hover:bg-hover active:bg-hover active:text-ink',
-  danger: 'bg-danger text-accent-contrast hover:brightness-110 active:brightness-110 shadow-card',
+  danger:
+    'bg-danger-solid text-danger-contrast hover:bg-danger-solid-hover active:bg-danger-solid-hover shadow-card',
 }
 
 /**
@@ -126,7 +127,11 @@ const classes = computed(() => [
 const rootTag = computed(() => (props.to ? NuxtLink : 'button'))
 
 function onClick(event: MouseEvent) {
-  if (isDisabled.value) return
+  if (isDisabled.value) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    return
+  }
   emit('click', event)
 }
 
@@ -153,6 +158,7 @@ defineExpose({
     :class="classes"
     :disabled="to ? undefined : isDisabled"
     :aria-disabled="to && isDisabled ? 'true' : undefined"
+    :tabindex="to && isDisabled ? -1 : undefined"
     :aria-label="label"
     :aria-busy="loading || undefined"
     :title="title"

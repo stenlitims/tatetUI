@@ -1,5 +1,15 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import {
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowRef,
+  useId,
+  watch,
+} from 'vue'
+import { computeTooltipPosition } from '~/utils/tooltip'
+import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 
 const props = withDefaults(
   defineProps<{
@@ -31,11 +41,12 @@ const style = ref<Record<string, string>>({})
 
 const tooltipId = `${useId()}-tooltip`
 const describedBy = ref<string | undefined>(undefined)
+const teleportReady = shallowRef(false)
 
 let timer: ReturnType<typeof setTimeout> | undefined
 
 function show() {
-  if (props.disabled || visible.value) return
+  if (props.disabled || visible.value || timer) return
   timer = setTimeout(() => {
     visible.value = true
     void nextTick(updatePosition)
@@ -55,50 +66,21 @@ function updatePosition() {
   const rect = anchor.getBoundingClientRect()
   const w = tooltipEl.value?.offsetWidth ?? 120
   const h = tooltipEl.value?.offsetHeight ?? 30
-  const gap = 6
-  const edge = 8
 
-  let top: number
-  let left: number
+  // Фліп по обох осях і притискання до країв — в utils/tooltip: чиста
+  // функція, щоб поведінку перевіряв тест, а не рендер.
+  const { top, left } = computeTooltipPosition(
+    rect,
+    { width: w, height: h },
+    { innerWidth: window.innerWidth, innerHeight: window.innerHeight },
+    props.placement,
+  )
 
-  switch (props.placement) {
-    case 'bottom':
-      top = rect.bottom + gap
-      left = rect.left + rect.width / 2 - w / 2
-      break
-    case 'left':
-      top = rect.top + rect.height / 2 - h / 2
-      left = rect.left - w - gap
-      break
-    case 'right':
-      top = rect.top + rect.height / 2 - h / 2
-      left = rect.right + gap
-      break
-    default:
-      top = rect.top - h - gap
-      left = rect.left + rect.width / 2 - w / 2
+  style.value = {
+    top: `${top}px`,
+    left: `${left}px`,
+    zIndex: String(getOverlayChildZIndex(anchor)),
   }
-
-  /*
-   * Фліп на протилежний бік, коли свій не влазить. Умова перевіряє САМЕ
-   * той бік, куди дивиться placement: «top» фліпається вниз, коли зверху
-   * менше місця, ніж висота підказки (top < edge), а не коли підказка
-   * вилазить за нижній край — інакше біля верхнього краю підказка
-   * перекривала б тригер замість перевороту вниз.
-   */
-  if (props.placement === 'top' && top < edge) {
-    top = rect.bottom + gap
-  } else if (props.placement === 'bottom' && top + h > window.innerHeight - edge) {
-    top = rect.top - h - gap
-  }
-
-  // Притискання до країв — останній шанс для вузьких вікон.
-  if (top + h > window.innerHeight - edge) top = window.innerHeight - h - edge
-  if (top < edge) top = edge
-  if (left + w > window.innerWidth - edge) left = window.innerWidth - w - edge
-  if (left < edge) left = edge
-
-  style.value = { top: `${Math.round(top)}px`, left: `${Math.round(left)}px` }
 }
 
 function onScrollOrResize() {
@@ -110,16 +92,24 @@ function onKeyDown(event: KeyboardEvent) {
 }
 
 // Панель у body — слухаємо документ, а не корінь.
-if (typeof document !== 'undefined') {
+onMounted(() => {
+  teleportReady.value = true
   document.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('scroll', onScrollOrResize, { passive: true, capture: true })
   window.addEventListener('resize', onScrollOrResize, { passive: true })
-}
+})
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) hide()
+  },
+)
 
 onBeforeUnmount(() => {
   hide()
   if (typeof document !== 'undefined') {
-    document.removeEventListener('keydown', onKeyDown)
+    document.removeEventListener('keydown', onKeyDown, true)
     window.removeEventListener('scroll', onScrollOrResize, true)
     window.removeEventListener('resize', onScrollOrResize)
   }
@@ -147,7 +137,7 @@ watch(tooltipEl, (el) => {
   >
     <slot :described-by="describedBy" />
 
-    <Teleport to="body">
+    <Teleport to="body" :disabled="!teleportReady">
       <Transition
         enter-active-class="transition duration-150 ease-out"
         enter-from-class="opacity-0"
@@ -161,7 +151,7 @@ watch(tooltipEl, (el) => {
           :id="tooltipId"
           ref="tooltipEl"
           role="tooltip"
-          class="pointer-events-none fixed z-[1100] max-w-64 rounded-control bg-ink px-2.5 py-1.5 text-xs leading-snug text-main shadow-overlay"
+          class="pointer-events-none fixed max-w-64 rounded-control bg-ink px-2.5 py-1.5 text-xs leading-snug text-main shadow-overlay"
           :style="style"
         >
           <slot name="content">{{ content }}</slot>

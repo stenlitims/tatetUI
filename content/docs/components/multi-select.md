@@ -4,6 +4,7 @@ description: Мультивибір із чекбоксами, пошуком, �
 component: UiMultiSelect
 dependsOn:
   - app/utils/uiFieldStyles.ts
+  - app/utils/overlayPosition.ts
 emitDescriptions:
   update:modelValue: Масив обраних значень у порядку, заданому в `options`.
 status: stable

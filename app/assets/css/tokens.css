@@ -87,6 +87,9 @@
   --danger: #b91c1c;              --danger-rgb: 185, 28, 28;
   --danger-bg: #fee2e2;           --danger-bg-rgb: 254, 226, 226;
   --danger-line: #fecaca;         --danger-line-rgb: 254, 202, 202;
+  --danger-solid: #b91c1c;        --danger-solid-rgb: 185, 28, 28;
+  --danger-solid-hover: #991b1b;  --danger-solid-hover-rgb: 153, 27, 27;
+  --danger-contrast: #ffffff;     --danger-contrast-rgb: 255, 255, 255;
   --info: #0369a1;                --info-rgb: 3, 105, 161;
   --info-bg: #e0f2fe;             --info-bg-rgb: 224, 242, 254;
   --info-line: #bae6fd;           --info-line-rgb: 186, 230, 253;
@@ -172,6 +175,9 @@
   --danger: #f87171;              --danger-rgb: 248, 113, 113;
   --danger-bg: #2c1416;           --danger-bg-rgb: 44, 20, 22;
   --danger-line: #4a2024;         --danger-line-rgb: 74, 32, 36;
+  --danger-solid: #dc2626;        --danger-solid-rgb: 220, 38, 38;
+  --danger-solid-hover: #b91c1c;  --danger-solid-hover-rgb: 185, 28, 28;
+  --danger-contrast: #ffffff;     --danger-contrast-rgb: 255, 255, 255;
   --info: #38bdf8;                --info-rgb: 56, 189, 248;
   --info-bg: #0a2233;             --info-bg-rgb: 10, 34, 51;
   --info-line: #14384f;           --info-line-rgb: 20, 56, 79;

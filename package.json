@@ -9,7 +9,9 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
-    "check:docs": "bun run scripts/check-docs.ts"
+    "test": "vitest run",
+    "check:docs": "bun run scripts/check-docs.ts",
+    "check:routes": "bun run scripts/check-routes.ts"
   },
   "dependencies": {
     "@floating-ui/dom": "^1.8.0",
@@ -35,11 +37,13 @@
     "@nuxt/content": "^3.15.2",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^26.2.0",
+    "happy-dom": "^20.11.12",
     "minisearch": "^7.2.0",
     "nuxt-component-meta": "0.18.0",
     "shiki": "4.4.3",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
     "vue-tsc": "^3.3.11"
   },
   "overrides": {

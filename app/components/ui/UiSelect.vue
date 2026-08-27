@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onBeforeUpdate,
+  onMounted,
+  ref,
+  shallowRef,
+  useId,
+  watch,
+} from 'vue'
+import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
   dropdownEmptyClass,
   dropdownPanelClass,
@@ -40,6 +51,8 @@ const props = withDefaults(
     clearable?: boolean
     /** Дозволяє звужувати список набором тексту. */
     filterable?: boolean
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   { size: 'md', filterable: true },
@@ -57,7 +70,7 @@ defineSlots<{
 }>()
 
 const generatedId = useId()
-const inputId = computed(() => props.name ?? `${generatedId}-select`)
+const inputId = computed(() => props.id ?? `${generatedId}-select`)
 const listboxId = `${generatedId}-listbox`
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
@@ -72,6 +85,7 @@ const isOpen = ref(false)
 const query = ref('')
 const isTyping = ref(false)
 const highlightedIndex = ref(-1)
+const teleportReady = shallowRef(false)
 
 const hasError = computed(() => !!props.error)
 
@@ -130,6 +144,7 @@ function updatePosition() {
     top: `${Math.max(margin, top)}px`,
     left: `${rect.left}px`,
     width: `${rect.width}px`,
+    zIndex: String(getOverlayChildZIndex(trigger)),
   }
 }
 
@@ -156,9 +171,13 @@ async function open() {
   if (props.disabled || isOpen.value) return
   isOpen.value = true
   isTyping.value = false
-  highlightedIndex.value = filteredOptions.value.findIndex(
+  const selectedIndex = filteredOptions.value.findIndex(
     (option) => option.value === props.modelValue,
   )
+  highlightedIndex.value =
+    selectedIndex >= 0 && !filteredOptions.value[selectedIndex]?.disabled
+      ? selectedIndex
+      : firstEnabledIndex(filteredOptions.value)
   attachReposition()
   await nextTick()
   updatePosition()
@@ -184,6 +203,13 @@ function syncQueryToSelection() {
 
 watch(() => props.modelValue, syncQueryToSelection, { immediate: true })
 
+watch(filteredOptions, (options) => {
+  if (!isOpen.value) return
+  const current = options[highlightedIndex.value]
+  if (current && !current.disabled) return
+  highlightedIndex.value = firstEnabledIndex(options)
+})
+
 function selectOption(option: SelectOption) {
   if (option.disabled) return
   emit('update:modelValue', option.value)
@@ -200,7 +226,7 @@ function clear() {
 function onInput(event: Event) {
   isTyping.value = true
   query.value = (event.target as HTMLInputElement).value
-  highlightedIndex.value = 0
+  highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
   emit('search', query.value)
   if (!isOpen.value) void open()
 }
@@ -227,6 +253,16 @@ function moveHighlight(step: 1 | -1) {
   void nextTick(scrollHighlightedIntoView)
 }
 
+function firstEnabledIndex(list: SelectOption[], fromEnd = false) {
+  if (fromEnd) {
+    for (let index = list.length - 1; index >= 0; index--) {
+      if (!list[index]?.disabled) return index
+    }
+    return -1
+  }
+  return list.findIndex((option) => !option.disabled)
+}
+
 function onKeydown(event: KeyboardEvent) {
   switch (event.key) {
     case 'ArrowDown':
@@ -251,6 +287,16 @@ function onKeydown(event: KeyboardEvent) {
       event.stopPropagation()
       close()
       return
+    case 'Home':
+      if (!isOpen.value) return
+      event.preventDefault()
+      highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
+      return void nextTick(scrollHighlightedIntoView)
+    case 'End':
+      if (!isOpen.value) return
+      event.preventDefault()
+      highlightedIndex.value = firstEnabledIndex(filteredOptions.value, true)
+      return void nextTick(scrollHighlightedIntoView)
     case 'Tab':
       close()
   }
@@ -269,9 +315,14 @@ function onDocumentPointerDown(event: PointerEvent) {
   close()
 }
 
-if (typeof document !== 'undefined') {
+onBeforeUpdate(() => {
+  optionEls.value = []
+})
+
+onMounted(() => {
+  teleportReady.value = true
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
-}
+})
 
 onBeforeUnmount(() => {
   detachReposition()
@@ -298,7 +349,6 @@ defineExpose({
         :id="inputId"
         ref="inputEl"
         :value="query"
-        :name="name"
         :placeholder="placeholder"
         :disabled="disabled"
         :required="required"
@@ -342,21 +392,28 @@ defineExpose({
       </span>
     </div>
 
-    <Teleport to="body">
+    <Teleport to="body" :disabled="!teleportReady">
       <Transition v-bind="dropdownTransitionProps">
         <div
           v-if="isOpen"
-          :id="listboxId"
           ref="dropdownEl"
-          role="listbox"
           :class="dropdownPanelClass"
           :style="panelStyle"
         >
-          <div v-if="loading" :class="dropdownEmptyClass">Завантаження…</div>
-          <div v-else-if="!filteredOptions.length" :class="dropdownEmptyClass">Нічого не знайдено</div>
-          <ul v-else class="py-1">
+          <ul :id="listboxId" role="listbox" class="py-1">
+            <li v-if="loading" role="option" aria-disabled="true" :class="dropdownEmptyClass">
+              Завантаження…
+            </li>
             <li
-              v-for="(option, index) in filteredOptions"
+              v-else-if="!filteredOptions.length"
+              role="option"
+              aria-disabled="true"
+              :class="dropdownEmptyClass"
+            >
+              Нічого не знайдено
+            </li>
+            <li
+              v-for="(option, index) in loading ? [] : filteredOptions"
               :id="optionId(index)"
               :key="option.value"
               :ref="(el) => (optionEls[index] = el as HTMLElement)"
@@ -396,6 +453,8 @@ defineExpose({
         </div>
       </Transition>
     </Teleport>
+
+    <input v-if="name" type="hidden" :name="name" :value="modelValue ?? ''" />
 
     <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>

@@ -32,6 +32,8 @@ const props = withDefaults(
     error?: string
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   {
@@ -58,7 +60,7 @@ const emit = defineEmits<{
 defineSlots<Record<string, never>>()
 
 const generatedId = useId()
-const inputId = computed(() => props.name ?? `${generatedId}-slider`)
+const inputId = computed(() => props.id ?? `${generatedId}-slider`)
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 
@@ -70,9 +72,29 @@ const describedBy = computed(() => {
   return undefined
 })
 
-const value = computed(() => (props.modelValue == null ? props.min : props.modelValue))
+const normalizedMin = computed(() => (Number.isFinite(props.min) ? props.min : 0))
+const normalizedMax = computed(() =>
+  Number.isFinite(props.max) && props.max > normalizedMin.value
+    ? props.max
+    : normalizedMin.value + 1,
+)
+const normalizedStep = computed(() =>
+  Number.isFinite(props.step) && props.step > 0 ? props.step : 1,
+)
+const value = computed(() => {
+  const raw = props.modelValue == null ? normalizedMin.value : props.modelValue
+  return Math.min(normalizedMax.value, Math.max(normalizedMin.value, raw))
+})
 
-const fillPercent = computed(() => ((value.value - props.min) / (props.max - props.min)) * 100)
+const fillPercent = computed(() =>
+  Math.min(
+    100,
+    Math.max(
+      0,
+      ((value.value - normalizedMin.value) / (normalizedMax.value - normalizedMin.value)) * 100,
+    ),
+  ),
+)
 
 const valueText = computed(() => (props.unit ? `${value.value}${props.unit}` : String(value.value)))
 
@@ -94,9 +116,9 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
       <input
         :id="inputId"
         type="range"
-        :min="min"
-        :max="max"
-        :step="step"
+        :min="normalizedMin"
+        :max="normalizedMax"
+        :step="normalizedStep"
         :value="value"
         :name="name"
         :disabled="disabled"
@@ -110,8 +132,8 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
     </div>
 
     <div v-if="showBounds" class="mt-0.5 flex justify-between text-xs tabular-nums text-muted">
-      <span>{{ min }}</span>
-      <span>{{ max }}</span>
+      <span>{{ normalizedMin }}</span>
+      <span>{{ normalizedMax }}</span>
     </div>
 
     <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>

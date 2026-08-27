@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUpdate, ref } from 'vue'
 
 /**
  * Сегментний перемикач: вибір ОДНОГО взаємовиключного значення з 2–4
@@ -34,6 +34,12 @@ const emit = defineEmits<{
   change: [value: string | number]
 }>()
 
+const optionEls = ref<(HTMLButtonElement | null)[]>([])
+
+onBeforeUpdate(() => {
+  optionEls.value = []
+})
+
 defineSlots<{
   /** Власний рендер сегмента. */
   option?: (props: { option: ToggleOption; selected: boolean }) => unknown
@@ -49,6 +55,41 @@ function select(option: ToggleOption) {
   if (props.disabled || option.disabled || option.value === props.modelValue) return
   emit('update:modelValue', option.value)
   emit('change', option.value)
+}
+
+const enabledOptions = computed(() =>
+  props.options
+    .map((option, index) => ({ option, index }))
+    .filter(({ option }) => !option.disabled),
+)
+
+const tabStopIndex = computed(() => {
+  const selected = enabledOptions.value.find(
+    ({ option }) => option.value === props.modelValue,
+  )
+  return selected?.index ?? enabledOptions.value[0]?.index ?? -1
+})
+
+function onKeydown(event: KeyboardEvent, index: number) {
+  if (props.disabled) return
+  if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+    return
+  }
+  const enabled = enabledOptions.value
+  if (!enabled.length) return
+  event.preventDefault()
+  let position = enabled.findIndex((entry) => entry.index === index)
+  if (position < 0) position = 0
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+    position = (position + 1) % enabled.length
+  } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+    position = (position - 1 + enabled.length) % enabled.length
+  } else if (event.key === 'Home') position = 0
+  else position = enabled.length - 1
+  const target = enabled[position]
+  if (!target) return
+  select(target.option)
+  void nextTick(() => optionEls.value[target.index]?.focus())
 }
 
 const trackClass = computed(() => [
@@ -72,14 +113,17 @@ const segmentClass = (option: ToggleOption) => [
 <template>
   <div role="radiogroup" :aria-label="ariaLabel" :class="trackClass">
     <button
-      v-for="option in options"
+      v-for="(option, index) in options"
       :key="option.value"
+      :ref="(el) => (optionEls[index] = el as HTMLButtonElement)"
       type="button"
       role="radio"
       :aria-checked="option.value === modelValue"
       :disabled="disabled || option.disabled"
+      :tabindex="disabled ? -1 : index === tabStopIndex ? 0 : -1"
       :class="segmentClass(option)"
       @click="select(option)"
+      @keydown="onKeydown($event, index)"
     >
       <slot name="option" :option="option" :selected="option.value === modelValue">
         {{ option.label }}

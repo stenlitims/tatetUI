@@ -91,13 +91,13 @@
     margin-top: 0.4em;
   }
 
-  .docs-prose a {
+  .docs-prose > a {
     color: var(--accent);
     text-decoration: underline;
     text-underline-offset: 2px;
   }
 
-  .docs-prose a:hover {
+  .docs-prose > a:hover {
     text-decoration-thickness: 2px;
   }
 
@@ -129,28 +129,31 @@
     font-family: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, monospace;
   }
 
-  .docs-prose blockquote {
-    padding-left: 1rem;
-    border-left: 3px solid var(--accent);
-    color: var(--ink-muted);
-  }
-
-  .docs-prose table {
+  /* th/td — тільки таблиці ПЕРШОГО рівня prose. Без `>` UiTable у демо
+     отримував prose-паддінги комірок (7.5px замість 9.375px) — той самий
+     баг, що списки вище: проза стилізує документ, не демо. */
+  .docs-prose > table {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.9rem;
   }
 
-  .docs-prose th,
-  .docs-prose td {
+  .docs-prose > table th,
+  .docs-prose > table td {
     padding: 0.5rem 0.75rem;
     border: 1px solid var(--line);
     text-align: left;
   }
 
-  .docs-prose th {
+  .docs-prose > table th {
     background-color: var(--bg-subtle);
     font-weight: 600;
+  }
+
+  .docs-prose > blockquote {
+    padding-left: 1rem;
+    border-left: 3px solid var(--accent);
+    color: var(--ink-muted);
   }
 
   .docs-prose hr {

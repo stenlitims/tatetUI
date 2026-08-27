@@ -95,6 +95,7 @@ function commit() {
 }
 
 function cancel() {
+  if (!editing.value) return
   editing.value = false
   draft.value = props.modelValue ?? null
   emit('cancel')

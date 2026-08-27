@@ -27,6 +27,7 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Вступ', to: '/docs' },
       { title: 'Як перенести компонент', to: '/docs/copy-guide' },
+      { title: 'Roadmap', to: '/docs/roadmap' },
     ],
   },
   {

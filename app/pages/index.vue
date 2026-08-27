@@ -1,24 +1,35 @@
 <script setup lang="ts">
+import HomeComponentGallery from '~/components/home/HomeComponentGallery.vue'
+import HomeDataWorkflow from '~/components/home/HomeDataWorkflow.vue'
+import HomeHeroDemo from '~/components/home/HomeHeroDemo.vue'
+import UiButton from '~/components/ui/UiButton.vue'
+
 useHead({ title: 'tatetUI — бібліотека UI-компонентів' })
 useSeoMeta({
   description:
-    'Канонічна бібліотека UI-компонентів для проєктів на Nuxt: копіюй код, а не встановлюй пакет.',
+    'Канонічна бібліотека UI-компонентів для Nuxt: копіюй код, перевіряй живі сценарії та адаптуй під продукт.',
 })
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col justify-center px-4 py-16">
-    <h1 class="text-4xl font-semibold tracking-tight text-ink sm:text-5xl">tatetUI</h1>
-    <p class="mt-4 text-lg text-muted">
-      Канонічна бібліотека UI-компонентів. Копіюй код, а не встановлюй пакет.
-    </p>
-    <div class="mt-8">
-      <NuxtLink
-        to="/docs"
-        class="inline-flex h-12 items-center rounded-control bg-accent-solid px-5 font-semibold text-accent-contrast transition-colors hover:bg-accent-solid-hover md:h-10"
-      >
-        Документація
-      </NuxtLink>
-    </div>
+  <main>
+    <HomeHeroDemo />
+    <HomeDataWorkflow />
+    <HomeComponentGallery />
+
+    <section class="mx-auto max-w-6xl px-4 pb-24">
+      <div class="flex flex-col items-start justify-between gap-6 rounded-overlay border border-line bg-card p-8 shadow-overlay sm:flex-row sm:items-center">
+        <div>
+          <h2 class="text-2xl font-semibold tracking-tight text-ink">Почни з одного компонента</h2>
+          <p class="mt-2 max-w-md text-muted">
+            Відкрий API, скопіюй компонент разом із його локальними залежностями та адаптуй під свій проєкт.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <UiButton to="/docs/components/button" size="lg">Відкрити Button</UiButton>
+          <UiButton to="/docs/roadmap" variant="outline" size="lg">Що далі</UiButton>
+        </div>
+      </div>
+    </section>
   </main>
 </template>

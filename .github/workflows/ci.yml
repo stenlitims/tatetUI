@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # Дрейф документації: демо/сторінки/emitDescriptions/токени/CSS.
+      # Найшвидша і найчастіше падаюча перевірка — першою.
+      - name: check:docs
+        run: bun run check:docs
+
+      # Типи. Збірка їх НЕ перевіряє (Nuxt), тож без цього кроку TS-помилки
+      # доїжджають до прод.
+      - name: typecheck
+        run: bun run typecheck
+
+      # Збірка + прередер. Падає на будь-якій помилці компонента або демо
+      # (наприклад, NuxtLink на неіснуючий маршрут у демо → 404 прередера).
+      - name: build
+        run: bun run build
+
+      # Smoke: кожна docs-сторінка зібраного сайту віддає 200.
+      - name: check:routes
+        run: bun run check:routes
+
+      # Behavior-тести чистої логіки (pagination, tooltip, multiselect,
+      # fileUpload). Крок опційний: падає тільки коли tests/ існує.
+      - name: test
+        run: bun run test --silent
+        continue-on-error: false
+        if: ${{ hashFiles('tests/**') != '' }}

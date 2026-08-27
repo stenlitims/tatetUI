@@ -4,6 +4,7 @@ description: Async-пошук без локальної фільтрації —
 component: UiCombobox
 dependsOn:
   - app/utils/uiFieldStyles.ts
+  - app/utils/overlayPosition.ts
 emitDescriptions:
   update:modelValue: Обране значення або `null`, якщо вибір скинуто.
   search: Введений текст. Споживач дебаунить і фетчить сам.

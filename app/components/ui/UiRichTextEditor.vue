@@ -50,8 +50,15 @@ const props = withDefaults(
      * `t()`, і зміна мови оновить підписи без перемонтування редактора.
      */
     labels?: Partial<RteLabels>
+    /** Доступна назва області редагування. */
+    ariaLabel?: string
   }>(),
-  { mode: 'full', minHeight: '10rem', placeholder: 'Почніть писати…' },
+  {
+    mode: 'full',
+    minHeight: '10rem',
+    placeholder: 'Почніть писати…',
+    ariaLabel: 'Редактор тексту',
+  },
 )
 
 const emit = defineEmits<{
@@ -62,7 +69,7 @@ const emit = defineEmits<{
 
 defineSlots<{
   /** Панель інструментів. Поки не задано — рендериться типова. */
-  toolbar?: (props: { editor: unknown }) => unknown
+  toolbar?: (props: { editor: unknown; editable: boolean }) => unknown
 }>()
 
 const isEditable = computed(() => !props.readonly && !props.disabled)
@@ -128,6 +135,9 @@ const editor = useEditor({
        * довелося б мати власну копію — і копії розійшлися б за тиждень.
        */
       class: 'ui-prose focus:outline-none',
+      'aria-label': props.ariaLabel,
+      'aria-readonly': String(!!props.readonly),
+      'aria-disabled': String(!!props.disabled),
     },
   },
   onUpdate: ({ editor: instance }) => emit('update:modelValue', instance.getHTML()),
@@ -156,6 +166,17 @@ watch(
 
 watch(isEditable, (value) => editor.value?.setEditable(value))
 
+watch(
+  [() => props.ariaLabel, () => props.readonly, () => props.disabled],
+  () => {
+    const root = editor.value?.view.dom
+    if (!root) return
+    root.setAttribute('aria-label', props.ariaLabel)
+    root.setAttribute('aria-readonly', String(!!props.readonly))
+    root.setAttribute('aria-disabled', String(!!props.disabled))
+  },
+)
+
 const charCount = computed(() => {
   // Читаємо uiTick першим: саме він робить цей computed залежним від
   // транзакцій редактора.
@@ -181,8 +202,8 @@ defineExpose({
     class="overflow-hidden rounded-card border bg-card transition-colors"
     :class="disabled ? 'opacity-50' : 'border-line focus-within:border-accent-solid'"
   >
-    <slot name="toolbar" :editor="editor">
-      <RteToolbar :editor="editor" :tick="uiTick" :mode="mode" />
+    <slot name="toolbar" :editor="editor" :editable="isEditable">
+      <RteToolbar :editor="editor" :tick="uiTick" :mode="mode" :disabled="!isEditable" />
     </slot>
 
     <div class="scrollbar-thin overflow-y-auto px-4 py-3" :style="{ minHeight }">

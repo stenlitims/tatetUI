@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Editor } from '@tiptap/vue-3'
 import UiDrawer from '../UiDrawer.vue'
 import RteIconBtn from './shared/RteIconBtn.vue'
@@ -11,6 +11,7 @@ const props = defineProps<{
   /** Лічильник транзакцій із кореня — робить стан кнопок реактивним. */
   tick: number
   mode: 'simple' | 'full'
+  disabled?: boolean
 }>()
 
 defineSlots<Record<string, never>>()
@@ -68,14 +69,25 @@ const headingLevel = computed({
 })
 
 function cmd(fn: (chain: ReturnType<NonNullable<typeof props.editor>['chain']>) => void) {
+  if (props.disabled) return
   const e = props.editor
   if (!e) return
   fn(e.chain().focus())
 }
+
+watch(
+  () => props.disabled,
+  (disabled) => {
+    if (disabled) mobileOpen.value = false
+  },
+)
 </script>
 
 <template>
-  <div class="flex items-center gap-1 border-b border-line bg-subtle px-2 py-1.5">
+  <fieldset
+    :disabled="disabled"
+    class="m-0 flex min-w-0 items-center gap-1 border-0 border-b border-line bg-subtle px-2 py-1.5"
+  >
     <!-- Десктоп: повний ряд -->
     <div class="hidden flex-wrap items-center gap-0.5 md:flex">
       <select v-model="headingLevel" class="h-11 rounded-control border border-line bg-input px-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:text-xs" :aria-label="l.headingLevel">
@@ -145,5 +157,5 @@ function cmd(fn: (chain: ReturnType<NonNullable<typeof props.editor>['chain']>) 
         <RteIconBtn icon="redo" :title="l.redo" :disabled="!history.redo" @click="cmd(c => c.redo().run())" />
       </div>
     </UiDrawer>
-  </div>
+  </fieldset>
 </template>

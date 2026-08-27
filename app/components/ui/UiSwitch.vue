@@ -66,7 +66,7 @@ function onClick(event: MouseEvent) {
     @click="presentational ? undefined : onClick($event)"
   >
     <span
-      class="absolute left-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200"
+      class="absolute left-0.5 h-4 w-4 rounded-full bg-accent-contrast shadow-sm transition-transform duration-200"
       :class="modelValue ? 'translate-x-4' : 'translate-x-0'"
     />
   </component>

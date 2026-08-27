@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
 import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
 
 const props = withDefaults(
@@ -34,6 +34,8 @@ const props = withDefaults(
      * зробити поле моноширинним. Цей проп цілить саме в поле.
      */
     inputClass?: string
+    /** Стабільний DOM id. `name` використовується лише для форми. */
+    id?: string
     name?: string
   }>(),
   { rows: 4, maxRows: 12 },
@@ -48,7 +50,7 @@ const emit = defineEmits<{
 defineSlots<Record<string, never>>()
 
 const generatedId = useId()
-const textareaId = computed(() => props.name ?? `${generatedId}-textarea`)
+const textareaId = computed(() => props.id ?? `${generatedId}-textarea`)
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 
@@ -80,12 +82,20 @@ function resize() {
   if (!node || !props.autoresize) return
   node.style.height = 'auto'
   const lineHeight = Number.parseFloat(getComputedStyle(node).lineHeight) || 20
-  const padding = node.offsetHeight - node.clientHeight
-  const max = lineHeight * props.maxRows + padding
+  const styles = getComputedStyle(node)
+  const cssNumber = (value: string) => Number.parseFloat(value) || 0
+  const padding = cssNumber(styles.paddingTop) + cssNumber(styles.paddingBottom)
+  const border = cssNumber(styles.borderTopWidth) + cssNumber(styles.borderBottomWidth)
+  const max = lineHeight * Math.max(1, props.maxRows) + padding + border
   node.style.height = `${Math.min(node.scrollHeight, max)}px`
 }
 
-watch(() => props.modelValue, () => void nextTick(resize))
+watch(
+  [() => props.modelValue, () => props.autoresize, () => props.rows, () => props.maxRows],
+  () => void nextTick(resize),
+)
+
+onMounted(resize)
 
 function onInput(event: Event) {
   emit('update:modelValue', (event.target as HTMLTextAreaElement).value)

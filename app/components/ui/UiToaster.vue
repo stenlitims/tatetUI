@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted, shallowRef } from 'vue'
 import { useToast, type ToastType } from '~/composables/useToast'
 
 /**
@@ -9,6 +10,11 @@ import { useToast, type ToastType } from '~/composables/useToast'
 defineSlots<Record<string, never>>()
 
 const { toasts, dismiss } = useToast()
+const teleportReady = shallowRef(false)
+
+onMounted(() => {
+  teleportReady.value = true
+})
 
 /*
  * Тон бере ті самі токени статусів, що й UiChip. Вихідна версія малювала
@@ -25,7 +31,7 @@ const TONES: Record<ToastType, string> = {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="!teleportReady">
     <!--
       data-overlay-ignore — маркер для useFocusTrap: без нього тости, що
       з'явилися під відкритою модалкою, отримали б inert разом з рештою
@@ -53,6 +59,24 @@ const TONES: Record<ToastType, string> = {
             <div class="min-w-0 flex-1">
               <p v-if="toast.title" class="mb-0.5 font-semibold">{{ toast.title }}</p>
               <p class="text-sm break-words">{{ toast.message }}</p>
+              <!--
+                Дії приходять ДАНИМИ з useToast({ actions: [...] }), а не
+                слотом: черга живе в composable поза шаблоном, слот туди
+                не прокинути. Кнопки малює контейнер у стилі ghost-UiButton
+                (споживач задає лише label і onClick). Клік по дії сам тост
+                НЕ закриває — закривайте через dismiss(id), коли потрібно.
+              -->
+              <div v-if="toast.actions?.length" class="mt-2 flex gap-2">
+                <button
+                  v-for="(action, index) in toast.actions"
+                  :key="`${toast.id}-${index}`"
+                  type="button"
+                  class="h-11 rounded-control px-3 text-sm font-medium text-muted transition-colors hover:bg-hover hover:text-ink active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:px-2.5 md:text-xs"
+                  @click="action.onClick()"
+                >
+                  {{ action.label }}
+                </button>
+              </div>
             </div>
             <button
               type="button"

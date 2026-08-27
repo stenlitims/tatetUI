@@ -2,6 +2,8 @@
 title: VirtualList
 description: Віртуалізований список із фіксованою висотою рядка — рендерить лише видиме вікно діапазону з overscan-запасом.
 component: UiVirtualList
+dependsOn:
+  - app/composables/useReducedMotion.ts
 emitDescriptions:
 status: stable
 order: 43
@@ -29,12 +31,18 @@ order: 43
 на `min-h` чи `py-` — рядок має вкладатися у відведені пікселі:
 
 ```vue
-<UiVirtualList :items="items" :item-height="36">
+<UiVirtualList ref="list" :items="items" :item-height="36">
   <template #item="{ item, index }">
     <div class="flex items-center px-3">{{ index }}. {{ item.label }}</div>
   </template>
 </UiVirtualList>
 ```
+
+Програмна прокрутка — `list.value.scrollToIndex(index)`: рядок опиняється
+посередині вікна, позиція клаймиться в межі полотна. При різкому
+скороченні `items` стара позиція скролу, що вилізла за нове полотно,
+скидається на початок — інакше вікно діапазону рахувалося б із «висячого»
+scrollTop і список показував би порожнє місце.
 
 ## Коли використовувати
 

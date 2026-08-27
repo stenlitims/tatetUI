@@ -101,6 +101,7 @@ async function main() {
 
   const pages = await walk(CONTENT_DIR)
   const pageRoutes = new Set<string>()
+  let componentPages = 0
 
   for (const page of pages) {
     const rel = relative(ROOT, page)
@@ -115,6 +116,8 @@ async function main() {
     const componentPath = component ? join(UI_DIR, `${component}.vue`) : null
     const componentExists = !!componentPath && existsSync(componentPath)
 
+    if (componentExists) componentPages += 1
+
     if (component && !componentExists) {
       fail(rel, `component: "${component}" — файл app/components/ui/${component}.vue не існує`)
     }
@@ -125,6 +128,42 @@ async function main() {
       if (!demoKeys.has(name)) {
         fail(rel, `демо "${name}" не знайдено в app/demos/**`)
       }
+    }
+
+    // 3a. stage у component-preview — клас з типового набору.
+    //
+    // stage передається РЯДКОМ з frontmatter, і JIT Tailwind не бачить
+    // літералів "min-h-64" у .md файлах — утиліти генеруються лише для
+    // наборів з @source inline(...) у main.css. Опечатка тут (min-h-64y,
+    // h-64 замість min-h-64) мовчки дає сцену нульової висоти: демо
+    // «зникає», а build і typecheck проходять. Ловимо тут.
+    for (const match of source.matchAll(/::component-preview\{[^}]*stage="([^"]+)"/g)) {
+      const stage = match[1]!
+      if (!/^((min|max)-h-\d+)( min-h-\d+)?$/.test(stage)) {
+        fail(
+          rel,
+          `stage "${stage}" — не впізнаний клас висоти; додай його в @source inline(...) у main.css або виправи опечатку`,
+        )
+      }
+    }
+
+    // 3b. Двокрапка зі пробілом усередині description ламає YAML-парсер
+    // Nuxt Content: значення читається як об'єкт, і сторінка друкує
+    // «[object Object]» замість опису. Виглядало саме так на Breadcrumb і
+    // Tooltip, поки не замінили на тире.
+    const descriptionRaw = source.match(/^description:[ \t]*(.+)$/m)?.[1] ?? ''
+    if (/:\s/.test(descriptionRaw)) {
+      fail(
+        rel,
+        'description містить ": " — YAML читає значення як об\'єкт і сторінка показує [object Object]; заміни двокрапку на тире',
+      )
+    }
+
+    // 3c. emitDescriptions: {} — парсер читає "{}" як РЯДОК, і
+    // Object.keys дає фантомні події "0"/"1" (бачено на п'яти сторінках).
+    // Для компонента без подій треба голий ключ без значення.
+    if (/^emitDescriptions:\s*\{\}\s*$/m.test(source)) {
+      fail(rel, 'emitDescriptions: {} читається як рядок з фантомними подіями "0"/"1"; залиш голий ключ "emitDescriptions:"')
     }
 
     // 4. dependsOn: шляхи мають існувати
@@ -176,6 +215,25 @@ async function main() {
     }
   }
 
+  const uiFiles = (await readdir(UI_DIR)).filter((name) => /^Ui[A-Z].*\.vue$/.test(name))
+  if (uiFiles.length !== 39) {
+    fail('app/components/ui', `знайдено ${uiFiles.length} публічних Ui*.vue, очікується 39`)
+  }
+  if (componentPages !== 38) {
+    fail('content/docs/components', `знайдено ${componentPages} публічних сторінок компонентів, очікується 38`)
+  }
+
+  // Компоненти повинні працювати в обох темах лише через semantic tokens.
+  // Локальні dark:-перевизначення та white/black знову розводять copy-first
+  // версії Tailwind v3/v4 і обходять контрастні пари з tokens.css.
+  for (const name of uiFiles) {
+    const raw = await readFile(join(UI_DIR, name), 'utf8')
+    const source = raw.replace(/<!--[^]*?-->/g, '').replace(/\/\*[^]*?\*\//g, '')
+    if (/\bdark:/.test(source)) fail(`app/components/ui/${name}`, 'заборонено dark: — використайте semantic token')
+    const rawColor = source.match(/\b(?:bg|text)-(?:white|black)\b/)
+    if (rawColor) fail(`app/components/ui/${name}`, `заборонено сирий колір "${rawColor[0]}" — використайте semantic token`)
+  }
+
   /* ---------------------------------------------------------------- */
   /*  7. Сайдбар і контент мають збігатися В ОБИДВА боки              */
   /* ---------------------------------------------------------------- */
@@ -203,6 +261,42 @@ async function main() {
   /* ---------------------------------------------------------------- */
 
   const tokensSource = await readFile(TOKENS_FILE, 'utf8')
+
+  const hexColor = (block: string, token: string) =>
+    block.match(new RegExp(`--${token}:\\s*(#[0-9a-fA-F]{6})`))?.[1]
+  const luminance = (hex: string) => {
+    const channels = [1, 3, 5].map((index) => Number.parseInt(hex.slice(index, index + 2), 16) / 255)
+    return channels.reduce(
+      (sum, channel, index) =>
+        sum + (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4) * [0.2126, 0.7152, 0.0722][index]!,
+      0,
+    )
+  }
+  const contrast = (first: string, second: string) => {
+    const [lighter, darker] = [luminance(first), luminance(second)].sort((a, b) => b - a)
+    return (lighter! + 0.05) / (darker! + 0.05)
+  }
+
+  for (const [theme, block] of [
+    ['light', tokensSource.match(/:root\s*\{([^]*?)\n\}/)?.[1] ?? ''],
+    ['dark', tokensSource.match(/\.dark\s*\{([^]*?)\n\}/)?.[1] ?? ''],
+  ] as const) {
+    for (const prefix of ['accent', 'danger'] as const) {
+      const solid = hexColor(block, `${prefix}-solid`)
+      const foreground = hexColor(block, `${prefix}-contrast`)
+      if (!solid || !foreground) {
+        fail('app/assets/css/tokens.css', `${theme}: бракує пари ${prefix}-solid/${prefix}-contrast`)
+        continue
+      }
+      const ratio = contrast(solid, foreground)
+      if (ratio < 4.5) {
+        fail(
+          'app/assets/css/tokens.css',
+          `${theme}: контраст ${prefix}-solid/${prefix}-contrast = ${ratio.toFixed(2)}:1, потрібно ≥4.5:1`,
+        )
+      }
+    }
+  }
 
   /*
    * Порівнюємо ПОРЯДКОВО, а не через дві мапи по всьому файлу.

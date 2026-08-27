@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUpdate, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUpdate, ref, useId, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 export interface TabItem {
   id: string
@@ -42,7 +43,7 @@ defineSlots<{
   default?: () => unknown
   /** `panel-<id>` — вміст панелі вкладки з цим id. Рендериться лише активна. */
   [key: `panel-${string}`]: () => unknown
-  /** `tab-<id>` — власний рендер кнопки вкладки: іконка, лічильник. */
+  /** `tab-<id>` — власний вміст усередині семантичної кнопки вкладки. */
   [key: `tab-${string}`]: (props: { tab: TabItem; active: boolean }) => unknown
 }>()
 
@@ -59,27 +60,43 @@ onBeforeUpdate(() => {
   tabButtonEls.value = []
 })
 
-const firstEnabled = props.tabs.find((tab) => !tab.disabled)?.id ?? props.tabs[0]?.id ?? ''
-const active = ref(props.modelValue ?? firstEnabled)
+const firstEnabled = computed(
+  () => props.tabs.find((tab) => !tab.disabled)?.id ?? props.tabs[0]?.id ?? '',
+)
+const isEnabledId = (id: string) => props.tabs.some((tab) => tab.id === id && !tab.disabled)
+const active = ref(
+  props.modelValue && isEnabledId(props.modelValue) ? props.modelValue : firstEnabled.value,
+)
 
 // Відновлення стану з URL має пріоритет над props.modelValue.
 if (props.queryParam && typeof route.query[props.queryParam] === 'string') {
   const fromQuery = route.query[props.queryParam] as string
-  if (props.tabs.some((tab) => tab.id === fromQuery && !tab.disabled)) active.value = fromQuery
+  if (isEnabledId(fromQuery)) active.value = fromQuery
 }
 
 watch(
   () => props.modelValue,
   (value) => {
-    if (value !== undefined && value !== active.value) active.value = value
+    if (value !== undefined && value !== active.value && isEnabledId(value)) active.value = value
   },
+)
+
+watch(
+  () => props.tabs,
+  () => {
+    if (isEnabledId(active.value)) return
+    const next = firstEnabled.value
+    active.value = next
+    if (next) emit('update:modelValue', next)
+  },
+  { deep: true },
 )
 
 // Назад/вперед у браузері: вкладка слідує за URL.
 watch(
   () => (props.queryParam ? route.query[props.queryParam] : undefined),
   (value) => {
-    if (typeof value === 'string' && props.tabs.some((tab) => tab.id === value)) {
+    if (typeof value === 'string' && isEnabledId(value)) {
       if (value !== active.value) active.value = value
     }
   },
@@ -89,12 +106,12 @@ function syncQuery(id: string) {
   if (!props.queryParam) return
   const query = { ...route.query, [props.queryParam]: id }
   // Перший таб не пише параметр: URL лишається чистим для стану за замовчуванням.
-  if (id === firstEnabled) delete query[props.queryParam]
+  if (id === firstEnabled.value) delete query[props.queryParam]
   void router.replace({ query })
 }
 
 function select(id: string) {
-  if (id === active.value) return
+  if (id === active.value || !isEnabledId(id)) return
   active.value = id
   emit('update:modelValue', id)
   emit('change', id)
@@ -131,8 +148,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
         "
       >
         <template v-for="(tab, index) in tabs" :key="tab.id">
-          <slot :name="`tab-${tab.id}`" :tab="tab" :active="tab.id === active">
-            <button
+          <button
               :id="`${baseId}-tab-${tab.id}`"
               :ref="(el) => (tabButtonEls[index] = el as HTMLElement)"
               type="button"
@@ -161,9 +177,10 @@ function onKeydown(event: KeyboardEvent, index: number) {
               @click="!tab.disabled && select(tab.id)"
               @keydown="onKeydown($event, index)"
             >
-              {{ tab.label }}
+              <slot :name="`tab-${tab.id}`" :tab="tab" :active="tab.id === active">
+                {{ tab.label }}
+              </slot>
             </button>
-          </slot>
         </template>
       </div>
     </div>

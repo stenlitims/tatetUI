@@ -5,6 +5,7 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
+  shallowRef,
   useId,
   watch,
 } from 'vue'
@@ -78,6 +79,7 @@ defineSlots<{
 
 const generatedId = useId()
 const listboxId = `${generatedId}-listbox`
+const optionId = (index: number) => `${generatedId}-option-${index}`
 
 const backdropEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
@@ -85,6 +87,7 @@ const inputEl = ref<HTMLInputElement | null>(null)
 
 const query = ref('')
 const activeIndex = ref(0)
+const teleportReady = shallowRef(false)
 
 /* ------------------------------------------------------------------ */
 /*  Фільтр і плоский список збігів                                    */
@@ -200,6 +203,14 @@ function selectActive() {
   closePalette()
 }
 
+function selectAt(index: number) {
+  const match = matches.value[index]
+  if (!match) return
+  activeIndex.value = index
+  emit('select', { groupId: match.group.id, item: match.item.id })
+  closePalette()
+}
+
 function onSearch(event: Event) {
   query.value = (event.target as HTMLInputElement).value
   emit('search', query.value)
@@ -284,6 +295,7 @@ function onRootClick(event: MouseEvent) {
 }
 
 onMounted(() => {
+  teleportReady.value = true
   document.addEventListener('keydown', onKeyDown)
   document.addEventListener('keydown', onHotkey)
   if (props.modelValue) void handleOpen()
@@ -299,10 +311,11 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Teleport to="body">
+  <Teleport to="body" :disabled="!teleportReady">
     <Transition name="ui-command-palette" :duration="transitionDuration" @after-leave="layer.settle()">
       <div
         v-if="modelValue"
+        data-ui-overlay
         class="ui-command-palette fixed inset-0 overflow-y-auto"
         :style="{ zIndex: layer.zIndex.value }"
         @pointerdown="onRootPointerDown"
@@ -332,6 +345,7 @@ onBeforeUnmount(() => {
               aria-expanded="true"
               :aria-controls="listboxId"
               aria-autocomplete="list"
+              :aria-activedescendant="matches.length ? optionId(activeIndex) : undefined"
               :placeholder="placeholder"
               :class="fieldClass('md')"
               @input="onSearch"
@@ -353,18 +367,20 @@ onBeforeUnmount(() => {
                      пріоритет і не бачив би змінну циклу. -->
                 <div
                   v-if="row.type === 'label'"
+                  role="presentation"
                   class="px-2.5 pb-1 pt-2 text-xs font-medium uppercase tracking-wide text-muted"
                 >
                   {{ row.group.label }}
                 </div>
                 <div
                   v-else
+                  :id="optionId(row.index!)"
                   role="option"
                   :aria-selected="row.index === activeIndex"
                   class="flex cursor-pointer items-center justify-between gap-3 rounded-control px-2.5 py-2.5 text-sm transition-colors md:py-2"
                   :class="row.index === activeIndex ? 'bg-hover text-ink' : 'text-ink hover:bg-hover'"
                   @mouseenter="activeIndex = row.index!"
-                  @click="selectActive()"
+                  @click="selectAt(row.index!)"
                 >
                   <slot
                     name="item"
