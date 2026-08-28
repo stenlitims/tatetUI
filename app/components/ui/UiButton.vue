@@ -116,7 +116,7 @@ const classes = computed(() => [
   variants[props.variant],
   sizes[props.size],
   props.block ? 'w-full justify-center' : '',
-  isDisabled.value ? 'opacity-50 cursor-not-allowed pointer-events-none' : '',
+  isDisabled.value ? 'opacity-50 cursor-not-allowed' : '',
 ])
 
 /**

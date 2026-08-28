@@ -67,7 +67,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
   <div>
     <label
       :for="checkboxId"
-      class="inline-flex items-start gap-2.5"
+      class="flex min-w-0 w-full items-start gap-2.5"
       :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
     >
       <span class="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
@@ -101,7 +101,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
           aria-hidden="true"
         />
       </span>
-      <span class="min-w-0">
+      <span class="min-w-0 flex-1">
         <span class="block text-sm font-medium text-ink">
           <slot :checked="modelValue" :indeterminate="indeterminate">{{ label }}</slot>
           <span v-if="required" class="text-danger" aria-hidden="true"> *</span>

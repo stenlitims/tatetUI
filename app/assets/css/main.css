@@ -45,6 +45,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* Preflight лишає кнопкам системний cursor: default. Інтерактивні кнопки
+     мають однаково сигналізувати про клік незалежно від UI-компонента. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
   /* Видиме фокус-кільце. Скидати outline без заміни не можна —
      керування з клавіатури стає сліпим. Це базовий рівень: компоненти
      можуть замінити його на focus-visible:ring-*, але НЕ прибрати. */
