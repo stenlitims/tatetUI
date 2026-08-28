@@ -216,11 +216,11 @@ async function main() {
   }
 
   const uiFiles = (await readdir(UI_DIR)).filter((name) => /^Ui[A-Z].*\.vue$/.test(name))
-  if (uiFiles.length !== 39) {
-    fail('app/components/ui', `знайдено ${uiFiles.length} публічних Ui*.vue, очікується 39`)
+  if (uiFiles.length !== 50) {
+    fail('app/components/ui', `знайдено ${uiFiles.length} публічних Ui*.vue, очікується 50`)
   }
-  if (componentPages !== 38) {
-    fail('content/docs/components', `знайдено ${componentPages} публічних сторінок компонентів, очікується 38`)
+  if (componentPages !== 49) {
+    fail('content/docs/components', `знайдено ${componentPages} публічних сторінок компонентів, очікується 49`)
   }
 
   // Компоненти повинні працювати в обох темах лише через semantic tokens.

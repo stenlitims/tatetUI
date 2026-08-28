@@ -48,7 +48,10 @@ export const docsNav: NavGroup[] = [
   {
     title: 'Форми',
     items: [
+      { title: 'Checkbox', to: '/docs/components/checkbox' },
+      { title: 'RadioGroup', to: '/docs/components/radio-group' },
       { title: 'Input', to: '/docs/components/input' },
+      { title: 'InputOtp', to: '/docs/components/input-otp' },
       { title: 'Textarea', to: '/docs/components/textarea' },
       { title: 'Select', to: '/docs/components/select' },
       { title: 'MultiSelect', to: '/docs/components/multi-select' },
@@ -62,6 +65,9 @@ export const docsNav: NavGroup[] = [
   {
     title: 'Оверлеї',
     items: [
+      { title: 'Popover', to: '/docs/components/popover' },
+      { title: 'ContextMenu', to: '/docs/components/context-menu' },
+      { title: 'HoverCard', to: '/docs/components/hover-card' },
       { title: 'Modal', to: '/docs/components/modal' },
       { title: 'Drawer', to: '/docs/components/drawer' },
       { title: 'ConfirmDialog', to: '/docs/components/confirm-dialog' },
@@ -82,6 +88,11 @@ export const docsNav: NavGroup[] = [
   {
     title: 'Структура',
     items: [
+      { title: 'NavigationMenu', to: '/docs/components/navigation-menu' },
+      { title: 'Sidebar', to: '/docs/components/sidebar' },
+      { title: 'ScrollArea', to: '/docs/components/scroll-area' },
+      { title: 'ResizablePanels', to: '/docs/components/resizable-panels' },
+      { title: 'Carousel', to: '/docs/components/carousel' },
       { title: 'Tabs', to: '/docs/components/tabs' },
       { title: 'Breadcrumb', to: '/docs/components/breadcrumb' },
       { title: 'Card', to: '/docs/components/card' },
