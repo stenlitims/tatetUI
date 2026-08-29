@@ -154,7 +154,8 @@ const triggerClasses = computed(() =>
   fieldClass(props.size, {
     error: hasError.value,
     disabled: props.disabled,
-    extra: 'flex cursor-default items-center gap-1.5 text-left pr-9',
+    padRight: 'pr-9',
+    extra: 'flex cursor-default items-center gap-1.5 text-left',
   }),
 )
 

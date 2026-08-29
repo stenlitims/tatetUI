@@ -309,6 +309,9 @@ const triggerClasses = computed(() =>
   fieldClass(props.size, {
     error: hasError.value,
     disabled: props.disabled,
+    // Кнопка очищення з'являється поверх правого краю — під неї потрібне
+    // місце, і воно має пережити md-брейкпоінт (див. fieldClass).
+    padRight: props.clearable && props.modelValue ? 'pr-10' : undefined,
     extra: 'text-left flex items-center gap-2',
   }),
 )
@@ -342,7 +345,7 @@ defineExpose({
           :aria-controls="isOpen ? panelId : undefined"
           :aria-invalid="hasError || undefined"
           :aria-describedby="describedBy"
-          :class="[triggerClasses, clearable && modelValue ? 'pr-10' : '']"
+          :class="triggerClasses"
           @click="toggle"
         >
           <svg class="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">

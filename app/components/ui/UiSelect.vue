@@ -117,7 +117,9 @@ const inputClasses = computed(() =>
   fieldClass(props.size, {
     error: hasError.value,
     disabled: props.disabled,
-    extra: props.clearable && selectedOption.value ? 'pr-14 cursor-default' : 'pr-9 cursor-default',
+    // Очищення додає другу іконку праворуч — місця треба вдвічі більше.
+    padRight: props.clearable && selectedOption.value ? 'pr-14' : 'pr-9',
+    extra: 'cursor-default',
   }),
 )
 

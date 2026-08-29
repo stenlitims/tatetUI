@@ -347,7 +347,8 @@ defineExpose({
         :class="fieldClass(size, {
           error: hasError,
           disabled,
-          extra: clearable && selectedOption ? 'pr-14 cursor-default' : 'pr-9 cursor-default',
+          padRight: clearable && selectedOption ? 'pr-14' : 'pr-9',
+          extra: 'cursor-default',
         })"
         role="combobox"
         aria-autocomplete="list"

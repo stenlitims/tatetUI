@@ -26,9 +26,36 @@ const fieldBase =
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-accent-solid'
 
 const fieldSizes: Record<FieldSize, string> = {
-  sm: 'h-11 px-2.5 text-sm md:h-8 md:px-2 md:text-xs',
-  md: 'h-11 px-3 text-base md:h-9 md:px-2.5 md:text-sm',
-  lg: 'h-12 px-3.5 text-base md:h-10 md:px-3',
+  sm: 'h-11 text-sm md:h-8 md:text-xs',
+  md: 'h-11 text-base md:h-9 md:text-sm',
+  lg: 'h-12 text-base md:h-10',
+}
+
+/*
+ * Горизонтальний паддінг живе окремо від решти розміру — і по одному класу
+ * на бік.
+ *
+ * Причина суто в порядку правил у згенерованому CSS: `md:px-2.5` лежить у
+ * медіазапиті, тобто НИЖЧЕ за будь-який базовий `pr-9`, дописаний через
+ * extra. Специфічність однакова, тож на ≥768px розмір мовчки з'їдав місце,
+ * зарезервоване під іконку: `pr-9` (36px) перетворювався на 9.375px, і текст
+ * — а в UiMultiSelect лічильник обраних — наїжджав на шеврон. На мобільному
+ * все виглядало правильно, тому баг і жив непоміченим.
+ *
+ * Лікується не «перебиванням», а відсутністю: бік, який зайняла іконка,
+ * взагалі не отримує паддінг від розміру (див. padLeft/padRight у
+ * fieldClass), тож конкурувати в медіазапиті нема з чим.
+ */
+const fieldPadLeft: Record<FieldSize, string> = {
+  sm: 'pl-2.5 md:pl-2',
+  md: 'pl-3 md:pl-2.5',
+  lg: 'pl-3.5 md:pl-3',
+}
+
+const fieldPadRight: Record<FieldSize, string> = {
+  sm: 'pr-2.5 md:pr-2',
+  md: 'pr-3 md:pr-2.5',
+  lg: 'pr-3.5 md:pr-3',
 }
 
 const fieldDisabled = 'opacity-50 cursor-not-allowed'
@@ -108,9 +135,28 @@ export const dropdownTransitionProps = {
 /** Повний рядок класів базового поля або тригера. */
 export function fieldClass(
   size: FieldSize,
-  opts?: { error?: boolean; disabled?: boolean; extra?: string },
+  opts?: {
+    error?: boolean
+    disabled?: boolean
+    /**
+     * Паддінг зліва/справа замість типового для розміру — місце під іконку,
+     * кнопку очищення чи степери.
+     *
+     * Передається готовим класом (`'pr-9'`), а не числом: Tailwind сканує
+     * вихідний код, і класу, склеєного в рантаймі з `pr-${n}`, у бандлі
+     * просто не буде.
+     */
+    padLeft?: string
+    padRight?: string
+    extra?: string
+  },
 ): string {
-  const classes = [fieldBase, fieldSizes[size]]
+  const classes = [
+    fieldBase,
+    fieldSizes[size],
+    opts?.padLeft || fieldPadLeft[size],
+    opts?.padRight || fieldPadRight[size],
+  ]
   if (opts?.error) classes.push(fieldError)
   if (opts?.disabled) classes.push(fieldDisabled)
   if (opts?.extra) classes.push(opts.extra)

@@ -237,13 +237,9 @@ const inputClasses = computed(() =>
   fieldClass(props.size, {
     error: hasError.value,
     disabled: props.disabled,
-    extra: [
-      'text-center tabular-nums',
-      props.steppers ? 'px-11 md:px-9' : '',
-      props.unit && !props.steppers ? 'pr-10' : '',
-    ]
-      .filter(Boolean)
-      .join(' '),
+    padLeft: props.steppers ? 'pl-11 md:pl-9' : undefined,
+    padRight: props.steppers ? 'pr-11 md:pr-9' : props.unit ? 'pr-10' : undefined,
+    extra: 'text-center tabular-nums',
   }),
 )
 

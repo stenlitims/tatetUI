@@ -87,7 +87,8 @@ const inputClasses = computed(() =>
     error: hasError.value,
     disabled: props.disabled,
     // Відступ під іконку інакше накладеться на текст введення.
-    extra: [slots.leading ? 'pl-9' : '', slots.trailing ? 'pr-9' : ''].filter(Boolean).join(' '),
+    padLeft: slots.leading ? 'pl-9' : undefined,
+    padRight: slots.trailing ? 'pr-9' : undefined,
   }),
 )
 
