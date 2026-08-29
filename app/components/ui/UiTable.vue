@@ -83,10 +83,9 @@ const props = withDefaults(
     /**
      * Клас на рядок — для підсвітки виділених, помилкових тощо.
      *
-     * З `tableId` рядок отримує власне тло `bg-card` (його успадковує жолоб
-     * налаштувань), тож заливка звідси має бути утилітою, яка в CSS іде
-     * після `bg-card` — усі семантичні токени (`bg-warning-bg`,
-     * `bg-danger-bg`, `bg-primary-50`) підходять.
+     * З `tableId` рядок отримує власне тло `bg-card`, тож заливка звідси
+     * має бути утилітою, яка в CSS іде після `bg-card` — усі семантичні
+     * токени (`bg-warning-bg`, `bg-danger-bg`, `bg-primary-50`) підходять.
      */
     rowClass?: (item: T) => string | undefined
     /**
@@ -229,7 +228,7 @@ const localDensity = ref<'sm' | 'md'>(props.density)
  * не збігся б із надісланим HTML: інша кількість <col>, інший порядок
  * заголовків. Vue лаявся б «Hydration completed but contains mismatches», а
  * DOM лишався б частково пропатченим — виміряно: колонка з ширинами сусідки
- * і жолоб налаштувань завширшки 220px.
+ * і кнопка налаштувань не на своєму місці.
  *
  * Ціна — короткий проблиск дефолтної розкладки до застосування збереженої.
  * Уникнути його на прередереній сторінці неможливо: сервер не знає, що
@@ -803,14 +802,159 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       </div>
     </Transition>
 
+    <!--
+      Тулбар налаштувань — рядок над таблицею, а не липка колонка.
+
+      Колонка під кнопкою (40px порожніх <td> у кожному рядку) створювала
+      мертву смугу вздовж таблиці, крала ширину в останню колонку і
+      розганяла горизонтальний скрол навіть там, де вміст вміщувався.
+      Липкий жолоб right-0 при цьому ЗАВЖДИ накривав останні 40px вмісту —
+      останню колонку не можна було прочитати навіть повністю прогорнувши.
+
+      Тулбар не залежить ані від щільності рядків, ані від скролбарів.
+      На мобільних картках колонок немає, але налаштування лишаються
+      доцільними: видимість та порядок керують полями у картках.
+    -->
+    <div v-if="showSettings" class="mb-2 flex items-center justify-end">
+      <UiMenu
+        width="20rem"
+        placement="bottom-end"
+        panel-role="dialog"
+        aria-label="Налаштування колонок"
+      >
+        <template #trigger="{ toggle, triggerAttrs }">
+          <button
+            v-bind="triggerAttrs"
+            type="button"
+            class="flex h-9 w-9 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label="Налаштування колонок"
+            @click="toggle"
+          >
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 6h16M4 12h16M4 18h16M8 6v0M16 12v0M10 18v0"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+              />
+              <circle cx="8" cy="6" r="2" fill="currentColor" />
+              <circle cx="16" cy="12" r="2" fill="currentColor" />
+              <circle cx="10" cy="18" r="2" fill="currentColor" />
+            </svg>
+          </button>
+        </template>
+
+        <template #content>
+          <div v-if="densityToggle" class="border-b border-line px-3 py-2">
+            <p class="mb-1.5 text-xs font-medium text-muted">Щільність</p>
+            <div class="flex gap-1">
+              <button
+                v-for="option in (['sm', 'md'] as const)"
+                :key="option"
+                type="button"
+                class="flex-1 rounded-control border px-2 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="
+                  localDensity === option
+                    ? 'border-primary-200 bg-primary-50 text-accent'
+                    : 'border-line text-muted hover:bg-hover'
+                "
+                @click="setDensity(option)"
+              >
+                {{ option === 'sm' ? 'Щільно' : 'Звичайно' }}
+              </button>
+            </div>
+          </div>
+
+          <div class="max-h-72 overflow-y-auto scrollbar-thin py-1">
+            <div
+              v-for="(header, index) in localHeaders"
+              :key="header.value"
+              class="flex items-center gap-2 px-2 py-1.5 hover:bg-hover"
+              draggable="true"
+              @dragstart="onDragStart(index, $event)"
+              @dragover.prevent
+              @drop.prevent="onDrop(index)"
+            >
+              <span class="cursor-grab text-muted active:cursor-grabbing" aria-hidden="true">
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                  <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                  <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+                </svg>
+              </span>
+
+              <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  class="shrink-0 accent-[var(--accent-solid)]"
+                  :checked="header.visible !== false"
+                  :disabled="header.visible !== false && !canHide(header)"
+                  @change="toggleVisibility(header)"
+                />
+                <span class="truncate">{{ header.title || header.text || header.value }}</span>
+              </label>
+
+              <div class="flex shrink-0 gap-0.5">
+                <button
+                  type="button"
+                  class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  :disabled="index === 0"
+                  :aria-label="`Перемістити «${header.title || header.text || header.value}» вище`"
+                  @click="moveHeader(index, -1)"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+                  :disabled="index === localHeaders.length - 1"
+                  :aria-label="`Перемістити «${header.title || header.text || header.value}» нижче`"
+                  @click="moveHeader(index, 1)"
+                >
+                  ↓
+                </button>
+              </div>
+
+              <input
+                v-if="!header.flex"
+                type="number"
+                class="w-16 shrink-0 rounded border border-line bg-input px-1.5 py-1 text-right text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :value="header.width"
+                :min="40"
+                :max="800"
+                aria-label="Ширина колонки, px"
+                @change="setWidth(header, ($event.target as HTMLInputElement).value)"
+              />
+            </div>
+          </div>
+
+          <div class="flex gap-1 border-t border-line px-2 py-2">
+            <button
+              type="button"
+              class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="showAll"
+            >
+              Показати всі
+            </button>
+            <button
+              type="button"
+              class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="resetAll"
+            >
+              Скинути
+            </button>
+          </div>
+        </template>
+      </UiMenu>
+    </div>
+
     <div class="relative">
       <!--
         bg-card на контейнері обов'язковий, а не косметика: компонент і сам
-        малює card у трьох місцях — жолоб налаштувань, градієнт прокрутки і
+        малює card у трьох місцях — кнопку налаштувань, градієнт прокрутки і
         оверлей «Оновлення…». Без власної поверхні вони лягають на те, що
-        просвічує крізь прозорі рядки (типово bg-main), і жолоб стає світлою
-        смугою вздовж останньої колонки. Виміряно: рядки #101216, жолоб
-        #181b20 у темній темі.
+        просвічує крізь прозорі рядки (типово bg-main), і кнопка налаштувань
+        стає світлою плямою над останньою колонкою.
       -->
       <div
         ref="scrollEl"
@@ -947,7 +1091,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
 
             <tr v-else-if="showEmpty">
               <td
-                :colspan="visibleHeaders.length + (showSettings ? 1 : 0) + (selectable ? 1 : 0)"
+                :colspan="visibleHeaders.length + (selectable ? 1 : 0)"
                 class="p-0"
               >
                 <slot name="empty">
@@ -1041,162 +1185,9 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       <div
         v-if="canScrollRight"
         class="pointer-events-none absolute inset-y-0 w-6 bg-gradient-to-l from-card to-transparent"
-        :class="[mobileCards ? 'hidden md:block' : '', showSettings ? 'right-10' : 'right-0']"
+        :class="mobileCards ? 'hidden md:block' : ''"
         aria-hidden="true"
       />
-
-      <!--
-        Кнопка налаштувань — оверлей на зовнішньому контейнері, а не колонка.
-
-        Колонка під неї (40px порожніх <td> у кожному рядку) створювала мертву
-        смугу вздовж таблиці, крала ширину в останню колонку і розганяла
-        горизонтальний скрол навіть там, де вміст вміщувався. Липкий жолоб
-        right-0 при цьому ЗАВЖДИ накривав останні 40px вмісту — останню
-        колонку не можна було прочитати навіть повністю прогорнувши.
-
-        Зовнішній div.relative НЕ прокручується, тож absolute тут лишається
-        на місці і при горизонтальному, і при вертикальному гортанні.
-        right-[41px] — це 8px скролбара + ~33px видимої частини кнопки: вона
-        не перекриває текст останньої колонки, лише злегка торкається її
-        краю. z-30 — над липкою шапкою (z-10).
-      -->
-      <div
-        v-if="showSettings"
-        class="absolute right-[41px] top-0 z-30 flex items-center"
-        :class="localDensity === 'sm' ? 'h-8' : 'h-11'"
-      >
-        <UiMenu
-          width="20rem"
-          placement="bottom-end"
-          panel-role="dialog"
-          aria-label="Налаштування колонок"
-        >
-          <template #trigger="{ toggle, triggerAttrs }">
-            <button
-              v-bind="triggerAttrs"
-              type="button"
-              class="flex items-center justify-center rounded-control bg-subtle text-muted shadow-card transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              :class="localDensity === 'sm' ? 'h-7 w-7' : 'h-9 w-9'"
-              aria-label="Налаштування колонок"
-              @click="toggle"
-            >
-              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M4 6h16M4 12h16M4 18h16M8 6v0M16 12v0M10 18v0"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                />
-                <circle cx="8" cy="6" r="2" fill="currentColor" />
-                <circle cx="16" cy="12" r="2" fill="currentColor" />
-                <circle cx="10" cy="18" r="2" fill="currentColor" />
-              </svg>
-            </button>
-          </template>
-
-          <template #content>
-            <div v-if="densityToggle" class="border-b border-line px-3 py-2">
-              <p class="mb-1.5 text-xs font-medium text-muted">Щільність</p>
-              <div class="flex gap-1">
-                <button
-                  v-for="option in (['sm', 'md'] as const)"
-                  :key="option"
-                  type="button"
-                  class="flex-1 rounded-control border px-2 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  :class="
-                    localDensity === option
-                      ? 'border-primary-200 bg-primary-50 text-accent'
-                      : 'border-line text-muted hover:bg-hover'
-                  "
-                  @click="setDensity(option)"
-                >
-                  {{ option === 'sm' ? 'Щільно' : 'Звичайно' }}
-                </button>
-              </div>
-            </div>
-
-            <div class="max-h-72 overflow-y-auto scrollbar-thin py-1">
-              <div
-                v-for="(header, index) in localHeaders"
-                :key="header.value"
-                class="flex items-center gap-2 px-2 py-1.5 hover:bg-hover"
-                draggable="true"
-                @dragstart="onDragStart(index, $event)"
-                @dragover.prevent
-                @drop.prevent="onDrop(index)"
-              >
-                <span class="cursor-grab text-muted active:cursor-grabbing" aria-hidden="true">
-                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-                    <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-                    <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-                  </svg>
-                </span>
-
-                <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink">
-                  <input
-                    type="checkbox"
-                    class="shrink-0 accent-[var(--accent-solid)]"
-                    :checked="header.visible !== false"
-                    :disabled="header.visible !== false && !canHide(header)"
-                    @change="toggleVisibility(header)"
-                  />
-                  <span class="truncate">{{ header.title || header.text || header.value }}</span>
-                </label>
-
-                <div class="flex shrink-0 gap-0.5">
-                  <button
-                    type="button"
-                    class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-                    :disabled="index === 0"
-                    :aria-label="`Перемістити «${header.title || header.text || header.value}» вище`"
-                    @click="moveHeader(index, -1)"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    class="flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
-                    :disabled="index === localHeaders.length - 1"
-                    :aria-label="`Перемістити «${header.title || header.text || header.value}» нижче`"
-                    @click="moveHeader(index, 1)"
-                  >
-                    ↓
-                  </button>
-                </div>
-
-                <input
-                  v-if="!header.flex"
-                  type="number"
-                  class="w-16 shrink-0 rounded border border-line bg-input px-1.5 py-1 text-right text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  :value="header.width"
-                  :min="40"
-                  :max="800"
-                  aria-label="Ширина колонки, px"
-                  @change="setWidth(header, ($event.target as HTMLInputElement).value)"
-                />
-              </div>
-            </div>
-
-            <div class="flex gap-1 border-t border-line px-2 py-2">
-              <button
-                type="button"
-                class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                @click="showAll"
-              >
-                Показати всі
-              </button>
-              <button
-                type="button"
-                class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                @click="resetAll"
-              >
-                Скинути
-              </button>
-            </div>
-          </template>
-        </UiMenu>
-      </div>
     </div>
 
     <!-- Мобільні картки з ТИХ САМИХ слотів cell-* -->
