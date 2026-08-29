@@ -307,6 +307,47 @@ describe('roadmap layout controls', () => {
     mounted.unmount()
   })
 
+  it('ResizablePanels працює без v-model: клавіатура змінює розмір і емітує change', async () => {
+    const changes: number[] = []
+    const mounted = await mountComponent(UiResizablePanels, {
+      min: 10,
+      max: 90,
+      step: 10,
+      onChange: (value: number) => changes.push(value),
+    }, { start: () => 'A', end: () => 'B' })
+    const separator = mounted.host.querySelector<HTMLElement>('[role="separator"]')!
+    expect(separator.getAttribute('aria-valuenow')).toBe('50')
+    separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    await nextTick()
+    expect(separator.getAttribute('aria-valuenow')).toBe('60')
+    expect(changes).toEqual([60])
+    mounted.unmount()
+  })
+
+  it('ResizablePanels зберігає розмір у localStorage і відновлює його на клієнті', async () => {
+    localStorage.setItem('rp-test-key', '70')
+    const changes: number[] = []
+    // Некерований вживання — так компонент живе в реальних shell-ах.
+    // Відновлення відбувається в onMounted, тож перший рендер (SSR) дає дефолт,
+    // а клієнтський mount застосовує збережені 70.
+    const mounted = await mountComponent(UiResizablePanels, {
+      min: 20,
+      max: 80,
+      storageKey: 'rp-test-key',
+      onChange: (value: number) => changes.push(value),
+    }, { start: () => 'A', end: () => 'B' })
+    const separator = mounted.host.querySelector<HTMLElement>('[role="separator"]')!
+    expect(separator.getAttribute('aria-valuenow')).toBe('70')
+    // Keyboard-дія перезаписує збережене значення.
+    separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
+    await nextTick()
+    expect(separator.getAttribute('aria-valuenow')).toBe('20')
+    expect(localStorage.getItem('rp-test-key')).toBe('20')
+    expect(changes).toEqual([20])
+    mounted.unmount()
+    localStorage.removeItem('rp-test-key')
+  })
+
   it('Carousel нормалізує index, керується клавіатурою і маркує слайд', async () => {
     const values: number[] = []
     const mounted = await mountComponent(UiCarousel, {
