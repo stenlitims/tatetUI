@@ -43,6 +43,7 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Button', to: '/docs/components/button' },
       { title: 'Chip', to: '/docs/components/chip' },
+      { title: 'SplitButton', to: '/docs/components/split-button' },
     ],
   },
   {
@@ -59,7 +60,11 @@ export const docsNav: NavGroup[] = [
       { title: 'Switch', to: '/docs/components/switch' },
       { title: 'Slider', to: '/docs/components/slider' },
       { title: 'DatePicker', to: '/docs/components/date-picker' },
+      { title: 'Calendar', to: '/docs/components/calendar' },
+      { title: 'DateRangePicker', to: '/docs/components/date-range-picker' },
       { title: 'InlineEdit', to: '/docs/components/inline-edit' },
+      { title: 'NumberInput', to: '/docs/components/number-input' },
+      { title: 'TagInput', to: '/docs/components/tag-input' },
     ],
   },
   {
@@ -81,6 +86,10 @@ export const docsNav: NavGroup[] = [
       { title: 'Menu', to: '/docs/components/menu' },
       { title: 'Pagination', to: '/docs/components/pagination' },
       { title: 'Avatar', to: '/docs/components/avatar' },
+      { title: 'AvatarGroup', to: '/docs/components/avatar-group' },
+      { title: 'StatCard', to: '/docs/components/stat-card' },
+      { title: 'DescriptionList', to: '/docs/components/description-list' },
+      { title: 'Timeline', to: '/docs/components/timeline' },
       { title: 'Tree', to: '/docs/components/tree' },
       { title: 'VirtualList', to: '/docs/components/virtual-list' },
     ],
@@ -114,6 +123,7 @@ export const docsNav: NavGroup[] = [
     title: 'Дрібниці',
     items: [
       { title: 'Kbd', to: '/docs/components/kbd' },
+      { title: 'Separator', to: '/docs/components/separator' },
       { title: 'CopyButton', to: '/docs/components/copy-button' },
       { title: 'ToggleGroup', to: '/docs/components/toggle-group' },
       { title: 'FileUpload', to: '/docs/components/file-upload' },

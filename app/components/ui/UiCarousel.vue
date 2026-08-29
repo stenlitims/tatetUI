@@ -4,12 +4,22 @@ import { useReducedMotion } from '~/composables/useReducedMotion'
 
 const props = withDefaults(
   defineProps<{
+    /** Слайди. Рендер кожного — слот `slide`. */
     items: T[]
+    /** Індекс поточного слайда. Використовуйте через `v-model`. */
     modelValue?: number
+    /** З останнього слайда переходити на перший. */
     loop?: boolean
+    /**
+     * Автоматичне гортання. Вимикається саме собою при
+     * `prefers-reduced-motion` і на час наведення чи фокуса.
+     */
     autoplay?: boolean
+    /** Пауза між автоматичними переходами, мс. */
     interval?: number
+    /** Спиняти автогортання під курсором. */
     pauseOnHover?: boolean
+    /** Доступна назва каруселі. */
     ariaLabel?: string
   }>(),
   {
@@ -121,7 +131,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
     role="region"
     aria-roledescription="carousel"
     :aria-label="ariaLabel"
-    class="relative outline-none"
+    class="relative outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
     tabindex="0"
     @keydown="onKeydown"
     @mouseenter="hovering = true"
@@ -164,7 +174,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
           :key="index"
           type="button"
           class="size-3 rounded-full border border-line transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          :class="index === current ? 'bg-accent-solid' : 'bg-surface-muted hover:bg-hover'"
+          :class="index === current ? 'bg-accent-solid' : 'bg-line-strong hover:bg-accent'"
           :aria-label="`Перейти до слайда ${index + 1}`"
           :aria-current="index === current ? 'true' : undefined"
           @click="goTo(index)"

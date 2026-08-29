@@ -33,8 +33,7 @@ if (!page.value) {
   })
 }
 
-useHead({ title: `${page.value.title} — tatetUI` })
-useSeoMeta({ description: page.value.description })
+useSeo({ title: page.value.title, description: page.value.description })
 
 /**
  * Ім'я компонента і описи подій віддаємо вниз через provide, щоб у
@@ -67,6 +66,7 @@ provide('docsPageEmitDescriptions', page.value.emitDescriptions ?? {})
     </article>
 
     <aside
+      aria-label="Зміст сторінки"
       class="scrollbar-thin sticky top-[calc(var(--header-height)+2.5rem)] hidden h-fit max-h-[calc(100dvh-var(--header-height)-5rem)] w-52 shrink-0 overflow-y-auto xl:block"
     >
       <DocsToc :links="page.body?.toc?.links ?? []" />

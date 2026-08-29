@@ -1,7 +1,15 @@
 <script setup lang="ts" generic="T extends Record<string, unknown>">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import UiCheckbox from './UiCheckbox.vue'
 import UiMenu from './UiMenu.vue'
 import UiSkeleton from './UiSkeleton.vue'
+import {
+  keysBetween,
+  selectionState,
+  subtractKeys,
+  unionKeys,
+  type SelectionKey,
+} from '~/utils/tableSelection'
 
 export interface TableHeader {
   /** Ключ поля в об'єкті рядка. Він же — суфікс іменованих слотів. */
@@ -44,7 +52,9 @@ export interface TableSort {
 
 const props = withDefaults(
   defineProps<{
+    /** Опис колонок: ключ, підпис, вирівнювання, ширина, сортованість. */
     headers: TableHeader[]
+    /** Рядки таблиці. Ключ рядка береться з поля, названого в `keyRow`. */
     items: T[]
     /** Поле-ідентифікатор рядка для `:key`. */
     keyRow?: string
@@ -55,10 +65,16 @@ const props = withDefaults(
      * `update:sort`, але порядок рядків не чіпає.
      */
     serverSort?: boolean
+    /** Показує скелетони замість рядків, зберігаючи висоту таблиці. */
     loading?: boolean
     /** Скільки рядків-заглушок показати під час ПЕРШОГО завантаження. */
     skeletonRows?: number
+    /** Текст, коли рядків немає. Складніший стан — слот `empty`. */
     emptyText?: string
+    /**
+     * Щільність рядків. `sm` для довгих таблиць, де важливіше бачити
+     * більше рядків.
+     */
     density?: 'sm' | 'md'
     /** Показати перемикач щільності в меню налаштувань. */
     densityToggle?: boolean
@@ -93,6 +109,23 @@ const props = withDefaults(
      * підніміть число, і збережений вибір користувача скинеться.
      */
     settingsVersion?: number
+    /**
+     * Вмикає колонку прапорців ліворуч. Ключем виділення служить той самий
+     * `keyRow`, що вже дає рядкам `:key`.
+     */
+    selectable?: boolean
+    /** Ключі обраних рядків. Використовуйте через `v-model:selected`. */
+    selected?: SelectionKey[]
+    /**
+     * Які рядки взагалі можна обрати. Незбиральний рядок показує вимкнений
+     * прапорець і не потрапляє ні в «обрати всі», ні в діапазон Shift.
+     */
+    selectableRow?: (item: T) => boolean
+    /**
+     * Панель «Вибрано N» над таблицею. Вимикайте, коли масові дії живуть у
+     * власному тулбарі споживача.
+     */
+    selectionBar?: boolean
   }>(),
   {
     keyRow: 'id',
@@ -102,12 +135,15 @@ const props = withDefaults(
     density: 'md',
     densityToggle: true,
     settingsVersion: 0,
+    selected: () => [],
+    selectionBar: true,
   },
 )
 
 const emit = defineEmits<{
   'update:sort': [value: TableSort | null]
   'update:headers': [value: TableHeader[]]
+  'update:selected': [value: SelectionKey[]]
   rowClick: [item: T]
 }>()
 
@@ -125,6 +161,12 @@ defineSlots<{
   'mobile-card'?: (props: { item: T }) => unknown
   /** Показується замість «Даних немає». */
   empty?: () => unknown
+  /** Дії в панелі «Вибрано N». `clear` знімає виділення. */
+  'selection-actions'?: (props: {
+    selected: SelectionKey[]
+    items: T[]
+    clear: () => void
+  }) => unknown
 }>()
 
 const slots = useSlots()
@@ -136,6 +178,8 @@ const slots = useSlots()
 /** Формат збереженого payload. Піднімає САМ компонент, не споживач. */
 const SETTINGS_SCHEMA = 1
 const SETTINGS_COLUMN_WIDTH = 40
+/** Ширина колонки прапорців. 44px — мінімальна ціль для пальця. */
+const SELECTION_COLUMN_WIDTH = 44
 const MIN_WIDTH = 40
 const MAX_WIDTH = 800
 const DEFAULT_WIDTH = 120
@@ -318,6 +362,102 @@ watch(
 )
 
 /* ---------------------------------------------------------------- */
+/*  Виділення рядків                                                */
+/* ---------------------------------------------------------------- */
+
+const selectedSet = computed(() => new Set<SelectionKey>(props.selected))
+
+const keyOf = (item: T): SelectionKey => item[props.keyRow] as SelectionKey
+
+function canSelect(item: T) {
+  return props.selectableRow ? props.selectableRow(item) : true
+}
+
+/** Ключі рядків, які видно ЗАРАЗ, у порядку показу. */
+const selectablePageKeys = computed(() => sortedItems.value.filter(canSelect).map(keyOf))
+
+const headerSelection = computed(() => selectionState(selectablePageKeys.value, selectedSet.value))
+
+const selectedCount = computed(() => props.selected.length)
+
+const selectedItems = computed(() => props.items.filter((item) => selectedSet.value.has(keyOf(item))))
+
+/*
+ * «Обрати всі» — це ОБ'ЄДНАННЯ з поточним набором, а не заміна.
+ *
+ * UiTable не пагінує: `items` — це вже сторінка, а UiPagination живе окремо.
+ * Якби прапорець у шапці ЗАМІНЯВ набір, користувач, який вибрав рядки,
+ * перейшов на другу сторінку й натиснув «обрати всі», мовчки втратив би
+ * вибір з першої.
+ */
+function toggleAll(next: boolean) {
+  emit(
+    'update:selected',
+    next
+      ? unionKeys(props.selected, selectablePageKeys.value)
+      : subtractKeys(props.selected, selectablePageKeys.value),
+  )
+}
+
+/*
+ * Shift+клік бере якір від останнього перемикання БЕЗ Shift і ставить
+ * усьому діапазону той стан, який отримав якір — як у Finder і Gmail.
+ * Почергове перемикання кожного рядка діапазону дало б результат, який
+ * неможливо передбачити оком.
+ */
+let selectionAnchor: SelectionKey | null = null
+
+/*
+ * UiCheckbox емітить `change: [value: boolean]` без об'єкта події, тож
+ * shiftKey звідти не дістати. Ловимо його на комірці, поки натискання ще
+ * не перетворилось на change.
+ */
+const pendingShift = ref(false)
+
+function toggleRow(item: T, next: boolean) {
+  const key = keyOf(item)
+  if (!canSelect(item)) return
+
+  if (pendingShift.value && selectionAnchor !== null) {
+    const range = keysBetween(selectablePageKeys.value, selectionAnchor, key)
+    emit('update:selected', next
+      ? unionKeys(props.selected, range)
+      : subtractKeys(props.selected, range))
+  } else {
+    selectionAnchor = key
+    emit('update:selected', next
+      ? unionKeys(props.selected, [key])
+      : subtractKeys(props.selected, [key]))
+  }
+  pendingShift.value = false
+}
+
+function clearSelection() {
+  selectionAnchor = null
+  if (props.selected.length) emit('update:selected', [])
+}
+
+/**
+ * Доступне ім'я прапорця рядка.
+ *
+ * Береться з першої видимої колонки, якщо там примітив; інакше лишається
+ * ключ. Голе «Обрати рядок» у таблиці на сто рядків не розрізняє нічого.
+ */
+function rowSelectionLabel(item: T): string {
+  const first = visibleHeaders.value[0]
+  const value = first ? item[first.value] : undefined
+  const readable = typeof value === 'string' || typeof value === 'number' ? String(value) : String(keyOf(item))
+  return `Обрати рядок ${readable}`
+}
+
+defineExpose({
+  /** Знімає виділення. Потрібне після успішної масової дії. */
+  clearSelection,
+  /** Обирає всі доступні рядки поточного `items`. */
+  selectAllOnPage: () => toggleAll(true),
+})
+
+/* ---------------------------------------------------------------- */
 /*  Геометрія                                                       */
 /* ---------------------------------------------------------------- */
 
@@ -333,7 +473,13 @@ const densityClass = computed(() => DENSITY_CLASSES[localDensity.value])
  */
 const tableMinWidth = computed(() => {
   const columns = visibleHeaders.value.reduce((sum, h) => sum + (h.width ?? DEFAULT_WIDTH), 0)
-  return columns + (showSettings.value ? SETTINGS_COLUMN_WIDTH : 0)
+  return (
+    columns +
+    (showSettings.value ? SETTINGS_COLUMN_WIDTH : 0) +
+    // Забути цей доданок — і table-layout: fixed відбере ширину в
+    // flex-колонки рівно на 44px, обрізавши останню колонку.
+    (props.selectable ? SELECTION_COLUMN_WIDTH : 0)
+  )
 })
 
 function alignClass(header: TableHeader) {
@@ -642,7 +788,38 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
 </script>
 
 <template>
-  <div :class="{ 'select-none': !!resizing }">
+  <div :class="{ 'select-none': !!resizing || selectable }">
+    <!--
+      Панель ЗОВНІ контейнера з overflow-auto: усередині нього вона з'їхала б
+      горизонтально разом із таблицею і зникла б з очей рівно тоді, коли
+      користувач прокрутив до колонки, заради якої й виділяв рядки.
+    -->
+    <Transition
+      enter-active-class="transition duration-150 ease-out"
+      enter-from-class="-translate-y-1 opacity-0"
+      leave-active-class="transition duration-100 ease-in"
+      leave-to-class="-translate-y-1 opacity-0"
+    >
+      <div
+        v-if="selectable && selectionBar && selectedCount > 0"
+        class="mb-2 flex flex-wrap items-center gap-3 rounded-card border border-accent-solid bg-primary-50 px-3 py-2"
+      >
+        <p class="text-sm font-medium text-accent" role="status" aria-live="polite">
+          Вибрано {{ selectedCount }}
+        </p>
+        <div class="ml-auto flex flex-wrap items-center gap-2">
+          <slot name="selection-actions" :selected="props.selected" :items="selectedItems" :clear="clearSelection" />
+          <button
+            type="button"
+            class="rounded-control px-2.5 py-1.5 text-sm text-accent transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            @click="clearSelection"
+          >
+            Зняти вибір
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <div class="relative">
       <!--
         bg-card на контейнері обов'язковий, а не косметика: компонент і сам
@@ -667,6 +844,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
             Колонка без width (flex) забирає залишок — це весь механізм, без JS.
           -->
           <colgroup>
+            <col v-if="selectable" :style="{ width: '44px' }" />
             <col
               v-for="header in visibleHeaders"
               :key="header.value"
@@ -677,6 +855,22 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
 
           <thead>
             <tr class="border-b border-line bg-subtle">
+              <th
+                v-if="selectable"
+                scope="col"
+                class="w-11 px-2"
+                :class="[densityClass, stickyHeader && maxHeight ? 'sticky top-0 z-10 bg-subtle' : '']"
+              >
+                <UiCheckbox
+                  :model-value="headerSelection === 'all'"
+                  :indeterminate="headerSelection === 'some'"
+                  :disabled="!selectablePageKeys.length"
+                  class="w-5"
+                  @update:model-value="toggleAll($event)"
+                >
+                  <span class="sr-only">Обрати всі рядки на сторінці</span>
+                </UiCheckbox>
+              </th>
               <th
                 v-for="header in visibleHeaders"
                 :key="header.value"
@@ -896,6 +1090,9 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                 class="border-b border-line last:border-0"
                 :class="showSettings ? 'bg-card' : ''"
               >
+                <td v-if="selectable" :class="densityClass" class="px-2">
+                  <UiSkeleton class="h-4 w-4 rounded" />
+                </td>
                 <td v-for="header in visibleHeaders" :key="header.value" :class="densityClass">
                   <!-- Ширина заглушки детермінована, а не Math.random(): інакше
                        вона мінялася б на кожному рендері й миготіла. -->
@@ -909,7 +1106,10 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
             </template>
 
             <tr v-else-if="showEmpty">
-              <td :colspan="visibleHeaders.length + (showSettings ? 1 : 0)" class="p-0">
+              <td
+                :colspan="visibleHeaders.length + (showSettings ? 1 : 0) + (selectable ? 1 : 0)"
+                class="p-0"
+              >
                 <slot name="empty">
                   <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
                 </slot>
@@ -926,13 +1126,37 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   rowClickable
                     ? 'cursor-pointer hover:bg-hover focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-ring'
                     : '',
+                  selectable && selectedSet.has(item[keyRow] as string | number) ? 'bg-primary-50' : '',
                   rowClass?.(item),
                 ]"
                 :role="rowClickable ? 'button' : undefined"
                 :tabindex="rowClickable ? 0 : undefined"
+                :aria-selected="selectable ? selectedSet.has(item[keyRow] as string | number) : undefined"
                 @click="onRowActivate(item)"
                 @keydown="onRowKeydown($event, item)"
               >
+                <!--
+                  @click.stop обов'язковий: без нього перемикання прапорця
+                  ще й «активує» рядок, і rowClickable-таблиця відкриває
+                  картку щоразу, коли її намагаються лише виділити.
+                -->
+                <td
+                  v-if="selectable"
+                  class="px-2"
+                  :class="densityClass"
+                  @click.stop
+                  @keydown.stop
+                  @pointerdown="pendingShift = $event.shiftKey"
+                >
+                  <UiCheckbox
+                    :model-value="selectedSet.has(item[keyRow] as string | number)"
+                    :disabled="!canSelect(item)"
+                    class="w-5"
+                    @update:model-value="toggleRow(item, $event)"
+                  >
+                    <span class="sr-only">{{ rowSelectionLabel(item) }}</span>
+                  </UiCheckbox>
+                </td>
                 <td
                   v-for="header in visibleHeaders"
                   :key="header.value"
@@ -995,13 +1219,36 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       <div
         v-for="item in showEmpty ? [] : sortedItems"
         :key="`m-${String(item[keyRow])}`"
-        class="rounded-card border border-line bg-card p-3"
-        :class="[rowClickable ? 'cursor-pointer' : '', rowClass?.(item)]"
-        :role="rowClickable ? 'button' : undefined"
-        :tabindex="rowClickable ? 0 : undefined"
-        @click="onRowActivate(item)"
-        @keydown="onRowKeydown($event, item)"
+        class="flex items-start gap-3 rounded-card border border-line bg-card p-3"
+        :class="[
+          selectable && selectedSet.has(item[keyRow] as string | number) ? 'border-accent-solid bg-primary-50' : '',
+          rowClass?.(item),
+        ]"
       >
+        <!--
+          Прапорець стоїть ЗОВНІ елемента з role="button", а не всередині
+          нього: інтерактивний контрол усередині ролі кнопки недосяжний для
+          скрінрідера в режимі читання.
+        -->
+        <div v-if="selectable" class="pt-0.5" @pointerdown="pendingShift = $event.shiftKey">
+          <UiCheckbox
+            :model-value="selectedSet.has(item[keyRow] as string | number)"
+            :disabled="!canSelect(item)"
+            class="w-5"
+            @update:model-value="toggleRow(item, $event)"
+          >
+            <span class="sr-only">{{ rowSelectionLabel(item) }}</span>
+          </UiCheckbox>
+        </div>
+
+        <div
+          class="min-w-0 flex-1"
+          :class="rowClickable ? 'cursor-pointer' : ''"
+          :role="rowClickable ? 'button' : undefined"
+          :tabindex="rowClickable ? 0 : undefined"
+          @click="onRowActivate(item)"
+          @keydown="onRowKeydown($event, item)"
+        >
         <slot name="mobile-card" :item="item">
           <dl class="space-y-1.5">
             <div
@@ -1018,6 +1265,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
             </div>
           </dl>
         </slot>
+        </div>
       </div>
     </div>
   </div>

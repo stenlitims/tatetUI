@@ -25,8 +25,8 @@ import type { ComputedRef } from 'vue'
 
 /**
  * `import.meta.client` тут не використовується навмисно — це специфіка
- * Nuxt, а бібліотеку копіюють і у Vite-проєкти без нього (ClayArenaChat,
- * DashClayarena). Перевірка на document працює скрізь.
+ * Nuxt, а бібліотеку копіюють і у Vite-проєкти без нього. Перевірка на
+ * document працює скрізь.
  */
 const isClient = typeof document !== 'undefined'
 

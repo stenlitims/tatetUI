@@ -176,6 +176,35 @@ describe('roadmap overlays and navigation', () => {
     mounted.unmount()
   })
 
+  it('NavigationMenu запам\'ятовує roving tabindex після стрілок', async () => {
+    /*
+     * Регрес: tabindex рахувався як `index === enabledRootItems()[0]?.index`
+     * — константа. Користувач доходив стрілками до третього пункту,
+     * виходив Tab'ом і Shift+Tab повертав його на перший.
+     */
+    const mounted = await mountComponent(UiNavigationMenu, {
+      modelValue: null,
+      items: [
+        { id: 'home', label: 'Головна', href: '#home' },
+        { id: 'docs', label: 'Документація', href: '#docs' },
+        { id: 'about', label: 'Про нас', href: '#about' },
+      ],
+    })
+    const roots = [...mounted.host.querySelectorAll<HTMLElement>('[role="menubar"] > li > [role="menuitem"]')]
+    expect(roots.map((el) => el.tabIndex)).toEqual([0, -1, -1])
+
+    roots[0]!.focus()
+    roots[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    await nextTick()
+    expect(document.activeElement).toBe(roots[1])
+    expect(roots.map((el) => el.tabIndex)).toEqual([-1, 0, -1])
+
+    roots[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    await nextTick()
+    expect(roots.map((el) => el.tabIndex)).toEqual([-1, -1, 0])
+    mounted.unmount()
+  })
+
   it('HoverCard використовує один delay timer для hover/focus і очищає його', async () => {
     vi.useFakeTimers()
     let mounted: Awaited<ReturnType<typeof mountComponent>>
@@ -222,6 +251,17 @@ describe('roadmap layout controls', () => {
     expect(document.body.dataset.overlayScrollLocked).toBe('true')
     mounted.host.querySelector<HTMLButtonElement>('[aria-label="Згорнути бічну панель"]')!.click()
     expect(collapsedValues).toEqual([true])
+    /*
+     * Шар — зі спільного стеку, а не з літерала z-[1000]. Поки він був
+     * літералом, UiModal, відкритий із сайдбару, отримував рівно той самий
+     * z-index, і що опиниться зверху, вирішував порядок вузлів у DOM.
+     */
+    expect(aside.className).not.toMatch(/z-\[/)
+    expect(Number(aside.style.zIndex)).toBeGreaterThanOrEqual(1000)
+    const backdrop = mounted.host.querySelector<HTMLElement>('button[aria-label="Закрити бічну панель"]')!
+    expect(backdrop.className).not.toMatch(/z-\[/)
+    expect(Number(backdrop.style.zIndex)).toBeLessThan(Number(aside.style.zIndex))
+
     aside.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     expect(openValues).toEqual([false])
     mounted.unmount()
@@ -234,6 +274,18 @@ describe('roadmap layout controls', () => {
     expect(region.tabIndex).toBe(0)
     expect(region.style.height).toBe('10rem')
     expect(typeof region.scrollTo).toBe('function')
+    mounted.unmount()
+  })
+
+  it('ScrollArea віддає стан країв у слот', async () => {
+    const seen: Array<{ atStart: boolean; atEnd: boolean }> = []
+    const mounted = await mountComponent(UiScrollArea, { height: '10rem' }, {
+      default: (props: any) => {
+        seen.push({ atStart: props.atStart, atEnd: props.atEnd })
+        return h('div', 'Вміст')
+      },
+    })
+    expect(seen.at(-1)).toEqual({ atStart: true, atEnd: true })
     mounted.unmount()
   })
 

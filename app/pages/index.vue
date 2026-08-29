@@ -4,15 +4,15 @@ import HomeDataWorkflow from '~/components/home/HomeDataWorkflow.vue'
 import HomeHeroDemo from '~/components/home/HomeHeroDemo.vue'
 import UiButton from '~/components/ui/UiButton.vue'
 
-useHead({ title: 'tatetUI — бібліотека UI-компонентів' })
-useSeoMeta({
+useSeo({
+  title: 'Бібліотека UI-компонентів для Vue 3 і Nuxt',
   description:
-    'Канонічна бібліотека UI-компонентів для Nuxt: копіюй код, перевіряй живі сценарії та адаптуй під продукт.',
+    'Канонічна бібліотека UI-компонентів для Nuxt — копіюй код, перевіряй живі сценарії та адаптуй під продукт.',
 })
 </script>
 
 <template>
-  <main>
+  <main id="content">
     <HomeHeroDemo />
     <HomeDataWorkflow />
     <HomeComponentGallery />

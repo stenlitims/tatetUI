@@ -16,7 +16,7 @@ function select(label: string, close: () => void) {
       <button
         v-bind="targetAttrs"
         type="button"
-        class="flex min-h-40 w-full items-center justify-center rounded-overlay border border-dashed border-line bg-surface-muted px-6 text-center text-sm text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="flex min-h-40 w-full items-center justify-center rounded-overlay border border-dashed border-line bg-subtle px-6 text-center text-sm text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         Натисніть правою кнопкою або Shift+F10
       </button>

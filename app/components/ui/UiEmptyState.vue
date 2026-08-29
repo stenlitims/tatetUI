@@ -7,6 +7,7 @@ const props = withDefaults(
     title: string
     /** Пояснення під заголовком. Найкраще — що зробити далі. */
     description?: string
+    /** Колір іконки. `danger` — лише коли порожнеча є наслідком помилки. */
     tone?: 'neutral' | 'accent' | 'danger'
     /** Щільний варіант — для порожньої таблиці чи панелі, а не сторінки. */
     compact?: boolean

@@ -1,0 +1,22 @@
+<!--
+  Знак tatetUI: сітка 2×2 в суцільній акцентній плитці.
+
+  Плитка обов'язкова. Чотири окремі квадрати без підкладки на 16px
+  зливаються з тлом вкладки браузера — а саме там знак і живе більшість
+  свого часу.
+
+  Кольори тут ЖОРСТКІ, на відміну від DocsLogo.vue: файл віддається як
+  статика, CSS-змінних сторінки в ньому немає. #2563eb — це --accent-solid
+  зі світлої теми; він же лишається --accent-solid і в темній, тож знак
+  однаковий в обох.
+
+  Геометрія (viewBox 32×32) єдина для SVG, .ico, apple-touch-icon і
+  OG-картинки; растр генерує scripts/gen-icons.py.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="tatetUI">
+  <rect width="32" height="32" rx="7" fill="#2563eb"/>
+  <rect x="5.5" y="5.5" width="9" height="9" rx="2.5" fill="#ffffff"/>
+  <rect x="17.5" y="5.5" width="9" height="9" rx="2.5" fill="#ffffff" opacity="0.45"/>
+  <rect x="5.5" y="17.5" width="9" height="9" rx="2.5" fill="#ffffff" opacity="0.45"/>
+  <rect x="17.5" y="17.5" width="9" height="9" rx="2.5" fill="#ffffff" opacity="0.45"/>
+</svg>

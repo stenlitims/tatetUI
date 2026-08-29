@@ -34,6 +34,7 @@ const props = withDefaults(
     copiedLabel?: string
     /** Візуальна вага. */
     variant?: 'ghost' | 'outline'
+    /** Висота кнопки. На мобільному кожен розмір вищий за десктопний. */
     size?: 'sm' | 'md'
     /** Доступна назва. Обов'язкова, коли `label` не задано. */
     ariaLabel?: string

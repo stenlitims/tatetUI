@@ -7,6 +7,7 @@ const props = withDefaults(
     modelValue?: number | null
     /** Максимум шкали. */
     max?: number
+    /** Товщина смуги. */
     size?: 'sm' | 'md'
     /** Доступна назва. Обов'язкова, якщо поруч немає видимого підпису. */
     label?: string

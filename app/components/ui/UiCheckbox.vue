@@ -9,10 +9,20 @@ const props = withDefaults(
     /** Візуальний і ARIA-стан часткового вибору. */
     indeterminate?: boolean
     label?: string
+    /** Пояснення під міткою. Друкується дрібнішим і не замінює `label`. */
     description?: string
     disabled?: boolean
     required?: boolean
+    /**
+     * Текст помилки. Стан помилки вмикає САМА наявність тексту — булевого
+     * прапорця немає навмисно, щоб не було червоного поля без пояснення
+     * причини.
+     */
     error?: string
+    /**
+     * Підказка під полем. Ховається, коли показано помилку:
+     * `aria-describedby` має вказувати рівно на один опис.
+     */
     hint?: string
     id?: string
     name?: string

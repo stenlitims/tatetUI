@@ -4,8 +4,8 @@ description: Реалізовані пріоритети UI-компоненті
 order: 3
 ---
 
-Перший roadmap-цикл завершено — усі 11 кандидатів реалізовані, мають живі
-приклади, API-сторінки та accessibility-контракти. Початкові пріоритети були
+Обидва цикли завершено — усі кандидати реалізовані, мають живі приклади,
+API-сторінки та accessibility-контракти. Початкові пріоритети були
 звірені з каталогами
 [Radix Primitives](https://www.radix-ui.com/primitives/docs/components),
 [shadcn/ui](https://ui.shadcn.com/docs/components) та
@@ -36,6 +36,31 @@ order: 3
 | [`UiResizablePanels`](/docs/components/resizable-panels) | Робочі області редакторів і dashboard | Pointer utilities | separator role, клавіатурний resize | stable |
 | [`UiCarousel`](/docs/components/carousel) | Послідовність промо або медіа | Buttons + reduced motion | оголошення slide, autoplay controls | stable |
 | [`UiHoverCard`](/docs/components/hover-card) | Необов'язковий preview за посиланням | Popover | hover/focus parity, dismiss | stable |
+
+## Цикл 2 — CRM і адміністративні панелі
+
+Другий цикл закриває те, чого бракувало для побудови CRM: дашборд, картка
+запису, стрічка активності й фільтр за періодом.
+
+| Компонент | Для чого | Основа композиції | Складність a11y | Статус |
+|---|---|---|---|---|
+| [`UiStatCard`](/docs/components/stat-card) | Ключова метрика зі зміною за період | Card + Skeleton | стрілка як символ, скорочене значення | stable |
+| [`UiAvatarGroup`](/docs/components/avatar-group) | Учасники запису в один рядок | Avatar | приховані учасники лишаються названими | stable |
+| [`UiDescriptionList`](/docs/components/description-list) | Пари «назва — значення» в картці | — | справжні `dl`/`dt`/`dd` | stable |
+| [`UiSeparator`](/docs/components/separator) | Межа між секціями | — | декоративний проти смислового | stable |
+| [`UiTimeline`](/docs/components/timeline) | Історія запису | — | `<time datetime>`, детермінований пояс | stable |
+| [`UiTagInput`](/docs/components/tag-input) | Мітки з вільним вводом | Combobox + Chip | список міток проти listbox, live-region | stable |
+| [`UiNumberInput`](/docs/components/number-input) | Кількість, ціна, відсоток | Field styles | `role="spinbutton"`, `aria-valuetext` | stable |
+| [`UiSplitButton`](/docs/components/split-button) | Головна дія плюс альтернативи | Button + Menu | `role="group"`, ArrowDown на головній | stable |
+| [`UiCalendar`](/docs/components/calendar) | Сітка місяця, діапазони | Roving tabindex | `role="grid"`, повна дата в назві дня | stable |
+| [`UiDateRangePicker`](/docs/components/date-range-picker) | Період над таблицею чи звітом | Calendar + anchored panel | один `tabindex="0"` на два місяці | stable |
+| [`UiTable`](/docs/components/table) — вибір рядків | Масові дії над записами | Table + Checkbox | ім'я прапорця з назви рядка | stable |
+
+Дати рахуються без бібліотеки дат: уся арифметика — в
+`app/utils/calendar.ts`, і кожна нова дата будується конструктором
+`new Date(рік, місяць, день)`, а не додаванням мілісекунд. Це не стиль:
+`+ 86 400 000` ламає сітку місяця двічі на рік, у ночі переходу на літній і
+зимовий час.
 
 ## Як наступний компонент переходить у роботу
 

@@ -3,14 +3,25 @@ import { computed, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 
 const props = withDefaults(
   defineProps<{
+    /** Розмір першої панелі у відсотках. Використовуйте через `v-model`. */
     modelValue?: number
+    /** Вісь поділу: панелі поруч чи одна над одною. */
     direction?: 'horizontal' | 'vertical'
+    /** Мінімальний розмір першої панелі у відсотках. */
     min?: number
+    /** Максимальний розмір першої панелі у відсотках. */
     max?: number
+    /** Крок зміни розміру стрілками з клавіатури. */
     step?: number
     disabled?: boolean
+    /** Доступна назва першої панелі. */
     startLabel?: string
+    /** Доступна назва другої панелі. */
     endLabel?: string
+    /**
+     * Доступна назва роздільника. Він оголошений як `separator` з
+     * `aria-valuenow`, тож без назви скрінрідер зачитає лише відсоток.
+     */
     separatorLabel?: string
   }>(),
   {
@@ -29,6 +40,13 @@ const props = withDefaults(
 const emit = defineEmits<{
   'update:modelValue': [value: number]
   change: [value: number]
+}>()
+
+defineSlots<{
+  /** Вміст першої панелі. `size` — її поточний розмір у відсотках. */
+  start?: (props: { size: number }) => unknown
+  /** Вміст другої панелі. `size` — розмір ПЕРШОЇ панелі у відсотках. */
+  end?: (props: { size: number }) => unknown
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
@@ -122,7 +140,7 @@ onBeforeUnmount(() => stopDragging())
       :aria-valuenow="value"
       :aria-disabled="disabled ? 'true' : undefined"
       :tabindex="disabled ? -1 : 0"
-      class="group relative z-10 flex shrink-0 touch-none items-center justify-center bg-surface-muted outline-none before:block before:bg-line hover:before:bg-accent-solid focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      class="group relative z-10 flex shrink-0 touch-none items-center justify-center bg-subtle outline-none before:block before:bg-line hover:before:bg-accent-solid focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       :class="[separatorClass, { 'cursor-not-allowed opacity-50': disabled, 'before:bg-accent-solid': dragging }]"
       @pointerdown="startDragging"
       @keydown="onKeydown"

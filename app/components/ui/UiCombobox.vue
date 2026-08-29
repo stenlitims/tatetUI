@@ -41,9 +41,14 @@ const props = withDefaults(
   defineProps<{
     /** Обране значення. Використовуйте через `v-model`. */
     modelValue?: string | number | null
+    /**
+     * Поточні варіанти. Компонент їх НЕ фільтрує: список приходить із
+     * сервера у відповідь на подію `search`.
+     */
     options: ComboboxOption[]
     label?: string
     placeholder?: string
+    /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
     size?: FieldSize
     disabled?: boolean
     required?: boolean

@@ -22,6 +22,7 @@ const props = withDefaults(
     /** Видимий лейбл. Пов'язується з полем автоматично. */
     label?: string
     placeholder?: string
+    /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
     size?: FieldSize
     disabled?: boolean
     readonly?: boolean

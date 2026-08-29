@@ -11,13 +11,24 @@ export interface RadioOption {
 
 const props = withDefaults(
   defineProps<{
+    /** Обране значення. Використовуйте через `v-model`. */
     modelValue?: string | number | null
+    /**
+     * Варіанти вибору. Група розрахована на 2–7 видимих варіантів; більше
+     * — це вже `UiSelect`.
+     */
     options: RadioOption[]
     label?: string
+    /**
+     * Напрям розкладки. Впливає і на стрілки: у вертикальній групі
+     * працюють ↑/↓, у горизонтальній — ←/→.
+     */
     orientation?: 'horizontal' | 'vertical'
     disabled?: boolean
     required?: boolean
+    /** Текст помилки. Стан помилки вмикає САМА наявність тексту. */
     error?: string
+    /** Підказка під групою. Ховається, коли показано помилку. */
     hint?: string
     id?: string
     name?: string

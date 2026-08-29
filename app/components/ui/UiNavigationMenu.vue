@@ -22,10 +22,21 @@ export interface NavigationMenuItem {
 
 const props = withDefaults(
   defineProps<{
+    /** Id відкритого пункту або `null`. Використовуйте через `v-model`. */
     modelValue?: string | null
+    /**
+     * Пункти меню. Пункт із `children` стає кнопкою з панеллю, без них —
+     * звичайним посиланням.
+     */
     items: NavigationMenuItem[]
+    /**
+     * Доступна назва навігації. На сторінці зазвичай кілька `nav`, і без
+     * назви їх не розрізнити.
+     */
     ariaLabel?: string
+    /** Бажана позиція панелі відносно пункту. */
     placement?: 'bottom-start' | 'bottom' | 'bottom-end'
+    /** Ширина панелі, будь-яка CSS-величина. */
     panelWidth?: string
   }>(),
   { modelValue: null, ariaLabel: 'Головна навігація', placement: 'bottom-start', panelWidth: '20rem' },
@@ -57,12 +68,35 @@ function setTriggerRef(id: string, value: Element | ComponentPublicInstance | nu
   else triggerRefs.delete(id)
 }
 
-function enabledRootItems() {
-  return props.items.map((item, index) => ({ item, index })).filter(({ item }) => !item.disabled)
-}
+/*
+ * computed, а не функція: у шаблоні це читалося на КОЖЕН пункт при кожному
+ * рендері й щоразу будувало два нових масиви.
+ */
+const enabledRootItems = computed(() =>
+  props.items.map((item, index) => ({ item, index })).filter(({ item }) => !item.disabled),
+)
+
+/*
+ * Roving tabindex: у табуляцію потрапляє рівно один пункт меню, решта
+ * доступні стрілками.
+ *
+ * Раніше цим пунктом ЗАВЖДИ був перший — tabindex рахувався як
+ * `index === enabledRootItems()[0]?.index`, тобто константа. Користувач
+ * доходив стрілками до п'ятого пункту, виходив Tab'ом далі по сторінці, і
+ * Shift+Tab повертав його на перший: позиція в меню губилася при кожному
+ * виході. Тепер вона запам'ятовується тут.
+ */
+const focusedIndex = ref<number | null>(null)
+
+const rovingIndex = computed(() => {
+  const enabled = enabledRootItems.value
+  if (!enabled.length) return -1
+  const remembered = enabled.find(entry => entry.index === focusedIndex.value)
+  return (remembered ?? enabled[0]!).index
+})
 
 function focusRoot(currentIndex: number, key: 'next' | 'previous' | 'first' | 'last') {
-  const items = enabledRootItems()
+  const items = enabledRootItems.value
   if (!items.length) return
   const current = items.findIndex(entry => entry.index === currentIndex)
   let next = current
@@ -70,7 +104,9 @@ function focusRoot(currentIndex: number, key: 'next' | 'previous' | 'first' | 'l
   if (key === 'previous') next = (current - 1 + items.length) % items.length
   if (key === 'first') next = 0
   if (key === 'last') next = items.length - 1
-  triggerRefs.get(items[next]!.item.id)?.focus()
+  const target = items[next]!
+  focusedIndex.value = target.index
+  triggerRefs.get(target.item.id)?.focus()
 }
 
 function childLinks() {
@@ -187,12 +223,13 @@ onBeforeUnmount(() => {
           type="button"
           role="menuitem"
           :disabled="item.disabled"
-          :tabindex="index === enabledRootItems()[0]?.index ? 0 : -1"
+          :tabindex="index === rovingIndex ? 0 : -1"
           aria-haspopup="menu"
           :aria-expanded="modelValue === item.id"
           :aria-controls="modelValue === item.id ? panelId : undefined"
           class="inline-flex min-h-10 items-center gap-1 rounded-control px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           @click="modelValue === item.id ? close() : open(item)"
+          @focus="focusedIndex = index"
           @keydown="onRootKeydown($event, index, item)"
         >
           <slot name="item" :item="item" :open="modelValue === item.id">{{ item.label }}</slot>
@@ -205,9 +242,10 @@ onBeforeUnmount(() => {
           role="menuitem"
           :aria-current="item.current ? 'page' : undefined"
           :aria-disabled="item.disabled ? 'true' : undefined"
-          :tabindex="item.disabled || index !== enabledRootItems()[0]?.index ? -1 : 0"
+          :tabindex="item.disabled || index !== rovingIndex ? -1 : 0"
           class="inline-flex min-h-10 items-center rounded-control px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50"
           @click="activate(item)"
+          @focus="focusedIndex = index"
           @keydown="onRootKeydown($event, index, item)"
         >
           <slot name="item" :item="item" :open="false">{{ item.label }}</slot>

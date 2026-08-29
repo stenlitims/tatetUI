@@ -54,6 +54,14 @@ const props = withDefaults(
      * автофокус в інпуті одразу піднімає клавіатуру і з'їдає пів екрана.
      */
     initialFocus?: string
+    /**
+     * Доступне ім'я діалогу, коли слот `header` не є заголовком.
+     *
+     * Без нього aria-labelledby вказує на контейнер слота, і якщо там
+     * лежить поле вводу — ім'я вікна обчислюється з його ЗНАЧЕННЯ. Діалог
+     * пошуку оголошувався як «Діалог: тек» на слові «текст».
+     */
+    ariaLabel?: string
   }>(),
   {
     modelValue: false,
@@ -230,8 +238,8 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           tabindex="-1"
-          :aria-labelledby="hasAccessibleHeader ? titleId : undefined"
-          :aria-label="hasAccessibleHeader ? undefined : 'Діалогове вікно'"
+          :aria-labelledby="!ariaLabel && hasAccessibleHeader ? titleId : undefined"
+          :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : 'Діалогове вікно')"
         >
           <div
             v-if="hasHeader"

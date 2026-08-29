@@ -5,12 +5,24 @@ import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/ove
 
 const props = withDefaults(
   defineProps<{
+    /** Відкрито. Використовуйте через `v-model`. */
     modelValue?: boolean
+    /** Бажана позиція картки. Не вміщається — перевертається. */
     placement?: AnchoredPlacement
+    /**
+     * Затримка перед показом, мс. Без неї картка блимає при кожному
+     * проході курсора повз посилання.
+     */
     openDelay?: number
+    /**
+     * Затримка перед приховуванням, мс. Дає час довести курсор від
+     * тригера до самої картки.
+     */
     closeDelay?: number
+    /** Ширина картки, будь-яка CSS-величина. */
     width?: string
     disabled?: boolean
+    /** Доступна назва картки. */
     ariaLabel?: string
   }>(),
   {

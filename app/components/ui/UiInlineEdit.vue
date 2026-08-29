@@ -5,7 +5,7 @@ import { errorTextClass, fieldClass, helperTextClass, labelClass } from '~/utils
 /**
  * Редагування на місці: текст у таблиці/картці, який перетворюється на
  * поле з подвійним кліком (або кліком — залежно від activateOn). Джерело
- * патерну — три реалізації InlineEdit у tatet-cms (Author/Number/Date),
+ * патерну — три незалежні реалізації InlineEdit (Author/Number/Date),
  * зведені в один компонент.
  */
 const props = withDefaults(

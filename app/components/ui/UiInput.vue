@@ -15,7 +15,12 @@ const props = withDefaults(
     /** Видимий лейбл. Пов'язується з полем через `for`/`id` автоматично. */
     label?: string
     placeholder?: string
+    /**
+     * Тип нативного поля. Впливає і на екранну клавіатуру телефона, і на
+     * автозаповнення браузера.
+     */
     type?: 'text' | 'email' | 'password' | 'search' | 'tel' | 'url' | 'number'
+    /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
     size?: FieldSize
     disabled?: boolean
     readonly?: boolean
@@ -28,6 +33,10 @@ const props = withDefaults(
     error?: string
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
+    /**
+     * Значення нативного `autocomplete`. Без нього браузер не підставить
+     * збережені дані.
+     */
     autocomplete?: string
     /** Стабільний DOM id. `name` використовується лише для форми. */
     id?: string

@@ -53,9 +53,15 @@ function onSelect(payload: { groupId: string; item: string }) {
 
     <p class="text-sm text-muted">Остання дія: {{ lastAction }}</p>
 
+    <!--
+      hotkey вимкнено САМЕ в демо: сайт документації має власний Ctrl+K для
+      пошуку. З увімкненим хоткеєм одне натискання на цій сторінці
+      відкривало два оверлеї одночасно — палітру демо і пошук по сайту.
+    -->
     <UiCommandPalette
       v-model="open"
       :groups="groups"
+      :hotkey="false"
       @select="onSelect"
     />
   </div>

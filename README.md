@@ -1,75 +1,99 @@
-# Nuxt Minimal Starter
+# tatetUI
 
-Look at the [Nuxt documentation](https://nuxt.com/docs/getting-started/introduction) to learn more.
+Бібліотека UI-компонентів для Vue 3 і Nuxt 4 та сайт документації
+українською. Компоненти **копіюються в проєкт, а не встановлюються
+пакетом** — як у shadcn/ui.
 
-## Setup
+Зібрана з найкращих реалізацій у кількох продуктових кодових базах, де ті
+самі компоненти писали незалежно по кілька разів.
 
-Make sure to install dependencies:
+## Чому копіювання, а не пакет
+
+Пакет доводиться версіонувати, а компоненти інтерфейсу майже завжди
+потребують дрібних правок під конкретний екран. Форк через npm болючий;
+форк через копіювання — це просто редагування файлу.
+
+Натомість документація бере на себе те, чого копіювання не дає: пояснює,
+**чому** компонент написаний саме так і які баги кожне рішення закриває.
+
+## Запуск
+
+Пакетний менеджер — **bun**, не npm.
 
 ```bash
-# npm
-npm install
-
-# pnpm
-pnpm install
-
-# yarn
-yarn install
-
-# bun
 bun install
 ```
 
-## Development Server
-
-Start the development server on `http://localhost:3000`:
-
 ```bash
-# npm
-npm run dev
-
-# pnpm
-pnpm dev
-
-# yarn
-yarn dev
-
-# bun
 bun run dev
 ```
 
-## Production
+## Команди
 
-Build the application for production:
+| Команда | Що робить |
+|---|---|
+| `bun run dev` | dev-сервер на `http://localhost:3000` |
+| `bun run build` | збірка + прередер, падає на будь-якій помилці |
+| `bun run preview` | локальний перегляд зібраного |
+| `bun run typecheck` | типи — **збірка їх не перевіряє** |
+| `bun run test` | vitest, DOM- та ARIA-контракти компонентів |
+| `bun run check:docs` | перевірки дрейфу документації (див. нижче) |
+| `bun run check:routes` | усі маршрути зібраного сайту віддають 200 |
+
+CI виконує їх у такому порядку: `check:docs` → `typecheck` → `build` →
+`check:routes` → `test`.
+
+## Як скопіювати компонент
+
+1. Відкрийте сторінку компонента в документації.
+2. Скопіюйте `app/components/ui/Ui<Name>.vue`.
+3. Скопіюйте те, що вказано у фронтматері `dependsOn` — зазвичай це
+   `app/utils/uiFieldStyles.ts` або композабли оверлеїв.
+4. Один раз на проєкт скопіюйте `app/assets/css/tokens.css`. Це чистий CSS
+   без синтаксису Tailwind; працює однаково на v3 і v4.
+
+Докладніше — сторінка «Як перенести компонент» у документації.
+
+## Що тримає документацію в узгодженні з кодом
+
+`bun run check:docs` — це не лінтер стилю. Кожна перевірка там з'явилася
+після конкретного бага:
+
+- кожен `Ui*.vue` має сторінку, і кожна сторінка — існуючий компонент
+  (звірка в обидва боки, без магічних чисел);
+- кожен публічний props має JSDoc — це єдине джерело колонки «Опис» у
+  таблиці API;
+- кожен компонент оголошує `defineSlots<>()`, інакше секція «Слоти» просто
+  зникає з таблиці;
+- події описані у frontmatter і звірені з `defineEmits` в обидва боки;
+- колірні утиліти посилаються лише на зареєстровані токени — `bg-surface`
+  не генерує нічого, і елемент лишається прозорим;
+- жодного `dark:` і жодного сирого кольору в компонентах;
+- пари `--token` / `--token-rgb` описують той самий колір, а контраст
+  `accent`/`danger` тримає AA;
+- посилання в сайдбарі й сторінки в `content/` збігаються в обидва боки;
+- CSS справді парситься — коментар, що втратив свій `/*`, мовчки вбиває
+  ціле правило.
+
+Повний перелік правил дому — у [CLAUDE.md](CLAUDE.md).
+
+## Іконки
+
+Джерело знака — `public/favicon.svg`. Растр (`favicon.ico`,
+`apple-touch-icon.png`, `og-image.png`) генерується вручну після зміни
+знака й комітиться:
 
 ```bash
-# npm
-npm run build
-
-# pnpm
-pnpm build
-
-# yarn
-yarn build
-
-# bun
-bun run build
+python3 scripts/gen-icons.py
 ```
 
-Locally preview production build:
+Скрипт потребує лише Pillow і в збірку не входить.
+
+## Деплой
+
+Базовий URL для `canonical`, `og:url` і `sitemap.xml` береться з
+`runtimeConfig.public.siteUrl`. Домен у код не зашитий:
 
 ```bash
-# npm
-npm run preview
-
-# pnpm
-pnpm preview
-
-# yarn
-yarn preview
-
-# bun
-bun run preview
+NUXT_PUBLIC_SITE_URL=https://example.com bun run build
 ```
-
-Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.

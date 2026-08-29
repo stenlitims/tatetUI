@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import UiDrawer from '~/components/ui/UiDrawer.vue'
+import DocsFooter from '~/components/docs/DocsFooter.vue'
+import DocsLogo from '~/components/docs/DocsLogo.vue'
 import DocsSearch from '~/components/docs/DocsSearch.vue'
+import DocsSkipLink from '~/components/docs/DocsSkipLink.vue'
 import DocsSidebar from '~/components/docs/DocsSidebar.vue'
 import DocsThemeToggle from '~/components/docs/DocsThemeToggle.vue'
 
@@ -15,6 +18,8 @@ watch(() => route.path, () => (mobileNavOpen.value = false))
 
 <template>
   <div class="min-h-dvh bg-main text-ink">
+    <DocsSkipLink />
+
     <header
       class="sticky top-0 z-30 flex h-[var(--header-height)] items-center gap-3 border-b border-line bg-card/85 px-4 backdrop-blur"
     >
@@ -29,7 +34,13 @@ watch(() => route.path, () => (mobileNavOpen.value = false))
         </svg>
       </button>
 
-      <NuxtLink to="/" class="font-semibold tracking-tight">tatetUI</NuxtLink>
+      <NuxtLink
+        to="/"
+        class="rounded-control focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="tatetUI — на головну"
+      >
+        <DocsLogo />
+      </NuxtLink>
 
       <div class="ml-auto flex items-center gap-2">
         <DocsSearch />
@@ -39,15 +50,18 @@ watch(() => route.path, () => (mobileNavOpen.value = false))
 
     <div class="mx-auto flex w-full max-w-[90rem] gap-8 px-4 lg:px-6">
       <aside
+        aria-label="Розділи документації"
         class="scrollbar-thin sticky top-[var(--header-height)] hidden h-[calc(100dvh-var(--header-height))] w-56 shrink-0 overflow-y-auto py-8 lg:block"
       >
         <DocsSidebar />
       </aside>
 
-      <main class="min-w-0 flex-1 py-10">
+      <main id="content" class="min-w-0 flex-1 py-10">
         <slot />
       </main>
     </div>
+
+    <DocsFooter />
 
     <!--
       Мобільна навігація — справжній UiDrawer із бібліотеки, а не окремий

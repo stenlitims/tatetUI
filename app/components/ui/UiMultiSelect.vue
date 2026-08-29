@@ -37,9 +37,14 @@ const props = withDefaults(
   defineProps<{
     /** Обрані значення. Використовуйте через `v-model`. */
     modelValue: (string | number)[]
+    /**
+     * Варіанти вибору. Фільтрація за введеним текстом відбувається
+     * локально.
+     */
     options: MultiSelectOption[]
     label?: string
     placeholder?: string
+    /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
     size?: FieldSize
     disabled?: boolean
     /**

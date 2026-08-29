@@ -4,17 +4,31 @@ import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyl
 
 const props = withDefaults(
   defineProps<{
+    /** Введений код. Використовуйте через `v-model`. */
     modelValue?: string
+    /** Кількість символів коду. */
     length?: number
+    /**
+     * Які символи приймати. `numeric` вмикає й числову клавіатуру на
+     * телефоні — літерна розкладка для коду з цифр коштує зайвого дотику.
+     */
     type?: 'numeric' | 'alphanumeric'
+    /** Ховати введені символи, як у полі пароля. */
     mask?: boolean
     disabled?: boolean
     required?: boolean
     id?: string
     name?: string
     label?: string
+    /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
+    /** Текст помилки. Стан помилки вмикає САМА наявність тексту. */
     error?: string
+    /**
+     * Значення autocomplete. `one-time-code` дозволяє браузеру підставити
+     * код зі свіжої SMS — заради цього компонент і побудований на ОДНОМУ
+     * полі вводу замість шести окремих.
+     */
     autocomplete?: string
   }>(),
   {
@@ -32,6 +46,11 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   complete: [value: string]
 }>()
+
+// Слотів немає свідомо: комірки коду малює сам компонент, а єдине поле
+// вводу під ними лишається невидимим — вставити туди чужу розмітку
+// означало б зламати і вставку з SMS, і позицію каретки.
+defineSlots<Record<string, never>>()
 
 const generatedId = useId()
 const inputId = computed(() => props.id || `${generatedId}-otp`)

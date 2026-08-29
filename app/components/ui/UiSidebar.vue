@@ -1,17 +1,39 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useFocusTrap } from '~/composables/useFocusTrap'
+import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 
 const props = withDefaults(
   defineProps<{
+    /**
+     * Відкрито на мобільному. На десктопі панель видима завжди.
+     * Використовуйте через `v-model`.
+     */
     modelValue?: boolean
+    /**
+     * Згорнуто до вузької смуги з іконками. Лише десктоп. Використовуйте
+     * через `v-model:collapsed`.
+     */
     collapsed?: boolean
+    /** З якого боку екрана панель. */
     side?: 'left' | 'right'
+    /** Ширина розгорнутої панелі, будь-яка CSS-величина. */
     width?: string
+    /** Ширина згорнутої панелі, будь-яка CSS-величина. */
     collapsedWidth?: string
+    /** Доступна назва панелі — вона є орієнтиром `navigation` на сторінці. */
     ariaLabel?: string
+    /**
+     * Показувати кнопку згортання. Вимкніть, якщо ширина панелі фіксована
+     * дизайном.
+     */
     collapsible?: boolean
+    /**
+     * Стабільний id шару в стеку оверлеїв. Задавати не обов'язково:
+     * без нього генерується автоматично.
+     */
+    sidebarId?: string
   }>(),
   {
     modelValue: false,
@@ -40,6 +62,18 @@ const panelEl = ref<HTMLElement | null>(null)
 const isMobile = shallowRef(false)
 const focusTrap = useFocusTrap(() => panelEl.value)
 const scrollLock = useScrollLock()
+/*
+ * На мобільному це повноцінний модальний діалог — role="dialog",
+ * aria-modal, пастка фокуса й лок прокрутки. Отже, і шар він мусить брати
+ * зі спільного стеку, а не з літералів z-[990]/z-[1000], як було.
+ *
+ * Перший шар у стеку отримує рівно 1000, тож UiModal, відкритий ІЗ
+ * сайдбару, зрівнювався з ним у z-index, і що опиниться зверху,
+ * вирішував порядок вузлів у DOM. Саме цей клас багів useOverlayStack і
+ * прибирає.
+ */
+const layer = useOverlayLayer(props.sidebarId)
+const isOverlayMode = computed(() => isMobile.value)
 let mobileQuery: MediaQueryList | null = null
 
 const sideClasses = computed(() => props.side === 'left'
@@ -66,6 +100,9 @@ function toggleCollapsed() {
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape' || !props.modelValue) return
+  // isTopmost — щоб Escape закривав сайдбар лише тоді, коли поверх нього
+  // не відкрито модалку чи меню.
+  if (!layer.isTopmost.value) return
   event.stopPropagation()
   close()
 }
@@ -76,12 +113,14 @@ function syncMobile(event?: MediaQueryListEvent) {
 
 watch([() => props.modelValue, isMobile], async ([open, mobile]) => {
   if (open && mobile) {
+    layer.activate()
     scrollLock.lock()
     await nextTick()
     focusTrap.activate()
   } else {
     focusTrap.deactivate()
     scrollLock.unlock()
+    layer.deactivate()
   }
 }, { immediate: true })
 
@@ -96,17 +135,26 @@ onBeforeUnmount(() => {
   mobileQuery?.removeEventListener('change', syncMobile)
   focusTrap.deactivate()
   scrollLock.unlock()
+  layer.deactivate()
+  layer.settle()
 })
 
 defineExpose({ close, toggleCollapsed })
 </script>
 
 <template>
-  <Transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-to-class="opacity-0">
+  <Transition
+    enter-active-class="transition-opacity duration-200"
+    enter-from-class="opacity-0"
+    leave-active-class="transition-opacity duration-150"
+    leave-to-class="opacity-0"
+    @after-leave="layer.settle()"
+  >
     <button
       v-if="modelValue"
       type="button"
-      class="fixed inset-0 z-[990] bg-overlay-backdrop md:hidden"
+      class="fixed inset-0 bg-backdrop/50 md:hidden"
+      :style="{ zIndex: layer.zIndex.value - 1 }"
       aria-label="Закрити бічну панель"
       @click="close"
     />
@@ -121,9 +169,9 @@ defineExpose({ close, toggleCollapsed })
     :inert="isMobile && !modelValue"
     :data-ui-overlay="isMobile && modelValue ? '' : undefined"
     tabindex="-1"
-    class="fixed inset-y-0 z-[1000] flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-surface text-ink shadow-overlay transition-[width,transform] duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
+    :style="[panelStyle, isOverlayMode ? { zIndex: layer.zIndex.value } : {}]"
+    class="fixed inset-y-0 flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-card text-ink shadow-overlay transition-[width,transform] duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
     :class="[sideClasses, mobileTransform, { 'md:w-[var(--ui-sidebar-collapsed-width)]': collapsed }]"
-    :style="panelStyle"
     @keydown="onKeydown"
   >
     <div class="flex min-h-14 items-center gap-2 border-b border-line px-3">

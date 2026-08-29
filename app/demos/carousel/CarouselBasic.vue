@@ -12,7 +12,7 @@ const slides = [
 <template>
   <UiCarousel v-model="active" :items="slides" loop autoplay aria-label="Переваги tatetUI">
     <template #slide="{ item }">
-      <article class="min-h-52 bg-surface-muted p-8">
+      <article class="min-h-52 bg-subtle p-8">
         <p class="text-xs font-semibold uppercase tracking-wide text-accent">{{ item.eyebrow }}</p>
         <h3 class="mt-3 text-2xl font-bold text-ink">{{ item.title }}</h3>
         <p class="mt-3 max-w-xl text-sm leading-6 text-muted">{{ item.text }}</p>

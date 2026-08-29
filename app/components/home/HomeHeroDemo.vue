@@ -14,7 +14,7 @@ import { useToast } from '~/composables/useToast'
 defineSlots<Record<string, never>>()
 
 const INITIAL_SPACE = 'tatet'
-const INITIAL_DESTINATION = 'cms'
+const INITIAL_DESTINATION = 'sales'
 
 const space = shallowRef(INITIAL_SPACE)
 const destination = shallowRef<string | number | null>(INITIAL_DESTINATION)
@@ -22,10 +22,10 @@ const { isDark, toggle } = useTheme()
 const toast = useToast()
 
 const groupOptions: SelectOption[] = [
-  { value: 'cms', label: 'tatet-cms' },
-  { value: 'chat', label: 'chat' },
-  { value: 'clay', label: 'ClayArena' },
-  { value: 'seo', label: 'seoClusterizer' },
+  { value: 'sales', label: 'Продажі' },
+  { value: 'support', label: 'Підтримка' },
+  { value: 'analytics', label: 'Аналітика' },
+  { value: 'archive', label: 'Архів' },
 ]
 
 const themeHint = computed(() => (isDark.value ? 'Темна тема' : 'Світла тема'))
@@ -50,9 +50,9 @@ const features = [
 ]
 
 const stats = [
-  { value: '50', label: 'UI-файлів' },
-  { value: '49', label: 'публічних сторінок' },
-  { value: '4', label: 'проєкти-джерела' },
+  { value: '60', label: 'UI-файлів' },
+  { value: '59', label: 'публічних сторінок' },
+  { value: 'AA', label: 'мінімальний контраст' },
   { value: '1', label: 'TipTap-виняток' },
 ]
 
@@ -83,8 +83,9 @@ function saveSettings() {
         </h1>
 
         <p class="mt-5 max-w-xl text-lg text-muted">
-          Зібрано з chat, tatet-cms, ClayArena та seoClusterizer. Нижче — не
-          скріншоти, а робочі сценарії на компонентах бібліотеки.
+Зібрано з кількох продуктових кодових баз, де ті самі компоненти
+          писали незалежно по кілька разів. Нижче — не скріншоти, а робочі
+          сценарії на компонентах бібліотеки.
         </p>
 
         <div class="mt-8 flex flex-wrap items-center gap-3">

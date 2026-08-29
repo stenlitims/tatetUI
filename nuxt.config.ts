@@ -59,10 +59,24 @@ export default defineNuxtConfig({
     },
   },
 
+  /**
+   * Базовий URL сайту. Потрібен абсолютний: canonical, og:url і og:image
+   * відносних адрес не приймають — Slack, Telegram і Twitter просто не
+   * покажуть картинку.
+   *
+   * Домен НЕ зашитий у код: перевизначається NUXT_PUBLIC_SITE_URL під час
+   * збірки, тож той самий репозиторій деплоїться куди завгодно.
+   */
+  runtimeConfig: {
+    public: {
+      siteUrl: 'https://tatetui.pages.dev',
+    },
+  },
+
   nitro: {
     prerender: {
       crawlLinks: true,
-      routes: ['/', '/api/search.json'],
+      routes: ['/', '/api/search.json', '/sitemap.xml'],
       failOnError: true,
     },
   },
@@ -138,6 +152,24 @@ export default defineNuxtConfig({
       meta: [
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'color-scheme', content: 'light dark' },
+        /*
+         * theme-color двома записами з media, а не одним.
+         * Одне значення фарбує панель мобільного браузера однаково в обох
+         * темах: у темній світла смуга над темною сторінкою виглядає як
+         * недомальований інтерфейс.
+         */
+        { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#f7f8fa' },
+        { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#101216' },
+      ],
+      link: [
+        /*
+         * Порядок має значення: браузер бере ОСТАННЮ придатну іконку.
+         * SVG стоїть після .ico, тож сучасні браузери беруть вектор, а
+         * старі зупиняються на .ico, якого не розуміють далі.
+         */
+        { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
+        { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       ],
       script: [
         {

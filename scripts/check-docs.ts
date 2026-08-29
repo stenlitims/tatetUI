@@ -1,7 +1,7 @@
 /**
  * Перевірки, що тримають документацію і код разом.
  *
- * Причина існування: у chat і tatet-cms довідники описують props, яких у
+ * Причина існування: у вихідних проєктах довідники описують props, яких у
  * компонентах уже немає. Рукописна документація завжди роз'їжджається — не
  * від недбалості, а тому що ніщо не змушує оновити її разом із кодом.
  *
@@ -19,6 +19,7 @@ const DEMOS_DIR = join(ROOT, 'app/demos')
 const TOKENS_FILE = join(ROOT, 'app/assets/css/tokens.css')
 const NAV_FILE = join(ROOT, 'app/config/docsNav.ts')
 const DOCS_PAGE = join(ROOT, 'app/pages/docs/[...slug].vue')
+const HOME_STATS = join(ROOT, 'app/components/home/HomeHeroDemo.vue')
 const CSS_DIR = join(ROOT, 'app/assets/css')
 
 const errors: string[] = []
@@ -26,6 +27,56 @@ const fail = (file: string, message: string) => errors.push(`${file}: ${message}
 
 /** Заголовки, які зобов'язана мати сторінка компонента. */
 const REQUIRED_HEADINGS = ['## API', '## Коли використовувати', '## Коли НЕ використовувати']
+
+/**
+ * Компоненти, які свідомо лишаються без публічної сторінки.
+ *
+ * UiLoadingDots — індикатор усередині UiButton, окремо його не вставляють;
+ * власна сторінка лише розмила б каталог. Список явний саме тому, що
+ * «немає сторінки» і «забули сторінку» інакше виглядають однаково.
+ */
+const UNDOCUMENTED = ['UiLoadingDots']
+
+/**
+ * Props, опис яких не додає нічого понад назву.
+ *
+ * Бібліотека вже свідомо лишає їх без JSDoc (див. UiInput, UiCheckbox), і
+ * вимога описати `disabled` дала б сорок файлів шуму замість реальних
+ * прогалин. Усе, що не в цьому списку, опис мати ЗОБОВ'ЯЗАНЕ: саме звідти
+ * колонка «Опис» у таблиці API бере текст.
+ */
+/**
+ * Префікси утиліт, значенням яких є КОЛІР, і слова, які після них кольором
+ * не є. Без другого списку перевірка нижче лаялася б на border-r,
+ * text-base й stroke-none — усе це легальні утиліти інших просторів.
+ */
+const COLOR_UTILITY =
+  /(?:^|[\s"'`[({])(bg|text|border|ring|divide|from|via|to|fill|stroke)-([a-z][a-z0-9/-]*)/g
+
+const NON_COLOR_UTILITY = new Set([
+  // text-*: розмір, вирівнювання, перенос
+  'xs', 'sm', 'base', 'lg', 'xl', 'left', 'center', 'right', 'justify', 'start', 'end',
+  'wrap', 'nowrap', 'balance', 'pretty', 'ellipsis', 'clip',
+  // border-*/divide-*: сторони, стиль, службове
+  't', 'r', 'b', 'l', 'x', 'y', 's', 'e', 'solid', 'dashed', 'dotted', 'double',
+  'hidden', 'none', 'collapse', 'separate', 'reverse',
+  // ring-*: службове
+  'inset', 'offset',
+  // bg-*: позиція, повтор, розмір, градієнт
+  'fixed', 'local', 'scroll', 'top', 'bottom', 'repeat', 'no-repeat', 'auto',
+  'cover', 'contain', 'origin-border', 'origin-padding', 'origin-content',
+  'clip-border', 'clip-padding', 'clip-content', 'clip-text', 'blend-normal',
+  'blend-multiply', 'blend-screen', 'blend-overlay', 'gradient-to-t',
+  'gradient-to-r', 'gradient-to-b', 'gradient-to-l', 'gradient-to-tr',
+  'gradient-to-tl', 'gradient-to-br', 'gradient-to-bl', 'linear', 'radial', 'conic',
+  // спільні ключові слова
+  'transparent', 'current', 'inherit',
+])
+
+const SELF_EVIDENT = [
+  'label', 'disabled', 'placeholder', 'id', 'name',
+  'required', 'readonly', 'autofocus', 'class',
+]
 
 async function walk(dir: string, ext = '.md'): Promise<string[]> {
   const out: string[] = []
@@ -101,6 +152,7 @@ async function main() {
 
   const pages = await walk(CONTENT_DIR)
   const pageRoutes = new Set<string>()
+  const componentNames: string[] = []
   let componentPages = 0
 
   for (const page of pages) {
@@ -116,7 +168,10 @@ async function main() {
     const componentPath = component ? join(UI_DIR, `${component}.vue`) : null
     const componentExists = !!componentPath && existsSync(componentPath)
 
-    if (componentExists) componentPages += 1
+    if (componentExists) {
+      componentPages += 1
+      componentNames.push(component!)
+    }
 
     if (component && !componentExists) {
       fail(rel, `component: "${component}" — файл app/components/ui/${component}.vue не існує`)
@@ -164,6 +219,14 @@ async function main() {
     // Для компонента без подій треба голий ключ без значення.
     if (/^emitDescriptions:\s*\{\}\s*$/m.test(source)) {
       fail(rel, 'emitDescriptions: {} читається як рядок з фантомними подіями "0"/"1"; залиш голий ключ "emitDescriptions:"')
+    }
+
+    // 3d. dependsOn: [] — той самий капкан, що й emitDescriptions: {}.
+    // Рукописний парсер читає "[]" РЯДКОМ і потім перебирає його символи,
+    // тобто шукає файли з іменами "[" і "]". Для сторінки без залежностей
+    // ключ треба просто не писати — схема сама підставить порожній масив.
+    if (/^dependsOn:\s*\[\]\s*$/m.test(source)) {
+      fail(rel, 'dependsOn: [] читається як рядок із фантомними шляхами "[" і "]"; приберіть ключ узагалі')
     }
 
     // 4. dependsOn: шляхи мають існувати
@@ -216,22 +279,115 @@ async function main() {
   }
 
   const uiFiles = (await readdir(UI_DIR)).filter((name) => /^Ui[A-Z].*\.vue$/.test(name))
-  if (uiFiles.length !== 50) {
-    fail('app/components/ui', `знайдено ${uiFiles.length} публічних Ui*.vue, очікується 50`)
+
+  /*
+   * Звіряємо ІМЕНА в обидва боки, а не кількості.
+   *
+   * Раніше тут стояли два числа — 50 файлів і 49 сторінок. Вони ловили
+   * тільки той випадок, коли забули рівно одне; додавши компонент і
+   * сторінку одночасно, можна було проґавити, що сторінка описує НЕ той
+   * компонент. Гірше інше: кожен новий компонент вимагав правити два
+   * літерали, і найпростіший спосіб «полагодити» червону перевірку —
+   * підняти число, тобто вимкнути її.
+   */
+  const documentedComponents = new Set(componentNames)
+  for (const file of uiFiles) {
+    const name = file.replace(/\.vue$/, '')
+    if (!documentedComponents.has(name) && !UNDOCUMENTED.includes(name)) {
+      fail('content/docs/components', `${name} не має сторінки — додайте content/docs/components/*.md з component: ${name}`)
+    }
   }
-  if (componentPages !== 49) {
-    fail('content/docs/components', `знайдено ${componentPages} публічних сторінок компонентів, очікується 49`)
+  for (const name of UNDOCUMENTED) {
+    if (documentedComponents.has(name)) {
+      fail('scripts/check-docs.ts', `${name} уже має сторінку — приберіть його з UNDOCUMENTED`)
+    }
   }
 
   // Компоненти повинні працювати в обох темах лише через semantic tokens.
   // Локальні dark:-перевизначення та white/black знову розводять copy-first
   // версії Tailwind v3/v4 і обходять контрастні пари з tokens.css.
+  // Токени, зареєстровані в утилітах Tailwind. Усе, що поза цим списком,
+  // генерує НІЧОГО — див. перевірку нижче.
+  const themeSource = await readFile(join(CSS_DIR, 'theme.css'), 'utf8')
+  const knownColors = new Set(
+    [...themeSource.matchAll(/--color-([\w-]+):/g)].map((match) => match[1]!),
+  )
+
   for (const name of uiFiles) {
     const raw = await readFile(join(UI_DIR, name), 'utf8')
     const source = raw.replace(/<!--[^]*?-->/g, '').replace(/\/\*[^]*?\*\//g, '')
-    if (/\bdark:/.test(source)) fail(`app/components/ui/${name}`, 'заборонено dark: — використайте semantic token')
+    const where = `app/components/ui/${name}`
+
+    if (/\bdark:/.test(source)) fail(where, 'заборонено dark: — використайте semantic token')
     const rawColor = source.match(/\b(?:bg|text)-(?:white|black)\b/)
-    if (rawColor) fail(`app/components/ui/${name}`, `заборонено сирий колір "${rawColor[0]}" — використайте semantic token`)
+    if (rawColor) fail(where, `заборонено сирий колір "${rawColor[0]}" — використайте semantic token`)
+
+    /*
+     * Колірна утиліта з НЕіснуючого токена.
+     *
+     * Tailwind не лається на bg-surface — він просто не генерує такого
+     * класу, і елемент лишається прозорим. Так у UiSidebar мобільна панель
+     * і її затемнення були прозорі (bg-surface, bg-overlay-backdrop), у
+     * UiScrollArea не малювалися градієнти країв (from-surface), а в
+     * UiResizablePanels роздільник був невидимий. Жодна перевірка цього не
+     * бачила: збірка зелена, типи зелені, у браузері просто «щось не те».
+     *
+     * Вбудована палітра Tailwind (bg-slate-500) теж не проходить — це та
+     * сама заборона сирих кольорів, лише іншими словами.
+     */
+    for (const match of source.matchAll(COLOR_UTILITY)) {
+      // Атрибут (stroke-width="2") чи властивість CSS (border-radius:) —
+      // не утиліта. Обидва впізнаються за наступним символом.
+      const after = source[match.index! + match[0].length]
+      if (after === '=' || after === ':') continue
+
+      let token = match[2]!
+      // ring-offset-* — окремий простір: ширина або колір.
+      if (match[1] === 'ring' && token.startsWith('offset-')) token = token.slice('offset-'.length)
+      // Число — ширина (border-2), відсоток (from-40%) або сторона з
+      // шириною (border-b-2). Кольором ніщо з цього не є.
+      if (NON_COLOR_UTILITY.has(token) || /^\d/.test(token) || /^[trblxyse]-\d/.test(token)) continue
+
+      const base = token.replace(/\/.*$/, '')
+      if (knownColors.has(base)) continue
+      fail(where, `утиліта "${match[0].trim()}" посилається на незареєстрований токен "${base}" — Tailwind згенерує порожнечу, елемент лишиться прозорим`)
+    }
+
+    /*
+     * defineSlots обов'язковий. Для генеричних компонентів слоти з шаблону
+     * не читаються взагалі, і секція «Слоти» в таблиці API просто зникає.
+     * Компонент без слотів пише defineSlots<Record<string, never>>().
+     */
+    if (!/defineSlots</.test(source)) {
+      fail(where, 'немає defineSlots<> — таблиця API лишиться без секції «Слоти»')
+    }
+
+    /*
+     * JSDoc на кожному публічному props. Це ЄДИНЕ джерело колонки «Опис»
+     * у таблиці API: nuxt-component-meta бере описи саме звідти. CLAUDE.md
+     * називав це правило перевіреним, хоча перевірки не існувало — і
+     * десять компонентів приїхали з порожніми описами.
+     */
+    const propsBlock = raw.match(/defineProps<\{([\s\S]*?)\n\s*\}>\(\)/)
+    if (propsBlock) {
+      const lines = propsBlock[1]!.split('\n')
+      for (const [index, line] of lines.entries()) {
+        const declaration = line.match(/^\s{4}([A-Za-z_$][\w$]*)\??:/)
+        if (!declaration) continue
+        const prop = declaration[1]!
+        if (SELF_EVIDENT.includes(prop)) continue
+        /*
+         * Дивимось на БЕЗПОСЕРЕДНЬО попередній непорожній рядок, а не на
+         * кілька рядків угору. Інакше props успадковує JSDoc сусіда: у
+         * UiEmptyState `tone` вважався описаним, бо рядком вище стояв опис
+         * для `description`.
+         */
+        const previous = lines.slice(0, index).map((line) => line.trim()).filter(Boolean).at(-1) ?? ''
+        if (!previous.endsWith('*/') && !previous.startsWith('//')) {
+          fail(where, `props "${prop}" без JSDoc — колонка «Опис» у таблиці API буде порожня`)
+        }
+      }
+    }
   }
 
   /* ---------------------------------------------------------------- */
@@ -344,6 +500,36 @@ async function main() {
       )
     }
     pairsChecked += 1
+  }
+
+  /* ---------------------------------------------------------------- */
+  /*  8a. Числа в статистиці на головній — справжні                    */
+  /* ---------------------------------------------------------------- */
+
+  /*
+   * «50 UI-файлів» і «49 публічних сторінок» — рукописні числа в hero.
+   * Рукописне число застаріває мовчки: додав компонент — і головна вже
+   * бреше, а помітить це хіба той, хто вирішить перерахувати. Це та сама
+   * причина, з якої існує решта перевірок у цьому файлі.
+   */
+  const homeSource = await readFile(HOME_STATS, 'utf8')
+  const homeStats: Array<[string, number]> = [
+    ['UI-файлів', uiFiles.length],
+    ['публічних сторінок', componentPages],
+  ]
+
+  for (const [label, expected] of homeStats) {
+    const declared = homeSource.match(
+      new RegExp(`\\{\\s*value:\\s*'(\\d+)',\\s*label:\\s*'${label}'\\s*\\}`),
+    )?.[1]
+    if (declared === undefined) {
+      fail('app/components/home/HomeHeroDemo.vue', `у статистиці немає рядка з label: '${label}'`)
+    } else if (Number(declared) !== expected) {
+      fail(
+        'app/components/home/HomeHeroDemo.vue',
+        `статистика каже ${declared} ${label}, насправді ${expected}`,
+      )
+    }
   }
 
   /* ---------------------------------------------------------------- */

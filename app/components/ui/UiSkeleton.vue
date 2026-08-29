@@ -11,6 +11,7 @@ const props = withDefaults(
      * а не як завантаження.
      */
     class?: string
+    /** Форма кутів. `full` — для кола на місці аватара. */
     rounded?: 'control' | 'card' | 'full'
   }>(),
   { rounded: 'control' },

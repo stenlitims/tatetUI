@@ -4,9 +4,12 @@ import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 
 const props = withDefaults(
   defineProps<{
+    /** Відкрито. Використовуйте через `v-model`. */
     modelValue?: boolean
+    /** Ширина меню, будь-яка CSS-величина. */
     width?: string
     disabled?: boolean
+    /** Доступна назва меню. */
     ariaLabel?: string
   }>(),
   { modelValue: false, width: '14rem', disabled: false, ariaLabel: 'Контекстне меню' },
