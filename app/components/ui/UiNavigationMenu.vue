@@ -34,12 +34,30 @@ const props = withDefaults(
      * назви їх не розрізнити.
      */
     ariaLabel?: string
+    /**
+     * Розмір пунктів, шеврона і панелі. На мобільному кожен розмір вищий
+     * за десктопний — нижче 44px палець промахується.
+     */
+    size?: 'sm' | 'md' | 'lg'
+    /**
+     * Вигляд кореневих пунктів. `plain` — прозорі з hover-підкладкою,
+     * `underline` — підкреслення активної сторінки, `pill` — капсули з
+     * брендовою підкладкою на активній.
+     */
+    variant?: 'plain' | 'underline' | 'pill'
     /** Бажана позиція панелі відносно пункту. */
     placement?: 'bottom-start' | 'bottom' | 'bottom-end'
     /** Ширина панелі, будь-яка CSS-величина. */
     panelWidth?: string
   }>(),
-  { modelValue: null, ariaLabel: 'Головна навігація', placement: 'bottom-start', panelWidth: '20rem' },
+  {
+    modelValue: null,
+    ariaLabel: 'Головна навігація',
+    size: 'md',
+    variant: 'plain',
+    placement: 'bottom-start',
+    panelWidth: '20rem',
+  },
 )
 
 const emit = defineEmits<{
@@ -51,6 +69,75 @@ defineSlots<{
   item?: (props: { item: NavigationMenuItem; open: boolean }) => unknown
   child?: (props: { item: NavigationMenuChild; parent: NavigationMenuItem }) => unknown
 }>()
+
+/*
+ * Аліаси виводяться з типу props, а не оголошуються окремо перед ним:
+ * union мусить стояти інлайново в defineProps, інакше в колонці «Тип»
+ * таблиці API замість переліку значень буде слово `Size`.
+ */
+type Size = NonNullable<typeof props.size>
+type Variant = NonNullable<typeof props.variant>
+
+/*
+ * Розмірні пропорції масштабують УСЕ разом: кореневий пункт, шеврон, панель
+ * і її пункти. Панель, що не росте разом із тригером, — типовий розсинхрон
+ * скопійованих навігацій: великі кнопки над дрібним списком.
+ *
+ * Мобільні висоти вищі за десктопні (правило 44px), ієрархія розмірів на
+ * телефоні лишається в шрифті й паддінгу.
+ */
+const metrics: Record<
+  Size,
+  { item: string; chevron: string; panel: string; child: string; description: string }
+> = {
+  sm: {
+    item: 'min-h-11 gap-1 px-2.5 text-sm md:min-h-8 md:text-xs',
+    chevron: 'h-3.5 w-3.5',
+    panel: 'p-1.5',
+    child: 'px-2.5 py-2 text-sm md:py-1.5 md:text-xs',
+    description: 'text-xs',
+  },
+  md: {
+    item: 'min-h-11 gap-1.5 px-3 text-sm md:min-h-9',
+    chevron: 'h-4 w-4',
+    panel: 'p-2',
+    child: 'px-3 py-2.5 text-sm md:py-2',
+    description: 'text-xs',
+  },
+  lg: {
+    item: 'min-h-12 gap-2 px-4 text-base md:min-h-10',
+    chevron: 'h-5 w-5',
+    panel: 'p-2.5',
+    child: 'px-3.5 py-3 text-base md:py-2.5',
+    description: 'text-sm',
+  },
+}
+
+/*
+ * Вигляд кореневих пунктів.
+ *
+ * Стан «поточна сторінка» і «панель відкрита» малюються через aria-варіанти
+ * (`aria-[current=page]:`, `aria-expanded:`): атрибути й так стоять на
+ * елементах, а селектор з атрибутом перебиває базовий колір без гонки
+ * порядку правил у згенерованому CSS. Умовний клас цього не гарантує —
+ * два однаково специфічні `text-*` виграє той, що нижче в бандлі.
+ *
+ * `active:` не декоративний: на дотику :hover не настає, і без явного
+ * стану натискання пункт не дає жодного відгуку.
+ */
+const itemVariants: Record<Variant, string> = {
+  plain:
+    'rounded-control text-ink hover:bg-hover active:bg-hover aria-expanded:bg-hover ' +
+    'aria-[current=page]:text-accent',
+  underline:
+    'rounded-none border-b-2 border-transparent text-muted hover:border-line-strong hover:text-ink active:bg-hover ' +
+    'aria-[current=page]:border-accent-solid aria-[current=page]:text-accent ' +
+    'aria-expanded:border-accent-solid aria-expanded:text-accent',
+  pill:
+    'rounded-full border border-transparent text-muted hover:border-line hover:bg-hover hover:text-ink active:bg-hover ' +
+    'aria-[current=page]:border-primary-200 aria-[current=page]:bg-primary-50 aria-[current=page]:text-accent ' +
+    'aria-expanded:border-primary-200 aria-expanded:bg-primary-50 aria-expanded:text-accent',
+}
 
 const navEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
@@ -227,13 +314,24 @@ onBeforeUnmount(() => {
           aria-haspopup="menu"
           :aria-expanded="modelValue === item.id"
           :aria-controls="modelValue === item.id ? panelId : undefined"
-          class="inline-flex min-h-10 items-center gap-1 rounded-control px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          class="inline-flex select-none items-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          :class="[metrics[size].item, itemVariants[variant]]"
           @click="modelValue === item.id ? close() : open(item)"
           @focus="focusedIndex = index"
           @keydown="onRootKeydown($event, index, item)"
         >
           <slot name="item" :item="item" :open="modelValue === item.id">{{ item.label }}</slot>
-          <span aria-hidden="true" class="transition-transform" :class="{ 'rotate-180': modelValue === item.id }">⌄</span>
+          <!-- Шеврон — SVG, а не текстовий знак: «⌄» кожен шрифт малює
+               по-своєму, дрібно й зі з'їздом від базової лінії. -->
+          <svg
+            aria-hidden="true"
+            class="shrink-0 text-muted transition-transform duration-150"
+            :class="[metrics[size].chevron, { 'rotate-180': modelValue === item.id }]"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </button>
         <a
           v-else
@@ -243,7 +341,8 @@ onBeforeUnmount(() => {
           :aria-current="item.current ? 'page' : undefined"
           :aria-disabled="item.disabled ? 'true' : undefined"
           :tabindex="item.disabled || index !== rovingIndex ? -1 : 0"
-          class="inline-flex min-h-10 items-center rounded-control px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          class="inline-flex select-none items-center font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          :class="[metrics[size].item, itemVariants[variant]]"
           @click="activate(item)"
           @focus="focusedIndex = index"
           @keydown="onRootKeydown($event, index, item)"
@@ -262,7 +361,8 @@ onBeforeUnmount(() => {
         ref="panelEl"
         role="menu"
         :aria-label="activeItem.label"
-        class="fixed rounded-overlay border border-line bg-dropdown p-2 shadow-overlay focus:outline-none"
+        class="fixed rounded-overlay border border-line bg-dropdown shadow-overlay focus:outline-none"
+        :class="metrics[size].panel"
         :style="{ ...panelPosition, width: panelWidth }"
         @keydown="onPanelKeydown"
       >
@@ -273,12 +373,17 @@ onBeforeUnmount(() => {
           role="menuitem"
           :aria-disabled="child.disabled ? 'true' : undefined"
           :tabindex="child.disabled ? -1 : 0"
-          class="block rounded-control px-3 py-2.5 text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          class="block rounded-control text-ink transition-colors hover:bg-hover active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:pointer-events-none aria-disabled:opacity-50"
+          :class="metrics[size].child"
           @click="activate(child)"
         >
           <slot name="child" :item="child" :parent="activeItem">
-            <span class="block text-sm font-medium">{{ child.label }}</span>
-            <span v-if="child.description" class="mt-0.5 block text-xs text-muted">{{ child.description }}</span>
+            <span class="block font-medium">{{ child.label }}</span>
+            <span
+              v-if="child.description"
+              class="mt-0.5 block text-muted"
+              :class="metrics[size].description"
+            >{{ child.description }}</span>
           </slot>
         </a>
       </div>

@@ -16,6 +16,16 @@ order: 47
 ::component-preview{name="navigation-menu-basic" stage="min-h-64"}
 ::
 
+## Розмір і вигляд
+
+Пропси `size` і `variant` керують пропорціями та виглядом кореневих
+пунктів, шеврона і панелі разом. Стан «поточної сторінки» малюється з
+`current` пункту: `underline` підкреслює його, `pill` дає брендову
+підкладку, `plain` змінює колір на акцентний.
+
+::component-preview{name="navigation-menu-customize" stage="min-h-64"}
+::
+
 ## API
 
 ::component-api
@@ -37,3 +47,8 @@ order: 47
 ArrowLeft і ArrowRight переміщують фокус між кореневими пунктами, ArrowDown
 відкриває групу, Home та End переходять до країв. У dropdown працюють
 ArrowUp, ArrowDown і Escape. Disabled-посилання не потрапляють у обхід.
+
+Шеврон групи — SVG, а не текстовий знак: символ «⌄» шрифти малюють
+по-своєму, дрібно й зі з'їздом від базової лінії, тож вигляд залежав би
+від системного шрифту. SVG масштабується пропорційно `size` і фарбується
+через `currentColor`.
