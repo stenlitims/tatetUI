@@ -34,7 +34,9 @@ const selected = ref<Array<string | number>>([])
 const TONES = { active: 'info', won: 'success', lost: 'danger' } as const
 const LABELS = { active: 'В роботі', won: 'Виграно', lost: 'Втрачено' } as const
 
-const money = new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'UAH', maximumFractionDigits: 0 })
+function formatMoney(value: number) {
+  return `${String(Math.round(value)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} ₴`
+}
 
 function bulkArchive() {
   toast.success(`Заархівовано записів: ${selected.value.length}`)
@@ -65,7 +67,7 @@ function bulkArchive() {
       </template>
 
       <template #cell-amount="{ item }">
-        {{ money.format(item.amount as number) }}
+        {{ formatMoney(item.amount as number) }}
       </template>
     </UiTable>
 

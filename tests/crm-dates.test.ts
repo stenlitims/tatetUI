@@ -275,4 +275,18 @@ describe('UiDateRangePicker', () => {
     await nextTick()
     expect(values.at(-1)).toBeNull()
   })
+
+  it('помилка має пріоритет в описі й role=alert', async () => {
+    mounted = await mountComponent(UiDateRangePicker, {
+      today: TODAY,
+      hint: 'Підказка',
+      error: 'Оберіть коректний період',
+    })
+    const trigger = mounted.host.querySelector<HTMLButtonElement>('button')!
+    const described = trigger.getAttribute('aria-describedby')!
+    expect(described.split(' ')).toHaveLength(1)
+    const error = mounted.host.querySelector<HTMLElement>(`#${described}`)!
+    expect(error.textContent).toContain('Оберіть коректний період')
+    expect(error.getAttribute('role')).toBe('alert')
+  })
 })

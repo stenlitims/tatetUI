@@ -26,6 +26,10 @@ const props = withDefaults(
     autoresize?: boolean
     /** Стеля висоти в рядках для `autoresize`. */
     maxRows?: number
+    /** Максимальна кількість символів. Передається як нативний `maxlength`. */
+    maxLength?: number
+    /** Показувати лічильник символів. Працює разом із `maxLength`. */
+    showCount?: boolean
     /**
      * Додаткові класи на сам `<textarea>`.
      *
@@ -38,7 +42,7 @@ const props = withDefaults(
     id?: string
     name?: string
   }>(),
-  { rows: 4, maxRows: 12 },
+  { rows: 4, maxRows: 12, showCount: false },
 )
 
 const emit = defineEmits<{
@@ -53,13 +57,23 @@ const generatedId = useId()
 const textareaId = computed(() => props.id ?? `${generatedId}-textarea`)
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
+const counterId = `${generatedId}-counter`
 
 const el = ref<HTMLTextAreaElement | null>(null)
 const hasError = computed(() => !!props.error)
+const normalizedMaxLength = computed(() => {
+  const value = props.maxLength
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : undefined
+})
+const showCounter = computed(() => props.showCount && normalizedMaxLength.value !== undefined)
+const characterCount = computed(() => (props.modelValue ?? '').length)
 
 const describedBy = computed(() => {
   if (hasError.value) return errorId
   if (props.hint) return hintId
+  if (showCounter.value) return counterId
   return undefined
 })
 
@@ -125,6 +139,7 @@ defineExpose({
       :disabled="disabled"
       :readonly="readonly"
       :required="required"
+      :maxlength="normalizedMaxLength"
       :class="classes"
       :aria-invalid="hasError || undefined"
       :aria-describedby="describedBy"
@@ -133,7 +148,18 @@ defineExpose({
       @blur="emit('blur', $event)"
     />
 
-    <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
-    <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
+    <div v-if="error || hint || showCounter" class="flex items-start justify-between gap-3">
+      <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
+      <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
+      <span v-else />
+      <p
+        v-if="showCounter"
+        :id="counterId"
+        class="mt-1 shrink-0 text-xs tabular-nums"
+        :class="characterCount >= (normalizedMaxLength ?? Infinity) ? 'text-danger' : 'text-muted'"
+      >
+        {{ characterCount }} / {{ normalizedMaxLength }}
+      </p>
+    </div>
   </div>
 </template>

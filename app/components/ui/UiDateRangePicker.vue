@@ -427,7 +427,7 @@ defineExpose({
       </Transition>
     </Teleport>
 
-    <p v-if="error" :id="errorId" :class="errorTextClass">{{ error }}</p>
+    <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
   </div>
 </template>

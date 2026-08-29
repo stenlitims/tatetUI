@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { errorTextClass, fieldClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
 
 /**
@@ -58,6 +58,8 @@ defineSlots<{
 const editing = ref(false)
 const draft = ref<string | number | null>(null)
 const inputEl = ref<HTMLInputElement | null>(null)
+const displayEl = ref<HTMLButtonElement | null>(null)
+const errorId = `${useId()}-error`
 
 watch(
   () => props.modelValue,
@@ -80,8 +82,12 @@ async function startEdit() {
   inputEl.value?.select()
 }
 
-function commit() {
-  if (!editing.value) return
+function restoreDisplayFocus() {
+  void nextTick(() => displayEl.value?.focus())
+}
+
+function commit(restoreFocus = false) {
+  if (!editing.value || props.error) return
   let value: string | number | null = draft.value
   if (props.type === 'number') {
     if (typeof value === 'string') value = value.trim() === '' ? null : Number(value)
@@ -92,28 +98,29 @@ function commit() {
   editing.value = false
   emit('update:modelValue', value)
   emit('save', value)
+  if (restoreFocus) restoreDisplayFocus()
 }
 
-function cancel() {
+function cancel(restoreFocus = false) {
   if (!editing.value) return
   editing.value = false
   draft.value = props.modelValue ?? null
   emit('cancel')
+  if (restoreFocus) restoreDisplayFocus()
 }
 
 function onBlur() {
-  if (props.saveOnBlur) commit()
-  else cancel()
+  if (props.saveOnBlur) commit(false)
+  else cancel(false)
 }
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter') {
     event.preventDefault()
-    commit()
+    commit(true)
   } else if (event.key === 'Escape') {
     event.stopPropagation()
-    cancel()
-    inputEl.value?.blur()
+    cancel(true)
   }
 }
 </script>
@@ -128,12 +135,14 @@ function onKeydown(event: KeyboardEvent) {
     :class="fieldClass('sm', { error: !!error, extra: 'h-8 md:h-8' })"
     :aria-label="ariaLabel"
     :aria-invalid="!!error || undefined"
+    :aria-describedby="error ? errorId : undefined"
     @input="draft = ($event.target as HTMLInputElement).value"
     @keydown="onKeydown"
     @blur="onBlur"
   />
   <button
     v-else
+    ref="displayEl"
     type="button"
     class="inline-flex min-h-11 w-full cursor-text items-center rounded-control px-1.5 text-left transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:py-0.5"
     :title="'Клікніть, щоб редагувати'"
@@ -145,5 +154,5 @@ function onKeydown(event: KeyboardEvent) {
     </slot>
   </button>
 
-  <p v-if="error && editing" :class="errorTextClass" role="alert">{{ error }}</p>
+  <p v-if="error && editing" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
 </template>

@@ -12,6 +12,8 @@ const text = ref('Спробуйте додати кілька рядків — 
       label="Опис"
       autoresize
       :max-rows="8"
+      :max-length="280"
+      show-count
       hint="Росте до восьми рядків, далі з'являється власна прокрутка."
     />
   </div>

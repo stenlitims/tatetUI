@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId } from 'vue'
+import { computed, onBeforeUnmount, ref, shallowRef, useId } from 'vue'
 import { isFileAccepted } from '~/utils/fileUpload'
 import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
 
@@ -47,6 +47,8 @@ const emit = defineEmits<{
   select: [files: File[]]
   /** Хоча б один файл не пройшов валідацію. */
   error: [message: string]
+  /** Одиночний файл видалено з локального прев'ю. */
+  remove: [file: File]
 }>()
 
 defineSlots<{
@@ -62,14 +64,21 @@ defineSlots<{
 }>()
 
 const inputId = `${useId()}-file`
+const errorId = `${inputId}-error`
+const hintId = `${inputId}-hint`
 const inputEl = ref<HTMLInputElement | null>(null)
 const dragActive = ref(false)
-const objectUrl = ref<string | null>(null)
-const fileName = ref<string | null>(null)
+const objectUrl = shallowRef<string | null>(null)
+const selectedFile = shallowRef<File | null>(null)
 const localError = ref<string | null>(null)
 
 const hasError = computed(() => !!props.error || !!localError.value)
 const errorText = computed(() => props.error ?? localError.value)
+const describedBy = computed(() => {
+  if (hasError.value) return errorId
+  if (props.hint) return hintId
+  return undefined
+})
 
 /*
  * Локальне прев'ю зображення: URL.createObjectURL дає посилання без
@@ -79,18 +88,23 @@ const errorText = computed(() => props.error ?? localError.value)
 function setPreview(file: File) {
   if (objectUrl.value) URL.revokeObjectURL(objectUrl.value)
   objectUrl.value = null
-  fileName.value = null
+  selectedFile.value = file
   const isImage = file.type.startsWith('image/')
   if (isImage && typeof URL !== 'undefined' && URL.createObjectURL) {
     objectUrl.value = URL.createObjectURL(file)
-    fileName.value = file.name
   }
 }
 
 function clearPreview() {
   if (objectUrl.value) URL.revokeObjectURL(objectUrl.value)
   objectUrl.value = null
-  fileName.value = null
+  selectedFile.value = null
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} Б`
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace('.', ',')} МБ`
 }
 
 onBeforeUnmount(clearPreview)
@@ -142,8 +156,10 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function removeFile() {
+  const file = selectedFile.value
   clearPreview()
   inputEl.value && (inputEl.value.value = '')
+  if (file) emit('remove', file)
 }
 
 defineExpose({
@@ -158,27 +174,38 @@ defineExpose({
       {{ label }}
     </label>
 
-    <!-- Прев'ю зображення -->
-    <div v-if="objectUrl && !$slots.default" class="mb-2 flex items-center gap-3">
-      <slot name="preview" :file-url="objectUrl" :file-name="fileName ?? ''">
-        <div class="relative">
+    <!-- Прев'ю одиночного файлу -->
+    <div
+      v-if="selectedFile && !multiple"
+      class="mb-2 flex items-center gap-3 rounded-card border border-line bg-subtle p-2.5"
+    >
+      <slot name="preview" :file-url="objectUrl ?? ''" :file-name="selectedFile.name">
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-control border border-line bg-card">
           <img
+            v-if="objectUrl"
             :src="objectUrl"
             alt=""
-            class="h-20 w-20 rounded-card border border-line object-cover"
+            class="h-full w-full object-cover"
           />
-          <button
-            type="button"
-            aria-label="Видалити"
-            class="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full border border-line bg-card text-muted shadow-card transition-colors hover:bg-hover hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            @click="removeFile"
-          >
-            <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            </svg>
-          </button>
+          <svg v-else class="h-5 w-5 text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M7 3h7l4 4v14H7zM14 3v5h4" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+          </svg>
         </div>
       </slot>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-sm font-medium text-ink">{{ selectedFile.name }}</p>
+        <p class="text-xs text-muted">{{ formatFileSize(selectedFile.size) }}</p>
+      </div>
+      <button
+        type="button"
+        :aria-label="`Видалити файл ${selectedFile.name}`"
+        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        @click="removeFile"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
+      </button>
     </div>
 
     <slot
@@ -192,6 +219,7 @@ defineExpose({
         :tabindex="disabled ? -1 : 0"
         :aria-busy="loading || undefined"
         :aria-disabled="disabled || undefined"
+        :aria-describedby="describedBy"
         :aria-label="typeof label === 'string' ? label : 'Завантажити файл'"
         class="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-card border-2 border-dashed p-6 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :class="[
@@ -247,7 +275,7 @@ defineExpose({
       @change="onFiles(($event.target as HTMLInputElement).files)"
     />
 
-    <p v-if="hasError" :class="errorTextClass" role="alert">{{ errorText }}</p>
-    <p v-else-if="hint" :class="helperTextClass">{{ hint }}</p>
+    <p v-if="hasError" :id="errorId" :class="errorTextClass" role="alert">{{ errorText }}</p>
+    <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
   </div>
 </template>

@@ -166,11 +166,33 @@ function onBlur() {
 
 const fastStep = computed(() => props.stepFast ?? props.step * 10)
 
+function reflectCommittedValue(value: number | null) {
+  const text = focused.value ? (value === null ? '' : String(value)) : format(value)
+  display.value = text
+  // Keyboard events відбуваються до наступного render tick. Віддзеркалюємо
+  // кероване значення негайно, щоб DOM і accessibility tree не відставали.
+  if (!inputEl.value) return
+  inputEl.value.value = text
+  if (value === null) inputEl.value.removeAttribute('aria-valuenow')
+  else inputEl.value.setAttribute('aria-valuenow', String(value))
+  if (props.unit && value !== null) inputEl.value.setAttribute('aria-valuetext', `${format(value)} ${props.unit}`)
+  else inputEl.value.removeAttribute('aria-valuetext')
+}
+
 function nudge(amount: number) {
   if (props.disabled || props.readonly) return
-  const base = props.modelValue ?? props.min ?? 0
-  commit(base + amount)
-  if (!focused.value) display.value = format(props.modelValue === null ? base + amount : clamp(base + amount))
+  // Під час серії клавіш props може ще чекати наступного render tick.
+  // Видимий рядок уже містить останній крок, тому він є надійнішою базою.
+  const visibleValue = focused.value ? parse(display.value) : null
+  const base = visibleValue ?? props.modelValue ?? props.min ?? 0
+  const next = commit(base + amount)
+  reflectCommittedValue(next)
+}
+
+function jumpTo(value: number) {
+  if (props.disabled || props.readonly) return
+  const next = commit(value)
+  reflectCommittedValue(next)
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -187,10 +209,10 @@ function onKeydown(event: KeyboardEvent) {
   }
   if (event.key === 'Home' && typeof props.min === 'number') {
     event.preventDefault()
-    commit(props.min)
+    jumpTo(props.min)
   } else if (event.key === 'End' && typeof props.max === 'number') {
     event.preventDefault()
-    commit(props.max)
+    jumpTo(props.max)
   }
 }
 
@@ -336,7 +358,7 @@ defineExpose({
       </button>
     </div>
 
-    <p v-if="error" :id="errorId" :class="errorTextClass">{{ error }}</p>
+    <p v-if="error" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
   </div>
 </template>

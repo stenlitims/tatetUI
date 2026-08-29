@@ -11,6 +11,10 @@ function onSelect(files: File[]) {
 function onError(message: string) {
   log.value.unshift(`error: ${message}`)
 }
+
+function onRemove(file: File) {
+  log.value.unshift(`remove: ${file.name}`)
+}
 </script>
 
 <template>
@@ -20,6 +24,7 @@ function onError(message: string) {
       hint="Зображення або PDF, до 10 МБ. Завантаження на сервер — на боці споживача."
       @select="onSelect"
       @error="onError"
+      @remove="onRemove"
     />
     <ul v-if="log.length" class="mt-3 space-y-1 text-xs text-muted">
       <li v-for="(entry, index) in log.slice(0, 4)" :key="index">{{ entry }}</li>

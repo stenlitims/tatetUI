@@ -80,10 +80,13 @@ describe('UiNumberInput', () => {
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
     await nextTick()
     expect(seen.at(-1)).toBe(6)
+    expect(field().value).toBe('6')
+    expect(field().getAttribute('aria-valuenow')).toBe('6')
 
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }))
     await nextTick()
     expect(seen.at(-1)).toBe(16)
+    expect(field().value).toBe('16')
 
     // Затискання по max, а не вихід за нього.
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }))
@@ -93,6 +96,26 @@ describe('UiNumberInput', () => {
     field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Home', bubbles: true }))
     await nextTick()
     expect(seen.at(-1)).toBe(0)
+    expect(field().value).toBe('0')
+
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
+    await nextTick()
+    expect(seen.at(-1)).toBe(20)
+    expect(field().value).toBe('20')
+  })
+
+  it('серія клавіш до render tick не втрачає кроки', async () => {
+    const seen: Array<number | null> = []
+    mounted = await mountComponent(UiNumberInput, {
+      modelValue: 5,
+      'onUpdate:modelValue': (value: number | null) => { seen.push(value); mounted!.props.modelValue = value },
+    })
+    field().dispatchEvent(new FocusEvent('focus'))
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true }))
+    expect(field().value).toBe('7')
+    await nextTick()
+    expect(seen).toEqual([6, 7])
   })
 
   it('розуміє український запис із комою й нерозривним пробілом', async () => {
@@ -141,6 +164,7 @@ describe('UiNumberInput', () => {
     const described = field().getAttribute('aria-describedby')!
     expect(described.split(' ')).toHaveLength(1)
     expect(mounted.host.querySelector(`#${described}`)?.textContent).toBe('Помилка')
+    expect(mounted.host.querySelector(`#${described}`)?.getAttribute('role')).toBe('alert')
   })
 })
 
@@ -228,5 +252,12 @@ describe('UiTagInput', () => {
     // Поле лишається комбобоксом заради панелі підказок.
     expect(field().getAttribute('role')).toBe('combobox')
     expect(mounted.host.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull()
+  })
+
+  it('помилка повʼязана з полем і оголошується одразу', async () => {
+    mounted = await mountComponent(UiTagInput, { modelValue: [], hint: 'Підказка', error: 'Помилка' })
+    const described = field().getAttribute('aria-describedby')!
+    expect(described.split(' ')).toHaveLength(1)
+    expect(mounted.host.querySelector(`#${described}`)?.getAttribute('role')).toBe('alert')
   })
 })
