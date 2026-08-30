@@ -1,6 +1,13 @@
 <script setup lang="ts" generic="T">
-import { computed, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useReducedMotion } from '~/composables/useReducedMotion'
+import {
+  dragAxis,
+  dragThreshold,
+  rubberBandDelta,
+  shouldAdvance,
+  swipeDirection,
+} from '~/utils/carousel'
 
 const props = withDefaults(
   defineProps<{
@@ -12,7 +19,8 @@ const props = withDefaults(
     loop?: boolean
     /**
      * Автоматичне гортання. Вимикається саме собою при
-     * `prefers-reduced-motion` і на час наведення чи фокуса.
+     * `prefers-reduced-motion`, на час наведення чи фокуса і доки
+     * вкладка у фоні.
      */
     autoplay?: boolean
     /** Пауза між автоматичними переходами, мс. */
@@ -50,30 +58,49 @@ defineSlots<{
 }>()
 
 const reducedMotion = useReducedMotion()
+const trackEl = ref<HTMLElement | null>(null)
 const hovering = shallowRef(false)
 const focused = shallowRef(false)
 const autoplayPaused = shallowRef(false)
-const pointerStart = shallowRef<number | null>(null)
+const documentPaused = shallowRef(false)
+const dragging = shallowRef(false)
 const dragOffset = shallowRef(0)
 let timer: number | null = null
-// Відстань останнього завершеного перетягування: якщо вона переступила
-// поріг, клік одразу після неї — продовження жесту, а не навігація.
+
+/*
+ * Стан активного жесту. Реактивні тут лише ті величини, що впливають на
+ * рендер (dragOffset, dragging); raw-поля — навпаки: зайвий ререндер від
+ * змінення pointerId чи часової мітки нікому не потрібен.
+ */
+let activePointerId: number | null = null
+let startX = 0
+let startY = 0
+let startStamp = 0
+let trackWidth = 0
+/** 'x' — ведемо слайд, 'y' — жест віддали скролу сторінки, null — не вирішено. */
+let axis: 'x' | 'y' | null = null
+// Відстань останнього завершеного перетягування: клік одразу після неї —
+// продовження жесту, а не навігація. NaN — «проковтнути наступний клік
+// безумовно» (вертикальний скрол теж може синтезувати клік).
 let lastDragDistance = 0
 
 const count = computed(() => props.items.length)
 const current = computed(() => count.value ? Math.max(0, Math.min(count.value - 1, Math.floor(props.modelValue))) : 0)
 const previousDisabled = computed(() => count.value < 2 || (!props.loop && current.value === 0))
 const nextDisabled = computed(() => count.value < 2 || (!props.loop && current.value === count.value - 1))
-const shouldAutoplay = computed(() => props.autoplay && !autoplayPaused.value && !reducedMotion.value && count.value > 1 && !(props.pauseOnHover && hovering.value) && !focused.value)
-const dragging = computed(() => pointerStart.value !== null)
+const shouldAutoplay = computed(() =>
+  props.autoplay
+  && !autoplayPaused.value
+  && !documentPaused.value
+  && !reducedMotion.value
+  && count.value > 1
+  && !(props.pauseOnHover && hovering.value)
+  && !focused.value,
+)
 
-/**
- * Зсув треку. Усі слайди стоять у одному рядку й зсунуті на `-index * 100%`;
- * перетягування додає пікселі поверх — палець веде слайд один-в-один.
- *
- * translate3d замість translateX: браузер тримає шар на GPU і без
- * перестворення шарів на кожному pointermove.
- */
+// Поріг свайпу від ширини треку + флік: «недотягнуті» змахи на телефоні —
+// найпоширеніша скарга на каруселі з фіксованим порогом у пікселях.
+
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-current.value * 100}% + ${dragOffset.value}px), 0, 0)`,
 }))
@@ -127,36 +154,93 @@ function onKeydown(event: KeyboardEvent) {
 function onPointerDown(event: PointerEvent) {
   if (!props.draggable) return
   if (event.pointerType === 'mouse' && event.button !== 0) return
-  pointerStart.value = event.clientX
+  // Другий палець не перезапускає жест: триває той, що почався першим.
+  if (activePointerId !== null) return
+  // Клік, синтезований попереднім скрол-жестом, міг не відбутися: прапорець
+  // не сміє дожити до наступного справжнього кліку користувача.
+  swallowNextClick = false
+  activePointerId = event.pointerId
+  startX = event.clientX
+  startY = event.clientY
+  startStamp = event.timeStamp
+  axis = null
+  trackWidth = trackEl.value?.getBoundingClientRect().width ?? 0
 }
 
 /*
- * Гумові краї: без `loop` перетягування за межі першого/останнього слайда
- * гаситься до чверті відстані — слайд пружинить, а не тягне порожнину.
+ * Осьове блокування: перші ~8px жест нічого не рухають — класифікуємо
+ * домінантну вісь. Горизонталь — карусель веде слайд і захоплює вказівник
+ * (setPointerCapture: палець, що з'їхав за межі компонента на 5px, більше
+ * не обриває перетягування pointerleave'ом). Вертикаль — жест цілком
+ * віддаємо скролу сторінки.
  */
 function onPointerMove(event: PointerEvent) {
-  if (pointerStart.value === null) return
-  let delta = event.clientX - pointerStart.value
-  if (!props.loop) {
-    if ((current.value === 0 && delta > 0) || (current.value === count.value - 1 && delta < 0)) delta *= 0.25
+  if (activePointerId === null || event.pointerId !== activePointerId) return
+
+  if (axis === null) {
+    const judged = dragAxis(event.clientX - startX, event.clientY - startY)
+    if (judged === null) return
+    axis = judged
+    if (axis === 'y') {
+      lastDragDistance = Number.NaN // скрол теж може синтезувати клік
+      return
+    }
+    dragging.value = true
+    // Вказівник іде за пальцем навіть поза компонентом: без capture палець,
+    // що з'їхав на 5px убік, обривав перетягування pointerleave'ом і трек
+    // різко смикався назад.
+    const section = event.currentTarget as HTMLElement | null
+    try {
+      section?.setPointerCapture(event.pointerId)
+    } catch {
+      // Вказівник уже пішов — жест завершиться на pointerup/cancel природно.
+    }
   }
+
+  const delta = rubberBandDelta(event.clientX - startX, {
+    atStart: !props.loop && current.value === 0,
+    atEnd: !props.loop && current.value === count.value - 1,
+  })
   dragOffset.value = delta
 }
 
-function onPointerUp(event: PointerEvent) {
-  if (pointerStart.value === null) return
-  const distance = event.clientX - pointerStart.value
-  pointerStart.value = null
+function endDrag(event: PointerEvent) {
+  if (activePointerId === null || event.pointerId !== activePointerId) return
+  const wasHorizontal = axis === 'x'
+  const dx = event.clientX - startX
+  const elapsed = event.timeStamp - startStamp
+  activePointerId = null
+  axis = null
+  dragging.value = false
   dragOffset.value = 0
-  lastDragDistance = distance
-  if (Math.abs(distance) < 40) return
-  distance > 0 ? previous() : next()
+
+  if (!wasHorizontal) {
+    // Вертикальний жест або рух менший за поріг класифікації — це не свайп:
+    // клік після нього має залишитися кліком. Гасимо його лише тоді, коли
+    // вертикальний скрол упевнено почався (він синтезує click сам).
+    if (Number.isNaN(lastDragDistance)) {
+      lastDragDistance = 0
+      swallowNextClick = true
+    }
+    return
+  }
+
+  lastDragDistance = Math.abs(dx) >= 8 ? dx : 0
+  if (shouldAdvance({ dx, elapsedMs: elapsed, width: trackWidth })) {
+    swipeDirection(dx) === 'previous' ? previous() : next()
+  }
 }
 
-function cancelDrag() {
-  pointerStart.value = null
+function cancelDrag(event: PointerEvent) {
+  if (activePointerId === null || event.pointerId !== activePointerId) return
+  activePointerId = null
+  axis = null
+  dragging.value = false
   dragOffset.value = 0
+  lastDragDistance = 0
 }
+
+let swallowNextClick = false
 
 /*
  * Клік одразу після перетягування — це закінчення жесту, а не вибір того,
@@ -164,10 +248,23 @@ function cancelDrag() {
  * відпущений над посиланням усередині слайда, відкривав би його.
  */
 function onClickCapture(event: MouseEvent) {
-  if (Math.abs(lastDragDistance) < 40) return
+  if (swallowNextClick) {
+    swallowNextClick = false
+    event.preventDefault()
+    event.stopPropagation()
+    return
+  }
+  if (Math.abs(lastDragDistance) < 8) return
   lastDragDistance = 0
   event.preventDefault()
   event.stopPropagation()
+}
+
+function onVisibilityChange() {
+  // Вкладка у фоні — таймер усе одно тікає в більшості браузерів, тож
+  // користувач повертався б на слайд, що сам застрибнув у бік. Пауза
+  // без «залишити на паузі назавжди»: повернення відновлює автопрокрутку.
+  documentPaused.value = document.hidden
 }
 
 watch([shouldAutoplay, () => props.interval], syncTimer)
@@ -175,8 +272,14 @@ watch([count, () => props.modelValue], () => {
   if (props.modelValue !== current.value) emit('update:modelValue', current.value)
 }, { immediate: true })
 
-onMounted(syncTimer)
-onBeforeUnmount(clearTimer)
+onMounted(() => {
+  syncTimer()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+onBeforeUnmount(() => {
+  clearTimer()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
 
 defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true }, play: () => { autoplayPaused.value = false } })
 </script>
@@ -195,14 +298,14 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
     @focusout="focused = false"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
-    @pointerup="onPointerUp"
+    @pointerup="endDrag"
     @pointercancel="cancelDrag"
     @pointerleave="cancelDrag"
   >
     <!--
       touch-pan-y: горизонтальний рух забирає карусель, вертикальний
-      залишається сторінці — без цього жест гортання сторінки конфліктує
-      з перетягуванням слайда, і браузер розриває жест pointercancel'ом.
+      залишається сторінці — разом з осьовим блокуванням у JS жест
+      вирішується однаково і в браузері, і в компоненті.
     -->
     <div
       :aria-live="shouldAutoplay ? 'off' : 'polite'"
@@ -211,8 +314,9 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
       @click.capture="onClickCapture"
     >
       <div
-        class="flex w-full will-change-transform"
-        :class="dragging ? 'transition-none' : 'transition-transform duration-300 ease-out'"
+        ref="trackEl"
+        class="flex w-full will-change-transform transition-transform duration-300 ease-out motion-reduce:transition-none"
+        :class="dragging ? 'transition-none' : ''"
         :style="trackStyle"
       >
         <div
@@ -229,15 +333,17 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         </div>
       </div>
 
-      <!-- Стрілки поверх слайда, на вертикальній середнині: стандарт
-           сучасних каруселей. Кола з напівпрозорим тлом і blur
+      <!-- На мобільному стрілок немає: свайп із фліком — основний жест, а
+           кнопки поверх тексту лиш закривали слайд і конфліктували з
+           пальцем. На десктопі — поверх слайда, на вертикальній середині:
+           стандарт сучасних каруселей. Кола з напівпрозорим тлом і blur
            читаються на будь-якому наповненні слайда. -->
       <button
         v-if="count > 1"
         type="button"
         :disabled="previousDisabled"
         aria-label="Попередній слайд"
-        class="absolute left-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
+        class="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:flex md:h-9 md:w-9"
         @click="previous"
       >
         <slot name="previous" :disabled="previousDisabled">
@@ -252,7 +358,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         type="button"
         :disabled="nextDisabled"
         aria-label="Наступний слайд"
-        class="absolute right-3 top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
+        class="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:flex md:h-9 md:w-9"
         @click="next"
       >
         <slot name="next" :disabled="nextDisabled">
@@ -287,7 +393,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
       <button
         v-if="autoplay"
         type="button"
-        class="ms-2 flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12 relative ms-2 flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :aria-label="autoplayPaused ? 'Продовжити автопрокрутку' : 'Призупинити автопрокрутку'"
         @click="toggleAutoplay"
       >
