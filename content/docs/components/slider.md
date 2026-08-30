@@ -15,7 +15,7 @@ PageUp/Down) і дотик. Компонент додає стилі обох т
 
 ## Приклад
 
-::component-preview{name="forms-extended" stage="min-h-72"}
+::component-preview{name="slider-basic" stage="min-h-72"}
 ::
 
 ## API

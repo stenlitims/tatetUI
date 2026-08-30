@@ -19,7 +19,7 @@ order: 37
 
 ## Приклад
 
-::component-preview{name="forms-extended" stage="min-h-72"}
+::component-preview{name="inline-edit-basic" stage="min-h-72"}
 ::
 
 ## API

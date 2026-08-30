@@ -15,7 +15,7 @@ Tabs, але семантика інша — це radiogroup без панеле
 
 ## Приклад
 
-::component-preview{name="extras-trio" stage="min-h-40"}
+::component-preview{name="toggle-group-basic" stage="min-h-40"}
 ::
 
 ## API

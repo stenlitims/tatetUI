@@ -13,7 +13,7 @@ order: 31
 
 ## Приклад
 
-::component-preview{name="extras-trio" stage="min-h-40"}
+::component-preview{name="kbd-basic" stage="min-h-40"}
 ::
 
 Модифікатори розпізнаються за назвою: `meta`/`cmd` → ⌘, `alt` → ⌥,

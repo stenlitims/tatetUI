@@ -15,7 +15,7 @@ Tabs нічого не говорить про порядок і не пам'я�
 
 ## Приклад
 
-::component-preview{name="forms-extended" stage="min-h-72"}
+::component-preview{name="stepper-basic" stage="min-h-72"}
 ::
 
 ## API

@@ -19,7 +19,7 @@ label/error/hint-контракт і токенізовану темну тем�
 
 ## Приклад
 
-::component-preview{name="forms-extended" stage="min-h-72"}
+::component-preview{name="date-picker-basic" stage="min-h-72"}
 ::
 
 ## API

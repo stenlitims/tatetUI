@@ -18,7 +18,7 @@ order: 32
 
 ## Приклад
 
-::component-preview{name="extras-trio" stage="min-h-40"}
+::component-preview{name="copy-button-basic" stage="min-h-40"}
 ::
 
 ## API
