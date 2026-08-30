@@ -126,7 +126,7 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
         :aria-valuetext="ariaValueText"
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
-        class="ui-slider h-11 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-50 md:h-6"
+        class="ui-slider h-12 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-50 md:h-6"
         @input="emit('update:modelValue', Number(($event.target as HTMLInputElement).value))"
       />
     </div>
@@ -197,7 +197,7 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
 }
 
 /*
- * На дотику input високий (h-11 = 44px), хоч трек візуально тонкий:
+ * На дотику input високий (h-12 = 45px), хоч трек візуально тонкий:
  * пальцю є в що влучити, а вигляд лишається компактним. На десктопі
  * висота повертається до md:h-6.
  */

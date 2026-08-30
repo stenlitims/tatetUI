@@ -90,7 +90,7 @@ watch(
   >
     <!-- Десктоп: повний ряд -->
     <div class="hidden flex-wrap items-center gap-0.5 md:flex">
-      <select v-model="headingLevel" class="h-11 rounded-control border border-line bg-input px-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:text-xs" :aria-label="l.headingLevel">
+      <select v-model="headingLevel" class="h-9 rounded-control border border-line bg-input px-2 text-sm text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:text-xs" :aria-label="l.headingLevel">
         <option value="0">{{ l.paragraph }}</option>
         <option value="1">{{ l.heading }} 1</option>
         <option value="2">{{ l.heading }} 2</option>
@@ -137,7 +137,7 @@ watch(
     <div class="flex items-center gap-1 md:hidden">
       <RteIconBtn icon="bold" :title="l.bold" :active="active.bold" @click="cmd(c => c.toggleBold().run())" />
       <RteIconBtn icon="italic" :title="l.italic" :active="active.italic" @click="cmd(c => c.toggleItalic().run())" />
-      <button type="button" class="ml-auto inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:w-8" :title="l.more" :aria-label="l.more" @click="mobileOpen = true">
+      <button type="button" class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" :title="l.more" :aria-label="l.more" @click="mobileOpen = true">
         <RteIcon name="more" />
       </button>
     </div>

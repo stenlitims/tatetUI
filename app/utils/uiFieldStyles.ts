@@ -25,10 +25,20 @@ const fieldBase =
   'w-full rounded-control border border-line bg-input text-ink placeholder:text-muted transition-colors ' +
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-accent-solid'
 
+/*
+ * Мобільні розміри ДОВЖЕ, а не вище: 45px (h-12 за кореня 15px) — це
+ * фактичний мінімум цільової зони дотику, тож поля на телефоні рівно на
+ * 44–45px і не «ховаються» під пальцем. Десктопні висоти повертає `md:`.
+ *
+ * `sm` на мобільному теж тримає 16px тексту: iOS Safari при фокусі на
+ * поле з font-size < 16px АВТОМАТИЧНО зумує сторінку на ~113%. Це не
+ * поправна дія — це властивість браузера, і `sm` з `text-sm` (13px)
+ * зумував би кожну форму з діалогом вибору. `md:` повертає 13px.
+ */
 const fieldSizes: Record<FieldSize, string> = {
-  sm: 'h-11 text-sm md:h-8 md:text-xs',
-  md: 'h-11 text-base md:h-9 md:text-sm',
-  lg: 'h-12 text-base md:h-10',
+  sm: 'h-12 text-base md:h-8 md:text-xs',
+  md: 'h-12 text-base md:h-9 md:text-sm',
+  lg: 'h-13 text-base md:h-10',
 }
 
 /*

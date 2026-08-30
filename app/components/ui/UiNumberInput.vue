@@ -259,20 +259,19 @@ const inputClasses = computed(() =>
   fieldClass(props.size, {
     error: hasError.value,
     disabled: props.disabled,
-    padLeft: props.steppers ? 'pl-11 md:pl-9' : undefined,
-    padRight: props.steppers ? 'pr-11 md:pr-9' : props.unit ? 'pr-10' : undefined,
+    padLeft: props.steppers ? 'pl-12 md:pl-9' : undefined,
+    padRight: props.steppers ? 'pr-12 md:pr-9' : props.unit ? 'pr-10' : undefined,
     extra: 'text-center tabular-nums',
   }),
 )
 
 /*
- * h-11 — це 41.25px, а не 44: корінь у проєкті 15px, тож 2.75rem не дотягує
- * до мінімальної цілі для пальця. Візуально збільшити кнопку не можна — вона
- * стоїть УСЕРЕДИНІ поля тієї ж висоти. Тому реальну зону дотику дає
- * невидимий ::after, як у UiSwitch.
+ * Кнопка лишається в межах поля (h-12 на мобільному = 45px — ціль і так
+ * 44+), на десктопі h-9 усередині поля md:h-9, зону дотику на дотику
+ * добудовує невидимий ::after, як у UiSwitch.
  */
 const STEPPER_CLASS =
-  'ui-number-stepper absolute top-1/2 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9'
+  'ui-number-stepper absolute top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9'
 
 defineExpose({
   /** Ставить фокус на поле. */

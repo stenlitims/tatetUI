@@ -91,17 +91,17 @@ const metrics: Record<
   { item: string; chevron: string; panel: string; child: string; description: string }
 > = {
   sm: {
-    item: 'min-h-11 gap-1 px-2.5 text-sm md:min-h-8 md:text-xs',
+    item: 'min-h-9 gap-1 px-2.5 text-base md:min-h-8 md:text-xs',
     chevron: 'h-3.5 w-3.5',
     panel: 'p-1.5',
-    child: 'px-2.5 py-2 text-sm md:py-1.5 md:text-xs',
+    child: 'px-2.5 py-2.5 text-base md:py-1.5 md:text-xs',
     description: 'text-xs',
   },
   md: {
-    item: 'min-h-11 gap-1.5 px-3 text-sm md:min-h-9',
+    item: 'min-h-10 gap-1.5 px-3 text-base md:min-h-9 md:text-sm',
     chevron: 'h-4 w-4',
     panel: 'p-2',
-    child: 'px-3 py-2.5 text-sm md:py-2',
+    child: 'px-3 py-2.5 text-base md:py-2 md:text-sm',
     description: 'text-xs',
   },
   lg: {

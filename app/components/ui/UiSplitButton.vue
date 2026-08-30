@@ -157,7 +157,7 @@ defineExpose({
           type="button"
           role="menuitem"
           :disabled="item.disabled"
-          class="block w-full rounded-control px-3 py-2.5 text-left text-sm transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:py-2"
+          class="block w-full rounded-control px-3 py-3 text-left text-sm transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:py-2"
           :class="item.danger ? 'text-danger' : 'text-ink'"
           @click="choose(item, toggle)"
         >

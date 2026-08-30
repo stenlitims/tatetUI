@@ -81,7 +81,7 @@ function onPageSizeChange(event: Event) {
         <select
           :value="pageSize"
           :disabled="disabled"
-          class="h-11 cursor-pointer rounded-control border border-line bg-input pl-2 pr-6 text-xs text-ink focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:h-8"
+          class="h-12 cursor-pointer rounded-control border border-line bg-input pl-2 pr-6 text-base text-ink focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:text-xs"
           @change="onPageSizeChange"
         >
           <option v-for="option in pageSizeOptions" :key="option" :value="option">{{ option }}</option>
@@ -91,11 +91,12 @@ function onPageSizeChange(event: Event) {
     </div>
 
     <nav v-if="normalizedTotalPages > 1" aria-label="Пагінація" class="flex items-center gap-1">
+      <!-- Зона дотику 45×45 на дотику — стрілки лишилися компактними. -->
       <button
         type="button"
         aria-label="Попередня сторінка"
         :disabled="normalizedPage <= 1 || disabled"
-        class="flex h-11 w-11 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
+        class="flex h-9 w-9 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
         @click="goTo(normalizedPage - 1)"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -116,7 +117,7 @@ function onPageSizeChange(event: Event) {
           type="button"
           :disabled="disabled"
           :aria-current="p === normalizedPage ? 'page' : undefined"
-          class="hidden h-11 min-w-11 items-center justify-center rounded-control px-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed sm:flex md:h-8 md:min-w-8"
+          class="hidden h-9 min-w-9 items-center justify-center rounded-control px-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed sm:flex md:h-8 md:min-w-8"
           :class="
             p === normalizedPage
               ? 'bg-accent-solid text-accent-contrast'
@@ -132,7 +133,7 @@ function onPageSizeChange(event: Event) {
         type="button"
         aria-label="Наступна сторінка"
         :disabled="normalizedPage >= normalizedTotalPages || disabled"
-        class="flex h-11 w-11 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
+        class="flex h-9 w-9 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
         @click="goTo(normalizedPage + 1)"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">

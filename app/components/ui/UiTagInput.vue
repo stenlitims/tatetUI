@@ -319,7 +319,7 @@ const teleportReady = ref(false)
 if (typeof document !== 'undefined') teleportReady.value = true
 
 const fieldWrapperClass = computed(() => [
-  'flex min-h-11 w-full flex-wrap items-center gap-1.5 rounded-control border bg-input px-2 py-1.5 transition-colors md:min-h-9',
+  'flex min-h-12 w-full flex-wrap items-center gap-1.5 rounded-control border bg-input px-2 py-1.5 transition-colors md:min-h-9',
   hasError.value ? 'border-danger' : 'border-line focus-within:border-accent-solid',
   'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-ring-offset',
   props.disabled ? 'cursor-not-allowed opacity-50' : '',

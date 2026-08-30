@@ -20,6 +20,11 @@ const props = withDefaults(
      */
     variant?: 'underline' | 'pills'
     /**
+     * Висота кнопок вкладок. `sm` — для вкладок усередині панелі
+     * інструментів чи картки; на дотику зону 45×45 дає невидимий ::after.
+     */
+    size?: 'sm' | 'md'
+    /**
      * Назва query-параметра, з яким синхронізується активна вкладка.
      * Напр. `"tab"` — стан читається з `?tab=` і пишеться туди через
      * `router.replace`. Потрібен лише для вкладок, що мають переживати
@@ -29,7 +34,7 @@ const props = withDefaults(
     /** Доступна назва для `role="tablist"`. */
     ariaLabel?: string
   }>(),
-  { modelValue: undefined, variant: 'underline', queryParam: undefined, ariaLabel: 'Вкладки' },
+  { modelValue: undefined, variant: 'underline', size: 'md', queryParam: undefined, ariaLabel: 'Вкладки' },
 )
 
 const emit = defineEmits<{
@@ -159,16 +164,21 @@ function onKeydown(event: KeyboardEvent, index: number) {
               :disabled="tab.disabled"
               :class="[
                 'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                // Невидима зона 45×45 на дотику — кнопка вкладки лишається
+                // компактною, як на десктопі (раніше h-11 розпирав панелі).
+                'pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[\'\'] pointer-coarse:after:h-12 pointer-coarse:after:w-12',
                 tab.disabled ? 'cursor-not-allowed opacity-50' : '',
                 variant === 'underline'
                   ? [
-                      '-mb-px h-11 rounded-t-control border-b-2 px-3.5 text-sm md:h-9',
+                      size === 'sm' ? 'h-9 px-3 text-sm md:h-8' : 'h-10 px-3.5 text-sm md:h-9',
+                      '-mb-px rounded-t-control border-b-2',
                       tab.id === active
                         ? 'border-accent-solid text-accent'
                         : 'border-transparent text-muted hover:border-line-strong hover:text-ink',
                     ]
                   : [
-                      'h-11 rounded-[calc(var(--radius-control)_-_0.125rem)] px-3.5 text-sm md:h-8',
+                      size === 'sm' ? 'h-8 px-3 text-xs md:h-7' : 'h-9 px-3.5 text-sm md:h-8',
+                      'rounded-[calc(var(--radius-control)_-_0.125rem)]',
                       tab.id === active
                         ? 'bg-card text-ink shadow-card'
                         : 'text-muted hover:text-ink',

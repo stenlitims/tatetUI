@@ -7,7 +7,12 @@ const props = withDefaults(
   defineProps<{
     /** Візуальна вага. `solid` — головна дія на екрані, вона має бути одна. */
     variant?: 'solid' | 'soft' | 'outline' | 'ghost' | 'danger'
-    /** Розмір. `icon` і `icon-sm` — квадратні, для кнопок без тексту. */
+    /**
+     * Висота кнопки. На мобільному ієрархія лишається: `sm` 9, `md` 10,
+     * `lg` 12 (у rem за кореня 15px), а точність дотику тримає невидима
+     * зона 44×44 (`pointer-coarse:`, див. нижче). `icon` і `icon-sm` —
+     * квадратні, для кнопок без тексту.
+     */
     size?: 'sm' | 'md' | 'lg' | 'icon' | 'icon-sm'
     /** Блокує кліки й показує індикатор, зберігаючи ширину кнопки. */
     loading?: boolean
@@ -88,26 +93,53 @@ const variants: Record<Variant, string> = {
     'bg-danger-solid text-danger-contrast hover:bg-danger-solid-hover active:bg-danger-solid-hover shadow-card',
 }
 
-/**
- * Спершу мобільні розміри, далі `md:` повертає десктопні.
+/*
+ * Мобільний масштаб — ієрархічний, а не «всі однакові».
  *
- * На дотику всі варіанти зводяться до `h-12` (45px за кореневого 15px) —
- * це мінімум, з якого палець перестає промахуватися; `h-11` дало б 41px.
- * Ієрархія розмірів на мобільному лишається в паддінгу та шрифті, бо різна
- * ВИСОТА кнопок пальцю нічого не дає, а нижче 44px просто ламає влучність.
+ * Раніше всі розміри зводилися до h-12 (45px): `sm`-кнопка була фізично
+ * більшою за десктопний `lg`, ієрархія зникала, а рядок дрібних дій у
+ * панелі списку займав п'ять рядів по висоті. Тепер на дотику `sm` 9,
+ * `md` 10, `lg` 12 (rem за кореня 15px) — ієрархія і щільність лишилися,
+ * а точність дотику тримає НЕ висота, а невидима зона 44×44 через
+ * `pointer-coarse:after:` (той самий патерн, що в UiSwitch).
+ *
+ * `sm` на мобільному теж тримає 16px тексту — щоб текст дрібних дій був
+ * узгоджений із полем поруч (base = 16px). `md:` повертає щільні розміри.
  */
 const sizes: Record<Size, string> = {
-  sm: 'h-12 px-3 text-sm gap-1.5 md:h-8 md:px-2.5 md:text-xs',
-  md: 'h-12 px-4 text-base gap-2 md:h-9 md:px-3.5 md:text-sm',
+  sm: 'h-9 px-3 text-base gap-1.5 md:h-8 md:px-2.5 md:text-xs',
+  md: 'h-10 px-4 text-base gap-2 md:h-9 md:px-3.5 md:text-sm',
   lg: 'h-12 px-5 text-base gap-2 md:h-11',
-  icon: 'h-12 w-12 justify-center md:h-9 md:w-9',
-  'icon-sm': 'h-12 w-12 justify-center text-sm md:h-7 md:w-7 md:text-xs',
+  icon: 'h-10 w-10 justify-center md:h-9 md:w-9',
+  'icon-sm': 'h-9 w-9 justify-center text-base md:h-7 md:w-7 md:text-xs',
 }
+
+/*
+ * Невидима зона дотику 45×45 навколо дрібних кнопок.
+ *
+ * Точність дотику вимірюється по цільовій зоні, а не по заливці (W3C
+ * 2.5.8 Target Size). Самі цілі нижче 44px (h-9 = 33.75px), тому на
+ * пристрої з грубим основним вказівником — телефон, планшет без
+ * стилуса — `::after` добудовує зону до 45×45 (h-12 за кореня 15px) навколо центру кнопки. Той самий патерн, що в UiSwitch,
+ * лише утилітами Tailwind v4 (`pointer-coarse:` = медіазапит
+ * `(pointer: coarse)`), без власного CSS у компоненті.
+ *
+ * На стилус-пристроях (primary pointer: fine) зони немає — і не треба:
+ * прицілювання там точне. Сусідні іконкові кнопки з `gap-1.5` можуть
+ * торкатися зонами по краях — це штатна ситуація (Material 48dp теж
+ * торкаються), клік у смужці перекриття бере кнопка, ближча до точки
+ * дотику в DOM-порядку.
+ */
+const touchTargetClass =
+  'pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 ' +
+  'pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 ' +
+  "pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
 
 const isDisabled = computed(() => props.disabled || props.loading)
 
 const classes = computed(() => [
   'relative inline-flex items-center rounded-control font-medium transition duration-150 select-none active:scale-[0.98]',
+  touchTargetClass,
   // Видиме фокус-кільце. У всіх чотирьох вихідних проєктах focus:outline-none
   // стоїть майже всюди без заміни — керування з клавіатури стає сліпим.
   // ring-offset відриває кільце від заливки, інакше на solid-кнопці воно

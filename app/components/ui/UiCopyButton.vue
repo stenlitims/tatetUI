@@ -103,10 +103,13 @@ async function copy() {
 
 const classes = computed(() => [
   'relative inline-flex select-none items-center justify-center gap-1.5 rounded-control font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  // Невидима зона 45×45 на дотику — той самий патерн, що в UiButton:
+  // сама кнопка лишається компактною, як у полі чи тулбарі поруч.
+  'pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[\'\'] pointer-coarse:after:h-12 pointer-coarse:after:w-12',
   props.variant === 'outline'
     ? 'border border-line bg-card text-ink hover:bg-hover'
     : 'text-muted hover:bg-hover hover:text-ink',
-  props.size === 'sm' ? 'h-11 px-2.5 text-xs md:h-8' : 'h-11 px-3 text-sm md:h-9',
+  props.size === 'sm' ? 'h-8 px-2.5 text-xs md:h-8' : 'h-9 px-3 text-sm md:h-9',
   props.label ? '' : 'aspect-square',
   state.value === 'copied' ? 'text-success' : '',
   state.value === 'failed' ? 'text-danger' : '',

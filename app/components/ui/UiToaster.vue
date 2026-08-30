@@ -71,7 +71,7 @@ const TONES: Record<ToastType, string> = {
                   v-for="(action, index) in toast.actions"
                   :key="`${toast.id}-${index}`"
                   type="button"
-                  class="h-11 rounded-control px-3 text-sm font-medium text-muted transition-colors hover:bg-hover hover:text-ink active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:px-2.5 md:text-xs"
+                  class="h-9 rounded-control px-3 text-sm font-medium text-muted transition-colors hover:bg-hover hover:text-ink active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-9 md:px-2.5 md:text-xs"
                   @click="action.onClick()"
                 >
                   {{ action.label }}

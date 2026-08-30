@@ -144,7 +144,7 @@ function onKeydown(event: KeyboardEvent) {
     v-else
     ref="displayEl"
     type="button"
-    class="inline-flex min-h-11 w-full cursor-text items-center rounded-control px-1.5 text-left transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:py-0.5"
+    class="inline-flex min-h-12 w-full cursor-text items-center rounded-control px-1.5 text-left text-base transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:py-1 md:text-sm"
     :title="'Клікніть, щоб редагувати'"
     :aria-label="`${ariaLabel}: ${displayText}`"
     @click="startEdit"

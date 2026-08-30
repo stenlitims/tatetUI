@@ -17,6 +17,16 @@ order: 11
 ::component-preview{name="textarea-autoresize" stage="min-h-48"}
 ::
 
+## Розміри
+
+`sm` — швидкий пошук чи коментар, `md` — типовий, `lg` — головне поле
+сторінки. На мобільному текст 16px — iOS Safari не зумує сторінку при
+фокусі, а висота росте з контентом (`min-h`), повертаючись до щільних
+паддінгів на `md:`.
+
+::component-preview{name="textarea-sizes"}
+::
+
 ## API
 
 ::component-api

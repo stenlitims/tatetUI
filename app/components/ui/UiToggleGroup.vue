@@ -14,7 +14,7 @@ const props = withDefaults(
     modelValue?: string | number
     /** Доступна назва групи. ОБОВ'ЯЗКОВА, якщо поруч немає видимого лейбла. */
     ariaLabel?: string
-    /** Висота кнопок. На мобільному кожен розмір вищий за десктопний. */
+    /** Висота сегментів. На дотику точність дає невидима зона 45×45. */
     size?: 'sm' | 'md'
     /** Розтягнути сегменти на всю ширину контейнера. */
     block?: boolean
@@ -100,7 +100,12 @@ const trackClass = computed(() => [
 
 const segmentClass = (option: ToggleOption) => [
   'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[calc(var(--radius-control)_-_0.125rem)] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-  props.size === 'sm' ? 'h-8 px-2.5 text-xs md:h-7' : 'h-11 px-3.5 text-sm md:h-8',
+  // На мобільному сегменти лишаються компактними (sm 8 / md 9), зону дотику
+  // 45×45 кожному дає pointer-coarse:after: — той самий патерн, що в
+  // UiButton. Раніше md здувався до h-11, і сегментний перемикач вище за
+  // поле, у якому він стоїть.
+  props.size === 'sm' ? 'h-8 px-2.5 text-xs md:h-7' : 'h-9 px-3.5 text-sm md:h-8',
+  'pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[\'\'] pointer-coarse:after:h-12 pointer-coarse:after:w-12',
   props.block ? 'flex-1' : '',
   option.value === props.modelValue
     ? 'bg-card text-ink shadow-card'

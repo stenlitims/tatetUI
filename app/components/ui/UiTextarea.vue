@@ -8,6 +8,12 @@ const props = withDefaults(
     modelValue?: string | null
     label?: string
     placeholder?: string
+    /**
+     * Щільність поля: `sm` — пошук/коментар, `md` — типовий, `lg` —
+     * головне поле сторінки. Висота задана мінімальною (поле росте
+     * рядками); на мобільному текст 16px — без авто-зуму iOS.
+     */
+    size?: 'sm' | 'md' | 'lg'
     /** Кількість видимих рядків у згорнутому стані. */
     rows?: number
     disabled?: boolean
@@ -42,7 +48,7 @@ const props = withDefaults(
     id?: string
     name?: string
   }>(),
-  { rows: 4, maxRows: 12, showCount: false },
+  { rows: 4, size: 'md', maxRows: 12, showCount: false },
 )
 
 const emit = defineEmits<{
@@ -77,9 +83,22 @@ const describedBy = computed(() => {
   return undefined
 })
 
+/*
+ * Розмір — як у решти полів контракту (uiFieldStyles), але висота тут
+ * задана мінімальною: textarea росте рядками, а `rows=4` з h-12
+ * конфліктував би з autoresize. `sm` — для швидкого пошуку й коментарів,
+ * `md` — типовий, `lg` — головне поле сторінки.
+ */
+const sizeClasses: Record<'sm' | 'md' | 'lg', string> = {
+  sm: 'min-h-9 px-2.5 py-1.5 text-base md:py-1 md:text-xs',
+  md: 'min-h-11 px-3 py-2.5 text-base md:py-2 md:text-sm',
+  lg: 'min-h-13 px-3.5 py-3 text-base md:py-2.5 md:text-base',
+}
+
 const classes = computed(() => [
-  'w-full rounded-control border bg-input px-3 py-2 text-base text-ink placeholder:text-muted',
-  'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:text-sm',
+  'w-full rounded-control border bg-input text-ink placeholder:text-muted',
+  'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  sizeClasses[props.size],
   hasError.value ? 'border-danger focus-visible:ring-danger' : 'border-line focus-visible:border-accent-solid',
   props.disabled ? 'cursor-not-allowed opacity-50' : '',
   props.autoresize ? 'resize-none overflow-y-auto scrollbar-thin' : 'resize-y',

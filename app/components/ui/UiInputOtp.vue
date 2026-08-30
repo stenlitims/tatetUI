@@ -118,7 +118,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
         v-for="(cell, index) in cells"
         :key="index"
         aria-hidden="true"
-        class="flex size-11 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-colors md:size-10"
+        class="flex size-12 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-colors md:size-10"
         :class="error ? 'border-danger' : 'border-line'"
       >
         {{ cell ? (mask ? '•' : cell) : '' }}

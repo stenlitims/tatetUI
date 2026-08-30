@@ -196,7 +196,7 @@ function onRowActivate(row: FlatRow) {
       :aria-expanded="row.hasChildren ? row.expanded : undefined"
       :aria-selected="selectable ? row.selected : undefined"
       :aria-disabled="row.node.disabled || undefined"
-      class="flex h-11 cursor-pointer select-none items-center gap-1.5 pr-2 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:h-9"
+      class="flex h-10 cursor-pointer select-none items-center gap-1.5 pr-2 text-base transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset md:h-9 md:text-sm"
       :class="[
         row.selected ? 'bg-primary-50 font-medium text-accent' : 'text-ink hover:bg-hover',
         row.node.disabled ? 'pointer-events-none opacity-50' : '',

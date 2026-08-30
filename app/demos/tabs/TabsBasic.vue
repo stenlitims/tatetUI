@@ -34,6 +34,22 @@ const last = ref('—')
       <template #panel-cozy><p class="text-sm text-muted">Список із повітрям.</p></template>
     </UiTabs>
 
+    <div class="rounded-card border border-line bg-card p-3">
+      <UiTabs
+        size="sm"
+        aria-label="Секції картки"
+        :tabs="[
+          { id: 'meta', label: 'Мета' },
+          { id: 'files', label: 'Файли' },
+          { id: 'activity', label: 'Активність' },
+        ]"
+      >
+        <template #panel-meta><p class="text-sm text-muted">Метадані запису.</p></template>
+        <template #panel-files><p class="text-sm text-muted">Прикріплені файли.</p></template>
+        <template #panel-activity><p class="text-sm text-muted">Історія змін.</p></template>
+      </UiTabs>
+    </div>
+
     <p class="text-xs text-muted">Остання зміна: {{ last }}</p>
   </div>
 </template>
