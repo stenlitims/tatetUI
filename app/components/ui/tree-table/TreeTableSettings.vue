@@ -44,6 +44,10 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:headers': [value: SettingsColumn[]]
   'update:density': [value: 'sm' | 'md']
+  /** Розгорнути всі гілки дерева. */
+  expandAll: []
+  /** Згорнути всі гілки дерева. */
+  collapseAll: []
   reset: []
 }>()
 
@@ -232,7 +236,9 @@ function showAll() {
               :aria-label="`Перемістити «${label(header)}» вище`"
               @click="move(index, -1)"
             >
-              ↑
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 19V5m0 0-6 6m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
             <button
               type="button"
@@ -241,20 +247,42 @@ function showAll() {
               :aria-label="`Перемістити «${label(header)}» нижче`"
               @click="move(index, 1)"
             >
-              ↓
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M12 5v14m0 0 6-6m-6 6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
           </div>
 
           <input
             v-if="!header.flex"
             type="number"
-            class="w-16 shrink-0 rounded-control border border-line bg-input px-1.5 py-1 text-right text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="w-16 shrink-0 rounded-control border border-line bg-input px-1.5 py-1 text-right text-xs tabular-nums text-ink transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
             :value="header.width"
             :min="40"
             :max="800"
             aria-label="Ширина колонки, px"
             @change="setWidth(header, ($event.target as HTMLInputElement).value)"
           />
+        </div>
+      </div>
+
+      <div class="border-t border-line px-3 py-2">
+        <p class="mb-1.5 text-xs font-medium text-muted">Гілки</p>
+        <div class="flex gap-1">
+          <button
+            type="button"
+            class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            @click="emit('expandAll')"
+          >
+            Розгорнути всі
+          </button>
+          <button
+            type="button"
+            class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            @click="emit('collapseAll')"
+          >
+            Згорнути всі
+          </button>
         </div>
       </div>
 

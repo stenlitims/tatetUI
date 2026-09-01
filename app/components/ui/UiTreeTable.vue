@@ -398,8 +398,10 @@ function reconcile(incoming: TreeTableHeader[]) {
 // tableId у джерелах watch обов'язковий: його часто передають динамічно
 // (`shop-${id}`) при сталих headers — без цього наступна сутність
 // відкривалася б із розкладкою попередньої.
+// props.density теж у джерелах: споживач міняє щільність згори, а
+// reconcile без цього перечитував би її лише разом зі зміною колонок.
 watch(
-  [() => props.headers, () => props.tableId, isMounted],
+  [() => props.headers, () => props.tableId, () => props.density, isMounted],
   ([incoming]) => reconcile(incoming as TreeTableHeader[]),
   { immediate: true, deep: true },
 )
@@ -436,12 +438,20 @@ function persistExpanded() {
  * вигравав props, збережене відкривалося б і миттєво закривалося на
  * кожному переході, тобто ключ був би записаний, але не прочитаний.
  */
-watch([() => props.tableId, isMounted], () => {
-  if (!isMounted.value || !props.tableId) return
-  const stored = readStorage(expandedKey())
-  if (!Array.isArray(stored) || !stored.length) return
-  expandedIds.value = new Set(stored as SelectionKey[])
-  emitExpanded()
+watch([() => props.tableId, isMounted], ([tableId], [previousId]) => {
+  if (!isMounted.value) return
+  const stored = tableId ? readStorage(expandedKey()) : null
+  if (Array.isArray(stored) && stored.length) {
+    expandedIds.value = new Set(stored as SelectionKey[])
+    emitExpanded()
+    return
+  }
+  // tableId змінився (`shop-1` → `shop-2`), а збереженого для нової
+  // сутності немає: гілки попередньої не мають лишатися відкритими.
+  if (previousId !== undefined && previousId !== tableId) {
+    expandedIds.value = new Set(props.expanded)
+    emitExpanded()
+  }
 })
 
 function setExpanded(row: TreeRow<T>, next: boolean, silent = false) {
@@ -655,6 +665,17 @@ function measureCards() {
 }
 
 const canScrollLeft = computed(() => scrollLeft.value > 1)
+
+/*
+ * Зсув закріпленої колонки ієрархії: за колонкою прапорців вона стоїть
+ * ДРУГОЮ, і left-0 накривав би прапорці при першій же горизонтальній
+ * прокрутці. Тож прапорці теж закріплені на 0, а дерево — одразу за ними.
+ */
+const treeStickyStyle = computed(() =>
+  props.stickyTreeColumn ? { left: `${props.selectable ? SELECTION_COLUMN_WIDTH : 0}px` } : undefined,
+)
+const isTreeSticky = (header: TreeTableHeader) =>
+  header.value === treeColumnValue.value && props.stickyTreeColumn
 const canScrollRight = computed(
   () => tableMinWidth.value - viewportWidth.value - scrollLeft.value > 1,
 )
@@ -774,7 +795,68 @@ function focusRow(index: number) {
   void nextTick(() => rowEls.get(row.id)?.focus({ preventScroll: true }))
 }
 
+/*
+ * Пошук набором: літери переводять фокус на наступний рядок, чий підпис у
+ * колонці ієрархії починається з набраного (APG treegrid). Буфер живе
+ * 600 мс, тож «ан» знаходить «Аналітика», а не два різні рядки на «а» і
+ * «н».
+ */
+let typeahead = ''
+let typeaheadTimer: ReturnType<typeof setTimeout> | undefined
+
+function onTypeahead(row: TreeRow<T>, key: string) {
+  if (typeaheadTimer) clearTimeout(typeaheadTimer)
+  typeahead += key.toLocaleLowerCase('uk')
+  typeaheadTimer = setTimeout(() => (typeahead = ''), 600)
+
+  const rows = flatRows.value
+  const total = rows.length
+  // Одна літера — шукаємо з НАСТУПНОГО рядка (повторне натискання
+  // циклює збіги); довший префікс — з поточного, бо він уточнює.
+  const startAt = typeahead.length > 1 ? row.index : row.index + 1
+  for (let step = 0; step < total; step++) {
+    const index = (startAt + step) % total
+    const label = displayValue(rows[index]!.item, treeColumnValue.value).toLocaleLowerCase('uk')
+    if (label.startsWith(typeahead)) {
+      focusRow(index)
+      return
+    }
+  }
+}
+
+onBeforeUnmount(() => {
+  if (typeaheadTimer) clearTimeout(typeaheadTimer)
+})
+
 function onRowKeydown(event: KeyboardEvent, row: TreeRow<T>) {
+  /*
+   * Клавіші з вкладених контролів — не команди рядка.
+   *
+   * Слот комірки може містити кнопку чи поле. Без цієї перевірки Enter
+   * на кнопці «Видалити» активував рядок, а сам клік гасився через
+   * preventDefault; у полі вводу стрілки рухали рядки замість каретки.
+   * Прапорець виділення — виняток: стрілки з нього мають рухати рядки,
+   * а Space він обробляє сам (нативно), і toggleRow приходить через
+   * update:modelValue.
+   */
+  const target = event.target as HTMLElement
+  if (target !== event.currentTarget) {
+    const control = target.closest<HTMLElement>(
+      'button, a[href], input, select, textarea, [contenteditable]:not([contenteditable="false"])',
+    )
+    if (control) {
+      const tag = control.tagName
+      const type = (control as HTMLInputElement).type
+      const editsText =
+        tag === 'TEXTAREA' ||
+        tag === 'SELECT' ||
+        control.isContentEditable ||
+        (tag === 'INPUT' && type !== 'checkbox' && type !== 'radio')
+      if (editsText) return
+      if (event.key === 'Enter' || event.key === ' ' || event.key.length === 1) return
+    }
+  }
+
   const last = flatRows.value.length - 1
   const page = Math.max(1, Math.floor(viewportHeight.value / rowHeightPx.value) - 1)
 
@@ -828,6 +910,12 @@ function onRowKeydown(event: KeyboardEvent, row: TreeRow<T>) {
       event.preventDefault()
       if (props.selectable) toggleRow(row, !rowSelection(row).checked)
       else activate(row)
+      return
+    default:
+      if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault()
+        onTypeahead(row, event.key)
+      }
   }
 }
 
@@ -890,10 +978,30 @@ const headerSelection = computed(() =>
   selectionState(allSelectableKeys.value, selectedSet.value),
 )
 
-function rowSelection(row: TreeRow<T>) {
+const NO_SELECTION = { checked: false, indeterminate: false } as const
+
+/*
+ * Стан прапорця рахується ОДИН раз на видимий рядок, а не на кожне
+ * звернення з шаблону. Шаблон питає його чотири рази на рядок (клас,
+ * aria-selected, галочка, indeterminate), а branchSelection проходить
+ * усіх нащадків — для кореня з десятьма тисячами вузлів це чотири обходи
+ * на кожен рендер кожного видимого рядка.
+ */
+const selectionByRow = computed(() => {
+  const map = new Map<SelectionKey, { checked: boolean; indeterminate: boolean }>()
   const index = selectionIndex.value
-  if (!index) return { checked: false, indeterminate: false }
-  return branchSelection(index, row.id, selectedSet.value)
+  if (!index) return map
+  for (const row of visibleRows.value) map.set(row.id, branchSelection(index, row.id, selectedSet.value))
+  for (const row of visibleCards.value) {
+    if (!map.has(row.id)) map.set(row.id, branchSelection(index, row.id, selectedSet.value))
+  }
+  return map
+})
+
+function rowSelection(row: TreeRow<T>): { checked: boolean; indeterminate: boolean } {
+  const index = selectionIndex.value
+  if (!index) return NO_SELECTION
+  return selectionByRow.value.get(row.id) ?? branchSelection(index, row.id, selectedSet.value)
 }
 
 function toggleAll(next: boolean) {
@@ -1150,6 +1258,8 @@ defineExpose({
         :pinned="treeColumnValue"
         @update:headers="onSettingsHeaders"
         @update:density="onSettingsDensity"
+        @expand-all="expandAll"
+        @collapse-all="collapseAll"
         @reset="resetAll"
       />
     </div>
@@ -1203,7 +1313,8 @@ defineExpose({
               <th
                 v-if="selectable"
                 scope="col"
-                class="sticky top-0 z-20 border-b border-line bg-subtle px-2 py-2"
+                class="sticky top-0 border-b border-line bg-subtle px-2 py-2"
+                :class="stickyTreeColumn ? 'left-0 z-30' : 'z-20'"
               >
                 <UiCheckbox
                   :model-value="headerSelection === 'all'"
@@ -1225,10 +1336,10 @@ defineExpose({
                 :class="[
                   densityCell,
                   alignClass(header),
-                  header.value === treeColumnValue && stickyTreeColumn
-                    ? 'sticky left-0 top-0 z-30'
-                    : 'sticky top-0 z-20',
+                  isTreeSticky(header) ? 'sticky top-0 z-30' : 'sticky top-0 z-20',
+                  isTreeSticky(header) && canScrollLeft ? 'ui-tree-table-sticky-edge' : '',
                 ]"
+                :style="isTreeSticky(header) ? treeStickyStyle : undefined"
               >
                 <slot :name="`header-${header.value}`" :header="header">
                   <button
@@ -1355,7 +1466,7 @@ defineExpose({
                 <td
                   v-if="selectable"
                   class="relative bg-inherit px-2"
-                  :class="ROW_SEPARATOR"
+                  :class="[ROW_SEPARATOR, stickyTreeColumn ? 'sticky left-0 z-10' : '']"
                   role="gridcell"
                   @click.stop
                   @pointerdown="pendingShift = $event.shiftKey"
@@ -1381,8 +1492,10 @@ defineExpose({
                   :class="[
                     densityCell,
                     ROW_SEPARATOR,
-                    header.value === treeColumnValue && stickyTreeColumn ? 'sticky left-0 z-10' : '',
+                    isTreeSticky(header) ? 'sticky z-10' : '',
+                    isTreeSticky(header) && canScrollLeft ? 'ui-tree-table-sticky-edge' : '',
                   ]"
+                  :style="isTreeSticky(header) ? treeStickyStyle : undefined"
                 >
                   <!-- Висота задається ТУТ, а не на <tr>: height на рядку
                        таблиці — це мінімум, і будь-який вміст слота
@@ -1558,6 +1671,24 @@ defineExpose({
         </table>
       </div>
 
+      <!-- Оверлей оновлення: дані вже є, але йде повторний запит. Заміняти
+           їх скелетоном було б гірше — дерево блимало б на кожному
+           сортуванні чи фільтрі, а розгорнуті гілки «стрибали» б. -->
+      <div
+        v-if="loading && flatRows.length > 0"
+        class="absolute inset-0 items-start justify-center rounded-card bg-card/60 pt-12 backdrop-blur-[1px]"
+        :class="mobileCards ? 'hidden md:flex' : 'flex'"
+        aria-hidden="true"
+      >
+        <span class="inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs text-muted shadow-card">
+          <svg class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle class="opacity-30" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </svg>
+          Оновлення…
+        </span>
+      </div>
+
       <div
         v-if="canScrollLeft"
         class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-card to-transparent"
@@ -1711,3 +1842,15 @@ defineExpose({
     </div>
   </div>
 </template>
+
+<style scoped>
+/*
+ * Край закріпленої колонки під час горизонтальної прокрутки: тінь каже,
+ * що решта колонок їде ПІД неї. Без тіні стик двох однакових білих
+ * поверхонь невидимий, і колонки просто «зникають» під деревом.
+ */
+.ui-tree-table-sticky-edge {
+  box-shadow: 4px 0 8px -4px color-mix(in oklab, var(--ink) 18%, transparent);
+  clip-path: inset(0 -12px 0 0);
+}
+</style>

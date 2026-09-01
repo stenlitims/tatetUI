@@ -405,7 +405,7 @@ describe('mergeColumnSettings', () => {
 /* ------------------------------------------------------------------ */
 
 import { afterEach, beforeAll } from 'vitest'
-import { nextTick } from 'vue'
+import { h, nextTick } from 'vue'
 import UiTreeTable from '~/components/ui/UiTreeTable.vue'
 import { mountComponent } from './helpers/mountComponent'
 
@@ -724,5 +724,72 @@ describe('UiTreeTable: ліниве завантаження', () => {
       hasChildren: (item: Node) => item.branch ?? false,
     })
     expect(rows()[0]!.getAttribute('aria-busy')).toBe('true')
+  })
+})
+
+describe('UiTreeTable: пошук набором і вкладені контроли', () => {
+  const press = (el: HTMLElement, key: string) =>
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }))
+
+  it('літера переводить фокус на наступний рядок із таким початком підпису', async () => {
+    const items: Node[] = [
+      { id: 1, name: 'Аналітика', items: 0 },
+      { id: 2, name: 'Довідка', items: 0 },
+      { id: 3, name: 'Архів', items: 0 },
+    ]
+    mounted = await mountComponent(UiTreeTable, { headers, items })
+    press(rows()[0]!, 'а')
+    await nextTick()
+    await nextTick()
+    // З «Аналітики» одна «а» веде до НАСТУПНОГО збігу, а не лишається на місці.
+    expect(document.activeElement).toBe(rows()[2])
+  })
+
+  it('Enter на кнопці в слоті комірки не перехоплюється рядком', async () => {
+    let rowClicks = 0
+    mounted = await mountComponent(
+      UiTreeTable,
+      { headers, items: makeTree(1, 0), rowClickable: true, onRowClick: () => (rowClicks += 1) },
+      { 'cell-items': () => h('button', { type: 'button' }, 'Дія') },
+    )
+    const button = host().querySelector<HTMLButtonElement>('tbody button')!
+    const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+    button.dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(rowClicks).toBe(0)
+
+    // А з самого рядка Enter активує його, як і раніше.
+    press(rows()[0]!, 'Enter')
+    expect(rowClicks).toBe(1)
+  })
+})
+
+describe('UiTreeTable: закріплені колонки й оверлей', () => {
+  it('з прапорцями колонка ієрархії закріплена за ними, а не поверх них', async () => {
+    mounted = await mountComponent(UiTreeTable, {
+      headers, items: makeTree(1, 0), selectable: true, stickyTreeColumn: true,
+    })
+    const cells = [...rows()[0]!.querySelectorAll<HTMLElement>('td')]
+    expect(cells[0]!.className).toContain('sticky')
+    expect(cells[0]!.className).toContain('left-0')
+    expect(cells[1]!.className).toContain('sticky')
+    expect(cells[1]!.style.left).toBe('44px')
+    const th = host().querySelector<HTMLElement>('thead th[role], thead th[aria-sort]')!
+    expect(th.style.left).toBe('44px')
+  })
+
+  it('loading з наявними даними показує оверлей, а не скелетон', async () => {
+    mounted = await mountComponent(UiTreeTable, { headers, items: makeTree(2, 0), loading: true })
+    expect(rows()).toHaveLength(2)
+    expect(host().textContent).toContain('Оновлення…')
+    expect(host().querySelector('table')?.getAttribute('aria-busy')).toBe('true')
+  })
+
+  it('зміна density згори перераховує висоту рядка', async () => {
+    mounted = await mountComponent(UiTreeTable, { headers, items: makeTree(1, 0), density: 'md' })
+    const cell = () => rows()[0]!.querySelector<HTMLElement>('td > div')!
+    expect(cell().style.height).toBe('36px')
+    await mounted.update({ density: 'sm' })
+    expect(cell().style.height).toBe('30px')
   })
 })
