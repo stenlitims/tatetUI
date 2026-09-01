@@ -793,3 +793,74 @@ describe('UiTreeTable: закріплені колонки й оверлей', (
     expect(cell().style.height).toBe('30px')
   })
 })
+
+describe('UiTreeTable: фокус після згортання, expandAll, хоткеї виділення', () => {
+  const press = (el: HTMLElement, init: KeyboardEventInit) =>
+    el.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init }))
+
+  it('після згортання предка Tab-зупинка переходить до нього, а не на початок', async () => {
+    mounted = await mountComponent(UiTreeTable, { headers, items: makeTree(2, 2), expanded: [2] })
+    // Активний — дитина другого кореня (рядок 2 у плоскому списку).
+    press(rows()[0]!, { key: 'End' })
+    await nextTick()
+    await nextTick()
+    expect(rows()[3]!.tabIndex).toBe(0)
+    // Згортаємо другий корінь кліком по шеврону.
+    const chevron = [...rows()[1]!.querySelectorAll<HTMLElement>('span[aria-hidden="true"]')].find(
+      (el) => el.querySelector('svg'),
+    )!
+    chevron.click()
+    await nextTick()
+    expect(rows()).toHaveLength(2)
+    expect(rows()[1]!.tabIndex).toBe(0)
+    expect(rows()[0]!.tabIndex).toBe(-1)
+  })
+
+  it('«Розгорнути всі» з меню віддає expand з loaded: false для лінивих гілок', async () => {
+    const expands: Array<{ id: string | number; loaded: boolean }> = []
+    const items: Node[] = [
+      { id: 1, name: 'Ліниво', items: 0, childsCount: 2 },
+      { id: 2, name: 'Завантажено', items: 0, childsCount: 1, children: [{ id: 21, name: 'Дитина', items: 0, childsCount: 0 }] },
+    ]
+    mounted = await mountComponent(UiTreeTable, {
+      headers,
+      items,
+      tableId: 'lazy-all',
+      hasChildren: (item: Node) => (item.childsCount as number) > 0,
+      onExpand: (payload: { id: string | number; loaded: boolean }) => expands.push(payload),
+    })
+    host().querySelector<HTMLButtonElement>('[aria-label="Налаштування колонок"]')!.click()
+    await nextTick()
+    await nextTick()
+    const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (el) => el.textContent?.trim() === 'Розгорнути всі',
+    )!
+    button.click()
+    await nextTick()
+    expect(expands).toEqual([{ item: items[0], id: 1, loaded: false }])
+    expect(rows()).toHaveLength(3)
+  })
+
+  it('Ctrl+A обирає все, Escape знімає вибір і не спливає', async () => {
+    const updates: (string | number)[][] = []
+    mounted = await mountComponent(UiTreeTable, {
+      headers,
+      items: makeTree(2, 1),
+      selectable: true,
+      selected: [],
+      'onUpdate:selected': (keys: (string | number)[]) => updates.push(keys),
+    })
+    press(rows()[0]!, { key: 'ф', code: 'KeyA', ctrlKey: true })
+    expect(updates.at(-1)).toEqual([1, 1000, 2, 2000])
+
+    await mounted.update({ selected: [1, 1000, 2, 2000] })
+    const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+    let reachedDocument = false
+    const spy = () => (reachedDocument = true)
+    document.addEventListener('keydown', spy)
+    rows()[0]!.dispatchEvent(escape)
+    document.removeEventListener('keydown', spy)
+    expect(updates.at(-1)).toEqual([])
+    expect(reachedDocument).toBe(false)
+  })
+})

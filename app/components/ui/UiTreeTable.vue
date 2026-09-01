@@ -499,10 +499,21 @@ function walkTree(nodes: T[], visit: (item: T) => void) {
 
 function expandAll() {
   const ids = new Set<SelectionKey>()
+  const unloaded: T[] = []
   walkTree(props.items, (item) => {
-    if (nodeHasChildren(item)) ids.add(nodeId(item))
+    if (!nodeHasChildren(item)) return
+    const id = nodeId(item)
+    ids.add(id)
+    if (!expandedIds.value.has(id) && nodeChildren(item) === undefined) unloaded.push(item)
   })
   expandedIds.value = ids
+  /*
+   * Ліниві гілки, відкриті вперше, мають дістати `expand` з loaded: false
+   * — так само, як від кліку. Без цього «розгорнути все» лишало б їх
+   * відкритими й порожніми без жодного сигналу споживачу, і діти не
+   * приїхали б ніколи.
+   */
+  for (const item of unloaded) emit('expand', { item, id: nodeId(item), loaded: false })
   emitExpanded()
   persistExpanded()
 }
@@ -747,18 +758,43 @@ watch([() => flatRows.value.length, rowHeightPx], () => {
  * сама прибирає за собою: Vue викликає її з null при демонтажі рядка.
  */
 const rowEls = new Map<SelectionKey, HTMLElement>()
+const cardEls = new Map<SelectionKey, HTMLElement>()
 
 function setRowEl(id: SelectionKey, el: unknown) {
   if (el) rowEls.set(id, el as HTMLElement)
   else rowEls.delete(id)
 }
 
+function setCardEl(id: SelectionKey, el: unknown) {
+  if (el) cardEls.set(id, el as HTMLElement)
+  else cardEls.delete(id)
+}
+
 const activeId = shallowRef<SelectionKey | null>(null)
 
+/*
+ * Активний рядок зник (згорнули предка кліком по шеврону чи «Згорнути
+ * все», відфільтрували) — Tab-зупинка переходить до НАЙБЛИЖЧОГО видимого
+ * предка, а не на початок списку. Інакше після згортання глибокої гілки
+ * клавіатурний користувач опинявся б на першому корені й шукав місце,
+ * де щойно був, заново.
+ */
 watch(
   flatRows,
-  (rows) => {
-    if (activeId.value !== null && rows.some((row) => row.id === activeId.value)) return
+  (rows, previous) => {
+    const current = activeId.value
+    if (current !== null && rows.some((row) => row.id === current)) return
+    if (current !== null && previous) {
+      let row = previous.find((candidate) => candidate.id === current)
+      while (row && row.parentIndex >= 0) {
+        const parent = previous[row.parentIndex]
+        if (parent && rows.some((candidate) => candidate.id === parent.id)) {
+          activeId.value = parent.id
+          return
+        }
+        row = parent
+      }
+    }
     activeId.value = rows[0]?.id ?? null
   },
   { immediate: true },
@@ -784,15 +820,35 @@ function focusRow(index: number) {
    * синхронно вводить рядок у рендер. Анімації тут теж немає: focus()
    * посеред плавної прокрутки скасовує її, і рядок лишається за кадром.
    */
-  if (isVirtual.value && (index < range.value.start || index > range.value.end)) {
+  // Таблиця прихована (mobileCards нижче md) рівно тоді, коли її вимір —
+  // нуль, а картки при цьому мають висоту. Обидва нулі (середовище без
+  // розкладки, як happy-dom) — не привід іти в картки: там нікого немає.
+  const tableHidden = tableMeasured.value === 0 && (cardMeasured.value ?? 0) > 0
+
+  if (isVirtual.value && !tableHidden && (index < range.value.start || index > range.value.end)) {
     const top = clampScrollTop(index * rowHeightPx.value - (viewportHeight.value - rowHeightPx.value) / 2)
     scrollTop.value = top
     if (scrollEl.value) scrollEl.value.scrollTop = top
   }
 
+  if (isVirtual.value && tableHidden && (index < cardRange.value.start || index > cardRange.value.end)) {
+    const maxTop = Math.max(0, flatRows.value.length * props.cardHeight - cardViewportHeight.value)
+    const top = Math.min(
+      maxTop,
+      Math.max(0, index * props.cardHeight - (cardViewportHeight.value - props.cardHeight) / 2),
+    )
+    cardScrollTop.value = top
+    if (cardEl.value) cardEl.value.scrollTop = top
+  }
+
   // preventScroll обов'язковий: без нього браузер сам доскролює до рядка
   // і б'ється з нашим scrollTop — видно як подвійний стрибок.
-  void nextTick(() => rowEls.get(row.id)?.focus({ preventScroll: true }))
+  void nextTick(() => {
+    const target = tableHidden
+      ? (cardEls.get(row.id) ?? rowEls.get(row.id))
+      : (rowEls.get(row.id) ?? cardEls.get(row.id))
+    target?.focus({ preventScroll: true })
+  })
 }
 
 /*
@@ -855,6 +911,22 @@ function onRowKeydown(event: KeyboardEvent, row: TreeRow<T>) {
       if (editsText) return
       if (event.key === 'Enter' || event.key === ' ' || event.key.length === 1) return
     }
+  }
+
+  // Ctrl/Cmd+A — усе дерево, Escape — зняти вибір. `code`, а не `key`:
+  // на українській розкладці key дає «ф», і хоткей не спрацьовував би.
+  if (props.selectable && (event.ctrlKey || event.metaKey) && event.code === 'KeyA') {
+    event.preventDefault()
+    toggleAll(true)
+    return
+  }
+  if (event.key === 'Escape' && props.selectable && props.selected.length) {
+    event.preventDefault()
+    // stopPropagation: інакше той самий Escape закриє ще й модалку, у
+    // якій стоїть таблиця, — а користувач хотів лише зняти вибір.
+    event.stopPropagation()
+    clearSelection()
+    return
   }
 
   const last = flatRows.value.length - 1
@@ -1309,7 +1381,7 @@ defineExpose({
           </colgroup>
 
           <thead>
-            <tr>
+            <tr aria-rowindex="1">
               <th
                 v-if="selectable"
                 scope="col"
@@ -1332,7 +1404,7 @@ defineExpose({
                 scope="col"
                 :aria-sort="ariaSort(header)"
                 :title="header.title"
-                class="relative border-b border-line bg-subtle py-2 font-medium text-muted"
+                class="group/th relative border-b border-line bg-subtle py-2 font-medium text-muted"
                 :class="[
                   densityCell,
                   alignClass(header),
@@ -1378,10 +1450,13 @@ defineExpose({
 
                 <!-- Хват ресайзу. touch-none обов'язковий: без нього
                      браузер забирає горизонтальний жест собі. -->
+                <!-- Хват проявляється на наведенні на заголовок: інакше про
+                     ресайз можна дізнатися лише випадково, наштовхнувшись
+                     курсором на невидиму смужку в 6px. -->
                 <span
                   v-if="isResizable(header)"
-                  class="absolute inset-y-0 right-0 w-1.5 cursor-col-resize touch-none hover:bg-accent/40"
-                  :class="resizing?.value === header.value ? 'bg-accent/60' : ''"
+                  class="absolute inset-y-1.5 right-0 w-1 rounded-full bg-line-strong opacity-0 transition-opacity cursor-col-resize touch-none group-hover/th:opacity-100 hover:bg-accent-solid"
+                  :class="resizing?.value === header.value ? 'opacity-100 bg-accent-solid' : ''"
                   @pointerdown="onResizeStart($event, header)"
                   @pointermove="onResizeMove"
                   @pointerup="onResizeEnd"
@@ -1689,8 +1764,10 @@ defineExpose({
         </span>
       </div>
 
+      <!-- Із закріпленою колонкою лівий градієнт зайвий: він лягав би на
+           саму колонку й прапорці в ній, а край позначає тінь колонки. -->
       <div
-        v-if="canScrollLeft"
+        v-if="canScrollLeft && !stickyTreeColumn"
         class="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-card to-transparent"
         :class="mobileCards ? 'hidden md:block' : ''"
         aria-hidden="true"
@@ -1731,7 +1808,9 @@ defineExpose({
       <div
         v-for="row in showEmpty ? [] : visibleCards"
         :key="`card-${row.id}`"
+        :ref="(el) => setCardEl(row.id, el)"
         role="treeitem"
+        :tabindex="row.id === activeId ? 0 : -1"
         :aria-level="row.depth + 1"
         :aria-posinset="row.posinset"
         :aria-setsize="row.setsize"
@@ -1739,7 +1818,8 @@ defineExpose({
         :aria-selected="selectable ? rowSelection(row).checked : undefined"
         :aria-busy="loadingSet.has(row.id) || undefined"
         :style="{ height: `${cardHeight}px`, ...cardIndent(row.depth) }"
-        class="pb-2"
+        class="rounded-card pb-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        @keydown="onRowKeydown($event, row)"
       >
         <!--
           Проміжок між картками — паддінг УСЕРЕДИНІ фіксованої висоти, а
