@@ -1,0 +1,420 @@
+/**
+ * Чиста арифметика дерева-таблиці.
+ *
+ * Винесено з UiTreeTable з тієї ж причини, що й `tableSelection`: «які
+ * рядки видно», «який діапазон рендериться» і «що станеться з набором
+ * ключів» — три речі, які мусять перевірятись без DOM. Віртуалізація
+ * ламається саме на арифметиці, а очима зсув на пів екрана видно лише
+ * тоді, коли до нього доскролили.
+ */
+
+import { selectionState, subtractKeys, unionKeys, type SelectionKey } from './tableSelection'
+
+/* ---------------------------------------------------------------- */
+/*  Плоский зріз дерева                                             */
+/* ---------------------------------------------------------------- */
+
+export interface TreeRow<T> {
+  item: T
+  id: SelectionKey
+  /** Позиція в плоскому списку — вона ж індекс вікна й клавіатури. */
+  index: number
+  depth: number
+  /**
+   * Індекс батька в ПЛОСКОМУ списку, -1 для кореня.
+   *
+   * Порахований тут, щоб ← працювала за O(1). Пошук батька по id на
+   * кожне натискання — це скан усього списку щокадру при автоповторі.
+   */
+  parentIndex: number
+  parentId: SelectionKey | null
+  hasChildren: boolean
+  expanded: boolean
+  /** Для КОЖНОГО рівня предків — чи є в того предка наступний сусід. */
+  guides: boolean[]
+  /** Чи є наступний сусід у самого рядка — нижня половина «коліна». */
+  hasNextSibling: boolean
+  /** 1-based позиція серед СУСІДІВ — `aria-posinset`. */
+  posinset: number
+  /** Кількість сусідів — `aria-setsize`. */
+  setsize: number
+}
+
+export interface FlattenOptions<T> {
+  getId: (item: T) => SelectionKey
+  getChildren: (item: T) => T[] | undefined
+  hasChildren: (item: T) => boolean
+  isExpanded: (id: SelectionKey) => boolean
+  /** Порівняння СУСІДІВ. `null` — лишити порядок джерела. */
+  compare?: ((a: T, b: T) => number) | null
+}
+
+/**
+ * Дерево → список видимих рядків. Гілки без розгортання не заходять у
+ * дітей, тож у шаблоні лишається один `v-for`.
+ */
+export function flattenTree<T>(roots: T[], options: FlattenOptions<T>): TreeRow<T>[] {
+  const rows: TreeRow<T>[] = []
+  const compare = options.compare ?? null
+
+  const walk = (
+    nodes: T[],
+    depth: number,
+    parentIndex: number,
+    parentId: SelectionKey | null,
+    guides: boolean[],
+  ) => {
+    /*
+     * Копія: сортування на місці мутувало б масив, переданий ззовні.
+     *
+     * Сортуються ЛИШЕ сусіди. Ієрархія структурно не може сплющитись,
+     * бо walk сортує рівно той масив, у який зараз спускається, і
+     * ніколи не бачить двох рівнів одночасно.
+     */
+    const ordered = compare ? [...nodes].sort(compare) : nodes
+    const setsize = ordered.length
+
+    for (let i = 0; i < setsize; i++) {
+      const item = ordered[i]!
+      const id = options.getId(item)
+      const hasChildren = options.hasChildren(item)
+      /*
+       * expanded ВИВОДИТЬСЯ, а не зберігається.
+       *
+       * Гілка, яка після завантаження виявилась порожньою, тихо стає
+       * листком і не тягне за собою aria-expanded. Тим самим рухом
+       * знешкоджуються застарілі id після оновлення даних: чистити
+       * набір розгорнутих не треба — на вузли, яких уже немає, він не
+       * впливає, а чистка воювала б із v-model:expanded.
+       */
+      const expanded = hasChildren && options.isExpanded(id)
+      const hasNextSibling = i < setsize - 1
+      const index = rows.length
+
+      rows.push({
+        item,
+        id,
+        index,
+        depth,
+        parentIndex,
+        parentId,
+        hasChildren,
+        expanded,
+        guides,
+        hasNextSibling,
+        posinset: i + 1,
+        setsize,
+      })
+
+      if (!expanded) continue
+      const children = options.getChildren(item)
+      /*
+       * `undefined` і `[]` — РІЗНІ стани, і саме тут різниця важить.
+       * `undefined` — діти ще їдуть (ліниве завантаження), рядок
+       * лишається зайнятим; `[]` — гілка справді порожня. Рядків нуль в
+       * обох випадках, але перший ще чекає на споживача.
+       */
+      if (!children?.length) continue
+      // guides спільний за посиланням для всіх дітей вузла: він лише
+      // читається, тож це один масив на гілку, а не на рядок.
+      walk(children, depth + 1, index, id, [...guides, hasNextSibling])
+    }
+  }
+
+  walk(roots, 0, -1, null, [])
+  return rows
+}
+
+/* ---------------------------------------------------------------- */
+/*  Вікно віртуалізації                                             */
+/* ---------------------------------------------------------------- */
+
+export interface WindowRange {
+  /** Перший рендерений рядок. */
+  start: number
+  /** Останній рендерений рядок включно. `-1`, коли рядків немає. */
+  end: number
+  /** Висота верхньої розпірки в пікселях. */
+  topPad: number
+  /** Висота нижньої розпірки в пікселях. */
+  bottomPad: number
+}
+
+/**
+ * Діапазон рядків для рендеру плюс висоти розпірок.
+ *
+ * Інваріант, який тримає всю віртуалізацію:
+ * `topPad + (end - start + 1) * rowHeight + bottomPad === total * rowHeight`.
+ * Порушити його — означає зсунути хвіст списку, і саме тому це чиста
+ * функція з тестом, а не вираз усередині шаблону.
+ */
+export function windowRange(
+  total: number,
+  rowHeight: number,
+  scrollTop: number,
+  viewport: number,
+  overscan: number,
+): WindowRange {
+  if (!(total > 0)) return { start: 0, end: -1, topPad: 0, bottomPad: 0 }
+
+  const height = Number.isFinite(rowHeight) && rowHeight > 0 ? rowHeight : 1
+  const pad = Number.isFinite(overscan) ? Math.max(0, Math.floor(overscan)) : 0
+  const top = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0
+  const view = Number.isFinite(viewport) ? Math.max(0, viewport) : 0
+
+  // Клампимо start зверху теж: позиція скролу може пережити скорочення
+  // набору (згорнули гілку), і тоді start сам по собі вийшов би за хвіст.
+  const start = Math.min(total - 1, Math.max(0, Math.floor(top / height) - pad))
+  const end = Math.min(total - 1, Math.max(start, Math.ceil((top + view) / height) + pad))
+
+  return {
+    start,
+    end,
+    topPad: start * height,
+    bottomPad: Math.max(0, (total - 1 - end) * height),
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/*  Індекс піддерев                                                 */
+/* ---------------------------------------------------------------- */
+
+export interface TreeKeyIndex {
+  /** id → ключі піддерева БЕЗ самого вузла, у порядку обходу. */
+  descendants: Map<SelectionKey, SelectionKey[]>
+  /** id → ключі предків, від найближчого до кореня. */
+  ancestors: Map<SelectionKey, SelectionKey[]>
+  /** Усі ключі дерева в порядку обходу. */
+  all: SelectionKey[]
+}
+
+export interface IndexOptions<T> {
+  getId: (item: T) => SelectionKey
+  getChildren: (item: T) => T[] | undefined
+}
+
+/**
+ * Індекс усього дерева — включно зі згорнутими гілками.
+ *
+ * Каскад виділення і «розгорнути до вузла» питають про вузли, яких зараз
+ * немає на екрані, тож обхід тут повний. Дорого: мемоізуйте в `computed`
+ * і не будуйте взагалі, поки виділення вимкнене.
+ */
+export function indexTree<T>(roots: T[], options: IndexOptions<T>): TreeKeyIndex {
+  const descendants = new Map<SelectionKey, SelectionKey[]>()
+  const ancestors = new Map<SelectionKey, SelectionKey[]>()
+  const all: SelectionKey[] = []
+
+  const walk = (nodes: T[], chain: SelectionKey[]): SelectionKey[] => {
+    const collected: SelectionKey[] = []
+    for (const item of nodes) {
+      const id = options.getId(item)
+      all.push(id)
+      ancestors.set(id, chain)
+      const children = options.getChildren(item)
+      const sub = children?.length ? walk(children, [id, ...chain]) : []
+      descendants.set(id, sub)
+      collected.push(id, ...sub)
+    }
+    return collected
+  }
+
+  walk(roots, [])
+  return { descendants, ancestors, all }
+}
+
+/* ---------------------------------------------------------------- */
+/*  Каскадне виділення                                              */
+/* ---------------------------------------------------------------- */
+
+/** Ключі гілки — сам вузол разом із усіма нащадками. */
+export function branchKeys(
+  index: TreeKeyIndex,
+  id: SelectionKey,
+  canSelect?: (id: SelectionKey) => boolean,
+): SelectionKey[] {
+  const keys = [id, ...(index.descendants.get(id) ?? [])]
+  return canSelect ? keys.filter(canSelect) : keys
+}
+
+/**
+ * Перемикання гілки. Нових примітивів не додає — це `unionKeys` /
+ * `subtractKeys` над ключами піддерева.
+ */
+export function cascadeSelect(
+  current: SelectionKey[],
+  index: TreeKeyIndex,
+  id: SelectionKey,
+  next: boolean,
+  canSelect?: (id: SelectionKey) => boolean,
+): SelectionKey[] {
+  const keys = branchKeys(index, id, canSelect)
+  return next ? unionKeys(current, keys) : subtractKeys(current, keys)
+}
+
+/**
+ * Стан прапорця гілки.
+ *
+ * Асиметрія навмисна: `checked` береться з САМОГО вузла, а не з
+ * `selectionState([id, ...descendants])`. Інакше набір, що прийшов із
+ * сервера з дітьми, але без батька, показував би повністю обрану гілку
+ * як `indeterminate`.
+ */
+export function branchSelection(
+  index: TreeKeyIndex,
+  id: SelectionKey,
+  selected: ReadonlySet<SelectionKey>,
+): { checked: boolean; indeterminate: boolean } {
+  if (selected.has(id)) return { checked: true, indeterminate: false }
+  const descendants = index.descendants.get(id) ?? []
+  return { checked: false, indeterminate: selectionState(descendants, selected) !== 'none' }
+}
+
+/**
+ * Доливає щойно завантажених нащадків до вже позначених гілок.
+ *
+ * Ліниве завантаження робить виділення матеріалізованим не одразу: тека
+ * позначена, а її дітей на той момент ще не було. Без цього кроку
+ * розгортання показало б непозначених дітей під позначеним батьком.
+ *
+ * Ідемпотентна і повертає ВХІДНИЙ масив, коли додавати нічого — тож
+ * виклик у watch можна гасити звичайним порівнянням по посиланню.
+ */
+export function reconcileLazySelection(
+  current: SelectionKey[],
+  index: TreeKeyIndex,
+  canSelect?: (id: SelectionKey) => boolean,
+): SelectionKey[] {
+  const chosen = new Set(current)
+  const add: SelectionKey[] = []
+  for (const id of current) {
+    for (const child of index.descendants.get(id) ?? []) {
+      if (chosen.has(child)) continue
+      if (canSelect && !canSelect(child)) continue
+      chosen.add(child)
+      add.push(child)
+    }
+  }
+  return add.length ? unionKeys(current, add) : current
+}
+
+/* ---------------------------------------------------------------- */
+/*  Колонки                                                         */
+/* ---------------------------------------------------------------- */
+
+export const COLUMN_MIN_WIDTH = 40
+export const COLUMN_MAX_WIDTH = 800
+export const COLUMN_DEFAULT_WIDTH = 120
+
+/**
+ * Порівняння значень комірок.
+ *
+ * Наївні `<` і `>` ставлять «Розділ 10» перед «Розділ 9», а кирилицю
+ * сортують за кодами символів. Порожні значення завжди в кінці,
+ * незалежно від напрямку: рядок без даних не має витісняти заповнені з
+ * початку.
+ */
+export function compareValues(a: unknown, b: unknown, direction: 1 | -1): number {
+  const aEmpty = a === null || a === undefined || a === ''
+  const bEmpty = b === null || b === undefined || b === ''
+  if (aEmpty && bEmpty) return 0
+  if (aEmpty) return 1
+  if (bEmpty) return -1
+
+  if (typeof a === 'number' && typeof b === 'number') return direction * (a - b)
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    return direction * (Number(a) - Number(b))
+  }
+
+  return direction * String(a).localeCompare(String(b), 'uk', {
+    numeric: true,
+    sensitivity: 'base',
+  })
+}
+
+export function clampWidth(width: number): number {
+  if (!Number.isFinite(width)) return COLUMN_DEFAULT_WIDTH
+  return Math.min(COLUMN_MAX_WIDTH, Math.max(COLUMN_MIN_WIDTH, Math.round(width)))
+}
+
+/**
+ * Мінімальна ширина таблиці.
+ *
+ * Ширина flex-колонки входить у мінімум, а не виключається з нього: за
+ * `table-layout: fixed` колонка без width отримує ЗАЛИШОК, і якщо
+ * мінімум дорівнює сумі фіксованих, залишку не лишається — flex-колонка
+ * схлопується в нуль.
+ */
+export function columnsMinWidth(headers: { width?: number }[], selectionWidth: number): number {
+  const columns = headers.reduce((sum, header) => sum + (header.width ?? COLUMN_DEFAULT_WIDTH), 0)
+  return columns + selectionWidth
+}
+
+export interface StoredColumn {
+  value: string
+  width?: number
+  visible?: boolean
+}
+
+/**
+ * Зведення збереженої розкладки зі свіжими колонками.
+ *
+ * Нова колонка вставляється ПІСЛЯ найближчого лівого сусіда, а не в
+ * кінець: інакше колонка, додана через пів року, стрибала б у хвіст у
+ * кожного користувача, який колись міняв порядок.
+ *
+ * `pinned` (колонка ієрархії) завжди виходить першою і видимою — вона
+ * несе відступ, шеврон і напрямні, а збережена розкладка зі старої
+ * версії цілком могла її сховати або відсунути.
+ */
+export function mergeColumnSettings<H extends { value: string; width?: number; visible?: boolean }>(
+  incoming: H[],
+  saved: StoredColumn[] | null,
+  pinned?: string,
+): H[] {
+  const normalize = (header: H, stored?: StoredColumn): H => ({
+    ...header,
+    width: stored?.width ?? header.width ?? COLUMN_DEFAULT_WIDTH,
+    visible: stored?.visible ?? header.visible !== false,
+  })
+
+  let ordered: H[]
+
+  if (!saved) {
+    ordered = incoming.map((header) => normalize(header))
+  } else {
+    const pool = new Map(incoming.map((header) => [header.value, header]))
+    ordered = []
+
+    // Спершу — у збереженому порядку: перевпорядкування користувача живе.
+    for (const stored of saved) {
+      const original = pool.get(stored.value)
+      if (!original) continue
+      ordered.push(normalize(original, stored))
+      pool.delete(stored.value)
+    }
+
+    // Далі — нові колонки, кожна поруч зі своїм сусідом із props.
+    for (let i = 0; i < incoming.length; i++) {
+      const header = incoming[i]!
+      if (!pool.has(header.value)) continue
+      let insertAt = ordered.length
+      for (let j = i - 1; j >= 0; j--) {
+        const previous = ordered.findIndex((h) => h.value === incoming[j]!.value)
+        if (previous !== -1) {
+          insertAt = previous + 1
+          break
+        }
+      }
+      ordered.splice(insertAt, 0, normalize(header))
+      pool.delete(header.value)
+    }
+  }
+
+  if (!pinned) return ordered
+  const at = ordered.findIndex((header) => header.value === pinned)
+  if (at === -1) return ordered
+  const [column] = ordered.splice(at, 1)
+  ordered.unshift({ ...column!, visible: true })
+  return ordered
+}

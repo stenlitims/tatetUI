@@ -92,6 +92,7 @@ export const docsNav: NavGroup[] = [
       { title: 'Timeline', to: '/docs/components/timeline' },
       { title: 'Tree', to: '/docs/components/tree' },
       { title: 'VirtualList', to: '/docs/components/virtual-list' },
+      { title: 'TreeTable', to: '/docs/components/tree-table' },
     ],
   },
   {
