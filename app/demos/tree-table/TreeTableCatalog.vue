@@ -109,7 +109,7 @@ const tree = ref<{
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div class="w-full min-w-0 space-y-3">
     <div class="flex flex-wrap items-center gap-2">
       <UiButton size="sm" variant="outline" @click="tree?.expandAll()">Розгорнути все</UiButton>
       <UiButton size="sm" variant="outline" @click="tree?.collapseAll()">Згорнути все</UiButton>
@@ -137,25 +137,34 @@ const tree = ref<{
       aria-label="Каталог категорій"
     >
       <template #icon="{ hasChildren, expanded: open }">
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <!--
+          Три стани — відкрита тека, закрита тека, аркуш. Контури взяті з
+          Lucide без змін: власноруч домальована «відкрита» тека з
+          прямокутника й трикутника читається як зламана іконка, бо в неї
+          немає перспективи передньої стінки.
+        -->
+        <svg
+          class="h-4 w-4"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
           <path
-            v-if="hasChildren"
-            :d="
-              open
-                ? 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v1H6l-3 8z'
-                : 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z'
-            "
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linejoin="round"
+            v-if="hasChildren && open"
+            d="M6 14l1.45-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.55 6a2 2 0 0 1-1.94 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"
           />
           <path
-            v-else
-            d="M6 3h8l4 4v14H6zM14 3v4h4"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linejoin="round"
+            v-else-if="hasChildren"
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
           />
+          <template v-else>
+            <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+            <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+          </template>
         </svg>
       </template>
 

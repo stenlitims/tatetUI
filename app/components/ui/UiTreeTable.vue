@@ -1,7 +1,6 @@
 <script setup lang="ts" generic="T extends Record<string, unknown>">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import UiCheckbox from './UiCheckbox.vue'
-import UiLoadingDots from './UiLoadingDots.vue'
 import UiSkeleton from './UiSkeleton.vue'
 import TreeTableSettings from './tree-table/TreeTableSettings.vue'
 import { useReducedMotion } from '~/composables/useReducedMotion'
@@ -1098,7 +1097,20 @@ defineExpose({
 </script>
 
 <template>
-  <div :class="{ 'select-none': !!resizing || selectable }">
+  <!--
+    w-full + min-w-0 на корені обов'язкові, а не косметика.
+
+    Таблиця має інлайновий min-width (сума ширин колонок), і горизонтальну
+    прокрутку бере на себе контейнер із overflow-auto. Але у flex- або
+    grid-батька цей корінь стає елементом з min-width: auto, тобто
+    відмовляється стискатись вужче за власний min-content — а той тягнеться
+    саме з min-width таблиці. Контейнер прокрутки при цьому не спрацьовує
+    жодного разу: стискатись нема чому. Виміряно на сторінці документації,
+    де сцена демо — flex із justify-center: корінь ставав ширшим за сцену і
+    вилазив ПОРІВНУ з обох боків, а зовнішній overflow-hidden обрізав і
+    ліву, і праву частину.
+  -->
+  <div class="w-full min-w-0" :class="{ 'select-none': !!resizing || selectable }">
     <!--
       Панель ЗОВНІ контейнера з overflow-auto: усередині нього вона з'їхала
       б горизонтально разом із таблицею і зникла б з очей рівно тоді, коли
@@ -1380,16 +1392,21 @@ defineExpose({
                     class="flex items-center overflow-hidden"
                     :style="{ height: `${rowHeightPx}px` }"
                   >
-                    <!-- Напрямні: по одній колонці 8px на кожен рівень
-                         предків. Вертикаль малюється лише там, де в
-                         предка ще є наступний сусід. -->
+                    <!--
+                      УСІ колонки ієрархії однакової ширини (w-5), і це не
+                      косметика. Коліно займає колонку БАТЬКА, а не власну
+                      додаткову, тож вертикаль дитини лягає рівно під центр
+                      шеврона батька. Коли напрямні були по 8px, коліно 20px,
+                      а шеврон ще 20px, кожен рівень зсувався на пів колонки
+                      — лінії підходили до папок повз них.
+                    -->
                     <span
                       v-for="(line, level) in row.guides"
                       :key="level"
-                      class="relative flex h-full w-2 shrink-0 justify-center"
+                      class="relative h-full w-5 shrink-0"
                       aria-hidden="true"
                     >
-                      <span v-if="line" class="h-full w-px bg-line" />
+                      <span v-if="line" class="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
                     </span>
 
                     <!-- Коліно. Нижня половина — лише за наявності
@@ -1400,11 +1417,19 @@ defineExpose({
                       class="relative h-full w-5 shrink-0"
                       aria-hidden="true"
                     >
-                      <span class="absolute bottom-1/2 left-1/2 top-0 w-px bg-line" />
-                      <span class="absolute left-1/2 top-1/2 h-px w-2.5 bg-line" />
+                      <!--
+                        -translate-x-1/2 на КОЖНІЙ вертикалі обов'язковий.
+                        Без нього left-1/2 ставить на центр колонки лівий
+                        КРАЙ лінії, а не її середину, і вся драбина стоїть
+                        на пів пікселя правіше за шеврони. На екрані 1x це
+                        півпікселя округлюється в сусідній стовпчик — лінія
+                        видимо промахується повз папку.
+                      -->
+                      <span class="absolute bottom-1/2 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
+                      <span class="absolute left-1/2 top-1/2 h-px w-1/2 bg-line" />
                       <span
                         v-if="row.hasNextSibling"
-                        class="absolute bottom-0 left-1/2 top-1/2 w-px bg-line"
+                        class="absolute bottom-0 left-1/2 top-1/2 w-px -translate-x-1/2 bg-line"
                       />
                     </span>
 
@@ -1419,7 +1444,31 @@ defineExpose({
                       aria-hidden="true"
                       @click.stop="toggle(row)"
                     >
-                      <UiLoadingDots v-if="loadingSet.has(row.id)" size="0.2rem" />
+                      <!-- Індикатор рівно на місці шеврона й того ж
+                           розміру: він його ЗАМІНЮЄ, тож будь-який інший
+                           розмір смикає рядок при кожному відкритті. -->
+                      <svg
+                        v-if="loadingSet.has(row.id)"
+                        class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <circle
+                          class="opacity-30"
+                          cx="12"
+                          cy="12"
+                          r="9"
+                          stroke="currentColor"
+                          stroke-width="3"
+                        />
+                        <path
+                          d="M21 12a9 9 0 0 0-9-9"
+                          stroke="currentColor"
+                          stroke-width="3"
+                          stroke-linecap="round"
+                        />
+                      </svg>
                       <svg
                         v-else
                         class="h-3.5 w-3.5 transition-transform"
@@ -1436,7 +1485,24 @@ defineExpose({
                         />
                       </svg>
                     </span>
-                    <span v-else class="w-5 shrink-0" aria-hidden="true" />
+                    <!--
+                      У листка шеврона немає, і горизонталь обривалась за
+                      цілу колонку до вмісту. Продовжуємо її тут — але не
+                      до самого краю: right-1.5 лишає зазор.
+
+                      Зазор обов'язковий саме тому, що іконка — слот, а не
+                      обов'язковий елемент. Коли її не передали, одразу за
+                      цією колонкою починається текст, і лінія впиралася б
+                      у першу літеру. З іконкою той самий зазор теж
+                      доречний — у гілок він уже є, бо шеврон центрований
+                      у своїй колонці.
+                    -->
+                    <span v-else class="relative h-full w-5 shrink-0" aria-hidden="true">
+                      <span
+                        v-if="row.depth > 0"
+                        class="absolute left-0 right-1.5 top-1/2 h-px bg-line"
+                      />
+                    </span>
 
                     <span v-if="$slots.icon" class="mr-1.5 flex shrink-0 items-center text-muted">
                       <slot
@@ -1577,7 +1643,16 @@ defineExpose({
           aria-hidden="true"
           @click.stop="toggle(row)"
         >
-          <UiLoadingDots v-if="loadingSet.has(row.id)" size="0.2rem" />
+          <svg
+            v-if="loadingSet.has(row.id)"
+            class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+          >
+            <circle class="opacity-30" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </svg>
           <svg
             v-else
             class="h-3.5 w-3.5 transition-transform"

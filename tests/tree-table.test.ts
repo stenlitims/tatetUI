@@ -5,6 +5,7 @@ import {
   clampWidth,
   columnsMinWidth,
   compareValues,
+  filterTree,
   flattenTree,
   indexTree,
   mergeColumnSettings,
@@ -80,18 +81,39 @@ describe('flattenTree', () => {
     expect(byId(rows, 12).parentIndex).toBe(0)
   })
 
-  it('guides описують предків, у яких є наступний сусід', () => {
+  it('guides описують колонки ліворуч від коліна, а не предків', () => {
     const rows = flattenTree(tree, options([1, 11]))
-    // 1 має наступного сусіда (2), 11 має наступного сусіда (12) —
-    // отже під 111 малюються обидві вертикалі.
-    expect(byId(rows, 111).guides).toEqual([true, true])
+
+    /*
+     * Довжина guides — рівно `depth - 1`: остання колонка рядка завжди
+     * зайнята коліном. Саме цей інваріант тримає драбину рівною: коліно
+     * дитини стоїть у тій самій колонці, що й шеврон батька.
+     */
+    for (const row of rows) {
+      expect(row.guides.length).toBe(Math.max(0, row.depth - 1))
+    }
+
+    // 111 (глибина 2) має одну колонку ліворуч від коліна — колонку
+    // вузла 1. Лінія в ній триває, бо 11 має наступного сусіда (12).
+    expect(byId(rows, 111).guides).toEqual([true])
     expect(byId(rows, 111).hasNextSibling).toBe(true)
     // 112 — останній серед сусідів: коліно без нижньої половини.
     expect(byId(rows, 112).hasNextSibling).toBe(false)
-    // 12 — останній на своєму рівні, але його предок 1 сусіда ще має.
-    expect(byId(rows, 12).guides).toEqual([true])
+    // 12 і 2 — колонок ліворуч від коліна не мають узагалі.
+    expect(byId(rows, 12).guides).toEqual([])
     expect(byId(rows, 12).hasNextSibling).toBe(false)
     expect(byId(rows, 2).guides).toEqual([])
+  })
+
+  it('лінія триває нижче рядка лише поки в предка лишились діти', () => {
+    // Корінь 1 БЕЗ наступного сусіда, але його дитина 11 сусіда має.
+    const solo = [tree[0]!]
+    const rows = flattenTree(solo, options([1, 11]))
+    // Колонка вузла 1 під рядком 111 має лінію: далі йде 12.
+    expect(byId(rows, 111).guides).toEqual([true])
+    // Під 12 (останньою дитиною) колонка вже порожня — але 12 сам на
+    // глибині 1, тож колонок ліворуч від коліна в нього немає.
+    expect(byId(rows, 12).guides).toEqual([])
   })
 
   it('posinset і setsize рахуються серед СУСІДІВ, а не в усьому списку', () => {
@@ -175,6 +197,52 @@ describe('windowRange', () => {
     const range = windowRange(10, 0, 100, 420, 5)
     expect(Number.isFinite(range.start)).toBe(true)
     expect(range.end).toBe(9)
+  })
+})
+
+describe('filterTree', () => {
+  const opts = (matches: (item: Node) => boolean) => ({
+    getId: (node: Node) => node.id,
+    getChildren: (node: Node) => node.children,
+    withChildren: (node: Node, children: Node[]) => ({ ...node, children }),
+    matches,
+  })
+
+  it('лишає предків збігу — інакше збіг втрачає місце в ієрархії', () => {
+    const result = filterTree(tree, opts((node) => node.name === 'Банерна реклама'))
+    expect(ids(flattenTree(result.items, options([1, 11])))).toEqual([1, 11, 111])
+    // Збігся ЛИШЕ сам вузол; предки — це контекст, а не збіги.
+    expect(result.matched).toEqual([111])
+  })
+
+  it('гілки без жодного збігу зникають цілком', () => {
+    const result = filterTree(tree, opts((node) => node.name === 'Головна'))
+    expect(result.items.map((node) => node.id)).toEqual([2])
+  })
+
+  it('expand перелічує гілки результату — без них збіг лишиться захованим', () => {
+    const result = filterTree(tree, opts((node) => node.name === 'Банерна реклама'))
+    expect(result.expand).toEqual([11, 1])
+  })
+
+  it('діти фільтруються навіть у вузла, що збігся сам', () => {
+    // 11 збігається, його діти — ні. Тека лишається, але порожньою.
+    const result = filterTree(tree, opts((node) => node.id === 11))
+    const branch = result.items[0]!.children![0]!
+    expect(branch.id).toBe(11)
+    expect(branch.children).toEqual([])
+  })
+
+  it('незмінене піддерево віддається ТИМ САМИМ вузлом', () => {
+    // Усе підходить — жодного клону, інакше пошук перемальовував би
+    // все дерево на кожне натискання клавіші.
+    const result = filterTree(tree, opts(() => true))
+    expect(result.items[0]).toBe(tree[0])
+    expect(result.items[1]).toBe(tree[1])
+  })
+
+  it('порожній результат — це порожній масив, а не виняток', () => {
+    expect(filterTree(tree, opts(() => false))).toEqual({ items: [], matched: [], expand: [] })
   })
 })
 

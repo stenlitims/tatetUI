@@ -30,7 +30,18 @@ export interface TreeRow<T> {
   parentId: SelectionKey | null
   hasChildren: boolean
   expanded: boolean
-  /** Для КОЖНОГО рівня предків — чи є в того предка наступний сусід. */
+  /**
+   * Прапорці вертикальних ліній для колонок ліворуч від коліна.
+   *
+   * Довжина — `max(0, depth - 1)`, бо остання колонка рядка завжди
+   * зайнята КОЛІНОМ, а нульовий рівень ліній не має взагалі: корені між
+   * собою драбиною не з'єднуються.
+   *
+   * `guides[j]` відповідає на питання «чи триває лінія в колонці `j`
+   * НИЖЧЕ цього рядка», тобто чи є ще діти в предка, якому ця колонка
+   * належить. Це НЕ «чи має предок наступного сусіда» — саме через цю
+   * підміну вертикаль з'їжджала на колонку від шеврона батька.
+   */
   guides: boolean[]
   /** Чи є наступний сусід у самого рядка — нижня половина «коліна». */
   hasNextSibling: boolean
@@ -115,9 +126,16 @@ export function flattenTree<T>(roots: T[], options: FlattenOptions<T>): TreeRow<
        * обох випадках, але перший ще чекає на споживача.
        */
       if (!children?.length) continue
-      // guides спільний за посиланням для всіх дітей вузла: він лише
-      // читається, тож це один масив на гілку, а не на рядок.
-      walk(children, depth + 1, index, id, [...guides, hasNextSibling])
+      /*
+       * Діти дістають колонку, у якій стояло коліно цього вузла, —
+       * і в ній лінія триває рівно тоді, коли в самого вузла є
+       * наступний сусід. Для коренів (depth 0) колонки немає взагалі:
+       * коліно кореня не малюється, тож і продовжувати нічого.
+       *
+       * guides спільний за посиланням для всіх дітей вузла: він лише
+       * читається, тож це один масив на гілку, а не на рядок.
+       */
+      walk(children, depth + 1, index, id, depth === 0 ? [] : [...guides, hasNextSibling])
     }
   }
 
@@ -173,6 +191,76 @@ export function windowRange(
     topPad: start * height,
     bottomPad: Math.max(0, (total - 1 - end) * height),
   }
+}
+
+/* ---------------------------------------------------------------- */
+/*  Пошук і фільтри                                                 */
+/* ---------------------------------------------------------------- */
+
+export interface FilterOptions<T> {
+  getId: (item: T) => SelectionKey
+  getChildren: (item: T) => T[] | undefined
+  /** Копія вузла з іншим списком дітей. Вихідне дерево не мутується. */
+  withChildren: (item: T, children: T[]) => T
+  /** Чи підходить САМ вузол. Предки збігу лишаються попри це. */
+  matches: (item: T) => boolean
+}
+
+export interface FilteredTree<T> {
+  items: T[]
+  /** Ключі вузлів, які збіглися САМІ, — для лічильника «знайдено N». */
+  matched: SelectionKey[]
+  /** Гілки результату. Під фільтром їх треба розгорнути, інакше збіг лишиться захованим. */
+  expand: SelectionKey[]
+}
+
+/**
+ * Фільтрує дерево, зберігаючи предків збігів.
+ *
+ * Плоский `filter` тут не працює принципово: вузол, що збігся, без
+ * предків втрачає єдине, що робить його зрозумілим, — місце в ієрархії.
+ * Тому вузол лишається, якщо збігся сам АБО якщо збігся хтось у його
+ * піддереві.
+ *
+ * Діти фільтруються завжди, навіть у вузла, що збігся сам. Інакше
+ * фільтр «лише активні» показував би вимкнених дітей активної теки —
+ * тобто рівно те, що просили сховати. Наслідок: тека, у якої не лишилось
+ * жодної дитини, рендериться як листок.
+ */
+export function filterTree<T>(roots: T[], options: FilterOptions<T>): FilteredTree<T> {
+  const matched: SelectionKey[] = []
+  const expand: SelectionKey[] = []
+
+  const walk = (nodes: T[]): T[] => {
+    const kept: T[] = []
+    for (const item of nodes) {
+      const children = options.getChildren(item)
+      const keptChildren = children?.length ? walk(children) : []
+      const self = options.matches(item)
+      if (!self && !keptChildren.length) continue
+
+      const id = options.getId(item)
+      if (self) matched.push(id)
+      if (keptChildren.length) expand.push(id)
+
+      /*
+       * Той самий об'єкт, якщо піддерево не змінилось.
+       *
+       * Без цієї перевірки кожне натискання клавіші в пошуку роздає
+       * НОВИЙ об'єкт кожному вузлу, :key лишається, але вміст рядка
+       * вважається зміненим — і Vue перемальовує все дерево замість
+       * кількох рядків, що справді змінились.
+       */
+      const childCount = children?.length ?? 0
+      const same =
+        childCount === keptChildren.length &&
+        keptChildren.every((child, index) => child === children![index])
+      kept.push(same ? item : options.withChildren(item, keptChildren))
+    }
+    return kept
+  }
+
+  return { items: walk(roots), matched, expand }
 }
 
 /* ---------------------------------------------------------------- */
