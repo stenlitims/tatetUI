@@ -34,6 +34,13 @@ defineSlots<{
   content?: () => unknown
 }>()
 
+const ORIGIN: Record<NonNullable<typeof props.placement>, string> = {
+  top: 'origin-bottom',
+  bottom: 'origin-top',
+  left: 'origin-right',
+  right: 'origin-left',
+}
+
 const wrapperEl = ref<HTMLElement | null>(null)
 const tooltipEl = ref<HTMLElement | null>(null)
 const visible = ref(false)
@@ -138,13 +145,15 @@ watch(tooltipEl, (el) => {
     <slot :described-by="describedBy" />
 
     <Teleport to="body" :disabled="!teleportReady">
+      <!-- Підказка «виростає» з боку тригера: origin залежить від placement,
+           інакше масштабування від центру виглядає як спалах на місці. -->
       <Transition
         enter-active-class="transition duration-150 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
+        enter-from-class="scale-95 opacity-0"
+        enter-to-class="scale-100 opacity-100"
         leave-active-class="transition duration-100 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
+        leave-from-class="scale-100 opacity-100"
+        leave-to-class="scale-95 opacity-0"
       >
         <div
           v-if="visible"
@@ -152,6 +161,7 @@ watch(tooltipEl, (el) => {
           ref="tooltipEl"
           role="tooltip"
           class="pointer-events-none fixed max-w-64 rounded-control bg-ink px-2.5 py-1.5 text-xs leading-snug text-main shadow-overlay"
+          :class="ORIGIN[placement]"
           :style="style"
         >
           <slot name="content">{{ content }}</slot>

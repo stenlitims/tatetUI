@@ -137,7 +137,29 @@ function onFiles(fileList: FileList | null) {
   }
 }
 
+/*
+ * Лічильник, а не булевий прапорець.
+ *
+ * dragleave спрацьовує щоразу, коли курсор переходить із зони на її
+ * ДОЧІРНІЙ елемент (іконку, текст) — і зона гасла посеред перетягування,
+ * блимаючи на кожній межі. Пара dragenter/dragleave на кожному вузлі
+ * симетрична, тож стан «над зоною» — це лічильник > 0.
+ */
+let dragDepth = 0
+
+function onDragEnter() {
+  if (props.disabled) return
+  dragDepth += 1
+  dragActive.value = true
+}
+
+function onDragLeave() {
+  dragDepth = Math.max(0, dragDepth - 1)
+  if (dragDepth === 0) dragActive.value = false
+}
+
 function onDrop(event: DragEvent) {
+  dragDepth = 0
   dragActive.value = false
   if (props.disabled) return
   onFiles(event.dataTransfer?.files ?? null)
@@ -223,13 +245,16 @@ defineExpose({
         :aria-label="typeof label === 'string' ? label : 'Завантажити файл'"
         class="flex min-h-24 cursor-pointer flex-col items-center justify-center gap-1.5 rounded-card border-2 border-dashed p-6 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :class="[
-          dragActive ? 'border-accent-solid bg-primary-50' : 'border-line bg-subtle',
+          dragActive
+            ? 'border-accent-solid bg-primary-50 ring-[3px] ring-ring/20'
+            : 'border-line bg-subtle hover:border-line-strong hover:bg-hover',
           disabled ? 'pointer-events-none opacity-50' : '',
         ]"
         @click="openDialog"
         @keydown="onKeydown"
-        @dragover.prevent="dragActive = true"
-        @dragleave="dragActive = false"
+        @dragenter.prevent="onDragEnter"
+        @dragover.prevent
+        @dragleave="onDragLeave"
         @drop.prevent="onDrop"
       >
         <svg v-if="loading" class="h-6 w-6 animate-spin text-accent" viewBox="0 0 24 24" fill="none" aria-hidden="true">

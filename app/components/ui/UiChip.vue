@@ -52,8 +52,11 @@ const classes = computed(() => [
   'inline-flex items-center rounded-full border font-medium leading-none whitespace-nowrap',
   tones[props.tone],
   sizes[props.size],
+  // Наведення — напівпрозорий шар поточного КОЛЬОРУ ТЕКСТУ поверх тла, а не
+  // brightness(0.95): затемнення в темній темі робить чип менш видимим, тоді
+  // як шар currentColor контрастує з тлом в обох темах однаково.
   props.clickable
-    ? 'cursor-pointer transition-[filter] hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+    ? 'cursor-pointer transition-shadow hover:shadow-[inset_0_0_0_100px_color-mix(in_oklab,currentColor_10%,transparent)] active:shadow-[inset_0_0_0_100px_color-mix(in_oklab,currentColor_16%,transparent)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
     : '',
 ])
 </script>

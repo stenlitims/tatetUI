@@ -902,7 +902,9 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   :aria-label="`Перемістити «${header.title || header.text || header.value}» вище`"
                   @click="moveHeader(index, -1)"
                 >
-                  ↑
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 19V5m0 0-6 6m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
                 </button>
                 <button
                   type="button"
@@ -911,14 +913,16 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   :aria-label="`Перемістити «${header.title || header.text || header.value}» нижче`"
                   @click="moveHeader(index, 1)"
                 >
-                  ↓
+                  <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 5v14m0 0 6-6m-6 6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
                 </button>
               </div>
 
               <input
                 v-if="!header.flex"
                 type="number"
-                class="w-16 shrink-0 rounded border border-line bg-input px-1.5 py-1 text-right text-xs text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="w-16 shrink-0 rounded-control border border-line bg-input px-1.5 py-1 text-right text-xs tabular-nums text-ink transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
                 :value="header.width"
                 :min="40"
                 :max="800"

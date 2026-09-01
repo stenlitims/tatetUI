@@ -5,6 +5,11 @@ import UiToaster from '~/components/ui/UiToaster.vue'
 
 <template>
   <NuxtRouteAnnouncer />
+  <!-- Смужка прогресу навігації під шапкою. На прередереному сайті
+       переходи майже миттєві, але payload сторінки й чанки демо їдуть
+       мережею — без індикатора клік у сайдбарі на повільному з'єднанні
+       виглядає як «нічого не сталося». -->
+  <NuxtLoadingIndicator color="var(--accent-solid)" :height="2" :throttle="120" />
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>

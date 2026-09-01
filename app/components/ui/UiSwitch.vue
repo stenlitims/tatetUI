@@ -55,7 +55,7 @@ function onClick(event: MouseEvent) {
     :aria-label="presentational ? undefined : label"
     :aria-hidden="presentational ? 'true' : undefined"
     :disabled="presentational ? undefined : disabled"
-    class="ui-switch relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors duration-200"
+    class="ui-switch relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors"
     :class="[
       trackClass,
       disabled ? 'cursor-not-allowed opacity-50' : '',
@@ -65,14 +65,30 @@ function onClick(event: MouseEvent) {
     ]"
     @click="presentational ? undefined : onClick($event)"
   >
+    <!-- Повзунок під натисканням витягується (див. стилі нижче) — це
+         відгук на дотик, якого не дає :hover на телефоні. -->
     <span
-      class="absolute left-0.5 h-4 w-4 rounded-full bg-accent-contrast shadow-sm transition-transform duration-200"
+      class="ui-switch-thumb absolute left-0.5 h-4 w-4 rounded-full bg-accent-contrast shadow-raised transition-[translate,width] ease-emphasized"
       :class="modelValue ? 'translate-x-4' : 'translate-x-0'"
     />
   </component>
 </template>
 
 <style scoped>
+/*
+ * Натиснутий перемикач витягує повзунок на 4px у бік руху. Це не декор:
+ * на дотику :hover не настає, і без цього між натисканням і зміною стану
+ * немає жодного проміжного відгуку. Увімкнений повзунок росте вліво
+ * (translate менший), вимкнений — вправо.
+ */
+.ui-switch:active:not(:disabled) .ui-switch-thumb {
+  width: 1.25rem;
+}
+
+.ui-switch:active:not(:disabled)[aria-checked='true'] .ui-switch-thumb {
+  translate: 0.75rem 0;
+}
+
 /*
  * Невидима зона натискання 44×44 навколо перемикача.
  *

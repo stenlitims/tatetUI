@@ -64,6 +64,15 @@ defineSlots<{
 
 const generatedId = useId()
 const panelId = `${generatedId}-popover`
+
+// Панель росте від краю тригера, а не від власного центру.
+const originClass = computed(() => {
+  const p = props.placement
+  if (p.startsWith('top')) return p.endsWith('end') ? 'origin-bottom-right' : 'origin-bottom-left'
+  if (p.startsWith('left')) return 'origin-right'
+  if (p.startsWith('right')) return 'origin-left'
+  return p.endsWith('end') ? 'origin-top-right' : 'origin-top-left'
+})
 const rootEl = shallowRef<HTMLElement | null>(null)
 const triggerEl = shallowRef<HTMLElement | null>(null)
 const panelEl = shallowRef<HTMLElement | null>(null)
@@ -201,6 +210,7 @@ defineExpose({ open, close, toggle })
           :aria-label="ariaLabel"
           tabindex="-1"
           class="fixed rounded-control border border-line bg-dropdown p-3 text-ink shadow-overlay outline-none"
+          :class="originClass"
           :style="panelStyle"
         >
           <slot :close="() => close(true)" />

@@ -83,7 +83,7 @@ function saveSettings() {
         </h1>
 
         <p class="mt-5 max-w-xl text-lg text-muted">
-Зібрано з кількох продуктових кодових баз, де ті самі компоненти
+          Зібрано з кількох продуктових кодових баз, де ті самі компоненти
           писали незалежно по кілька разів. Нижче — не скріншоти, а робочі
           сценарії на компонентах бібліотеки.
         </p>
@@ -117,7 +117,7 @@ function saveSettings() {
           />
           <div class="flex items-center justify-between rounded-card border border-line bg-subtle px-3.5 py-3">
             <span class="text-sm text-ink">Тема: {{ themeHint }}</span>
-            <UiSwitch :model-value="isDark" label="Перемкнути тему" @update:model-value="toggle" />
+            <UiSwitch :model-value="isDark" label="Перемкнути тему" @update:model-value="toggle()" />
           </div>
           <UiProgress :model-value="72" label="Заповнення сховища" show-value />
           <div class="flex justify-end gap-2 border-t border-line pt-4">

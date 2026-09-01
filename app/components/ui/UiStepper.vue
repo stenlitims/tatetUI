@@ -69,12 +69,14 @@ function onStepClick(index: number) {
 const stepClass = (index: number) => {
   const state = stateOf(index)
   return [
-    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-colors',
+    'flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-xs font-semibold transition-[color,background-color,border-color,box-shadow]',
+    // Активний крок — з «ореолом»: серед кількох однакових кружечків саме
+    // він має читатись першим, а не лише за кольором межі.
     state === 'done'
       ? 'border-accent-solid bg-accent-solid text-accent-contrast'
       : state === 'active'
-        ? 'border-accent-solid bg-card text-accent'
-        : 'border-line bg-card text-muted',
+        ? 'border-accent-solid bg-card text-accent ring-4 ring-ring/15'
+        : 'border-line bg-card text-muted group-hover:border-line-strong',
   ]
 }
 </script>

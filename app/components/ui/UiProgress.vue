@@ -56,7 +56,7 @@ const percent = computed(() => {
       />
       <div
         v-else
-        class="h-full rounded-full bg-accent-solid transition-[width] duration-300"
+        class="h-full rounded-full bg-accent-solid transition-[width] duration-300 ease-out"
         :style="{ width: `${percent}%` }"
       />
     </div>

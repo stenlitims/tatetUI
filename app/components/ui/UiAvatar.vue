@@ -21,11 +21,20 @@ defineSlots<{
 }>()
 
 const failed = ref(false)
+const loaded = ref(false)
 // Нова URL — нова спроба: без цього старий стан помилки «липнув» до src.
 watch(
   () => props.src,
-  () => (failed.value = false),
+  () => {
+    failed.value = false
+    loaded.value = false
+  },
 )
+
+// Картинка з кешу вже complete на момент монтування — події load не буде.
+function onImageRef(el: unknown) {
+  if (el instanceof HTMLImageElement && el.complete && el.naturalWidth > 0) loaded.value = true
+}
 
 const initials = computed(() => {
   const parts = (props.name ?? '').trim().split(/\s+/).filter(Boolean)
@@ -55,14 +64,26 @@ const fontSizeClass = computed(() =>
     role="img"
     :aria-label="name ?? 'Аватар'"
   >
+    <!-- Ініціали під картинкою до завантаження: аватар ніколи не порожній,
+         а картинка проявляється поверх, а не вмикається стрибком. -->
+    <span
+      v-if="src && !failed && !loaded && initials && !$slots.default"
+      :class="fontSizeClass"
+      aria-hidden="true"
+    >{{ initials }}</span>
     <img
       v-if="src && !failed"
+      :ref="onImageRef"
       :src="src"
       alt=""
-      class="h-full w-full object-cover"
+      loading="lazy"
+      decoding="async"
+      class="absolute inset-0 h-full w-full object-cover transition-opacity"
+      :class="loaded ? 'opacity-100' : 'opacity-0'"
+      @load="loaded = true"
       @error="failed = true"
     />
-    <slot v-else>
+    <slot v-if="!src || failed">
       <span v-if="initials" :class="fontSizeClass" aria-hidden="true">{{ initials }}</span>
     </slot>
   </span>

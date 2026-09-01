@@ -59,6 +59,15 @@ const errorId = computed(() => props.error ? `${inputId.value}-error` : undefine
 const inputEl = ref<HTMLInputElement | null>(null)
 const safeLength = computed(() => Math.max(1, Math.floor(props.length)))
 
+/*
+ * Підсвічується КОМІРКА, куди піде наступний символ, а не вся група.
+ * Кільце навколо шести клітинок каже лише «поле у фокусі»; кільце на
+ * одній — ще й «ось тут каретка», і це головне, що треба знати, набираючи
+ * код із SMS.
+ */
+const focused = ref(false)
+const activeIndex = computed(() => Math.min(sanitize(props.modelValue).length, safeLength.value - 1))
+
 function sanitize(value: string) {
   const normalized = props.type === 'numeric'
     ? value.replace(/\D/g, '')
@@ -94,7 +103,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
     </label>
 
     <div
-      class="relative inline-grid max-w-full grid-flow-col gap-2 rounded-control focus-within:outline-none focus-within:ring-2 focus-within:ring-ring"
+      class="relative inline-grid max-w-full grid-flow-col gap-2 rounded-control"
       :class="{ 'cursor-not-allowed opacity-50': disabled }"
       @click="inputEl?.focus()"
     >
@@ -113,15 +122,30 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
         :aria-label="label ? undefined : `Одноразовий код із ${safeLength} символів`"
         class="absolute inset-0 z-10 h-full w-full cursor-text opacity-0 disabled:cursor-not-allowed"
         @input="onInput"
+        @focus="focused = true"
+        @blur="focused = false"
       >
       <span
         v-for="(cell, index) in cells"
         :key="index"
         aria-hidden="true"
-        class="flex size-12 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-colors md:size-10"
-        :class="error ? 'border-danger' : 'border-line'"
+        class="flex size-12 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-[border-color,box-shadow] md:size-10"
+        :class="[
+          error ? 'border-danger' : 'border-line',
+          focused && index === activeIndex
+            ? error
+              ? 'border-danger ring-[3px] ring-danger/30'
+              : 'border-accent-solid ring-[3px] ring-ring/30'
+            : '',
+        ]"
       >
         {{ cell ? (mask ? '•' : cell) : '' }}
+        <!-- Каретка в активній порожній комірці: без неї не видно, що поле
+             чекає на ввід. Блимає лише тим, хто не просив прибрати рух. -->
+        <span
+          v-if="focused && index === activeIndex && !cell"
+          class="ui-otp-caret h-5 w-px bg-ink md:h-4"
+        />
       </span>
     </div>
 
@@ -129,3 +153,26 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
     <p v-else-if="hint" :id="hintId" :class="helperTextClass">{{ hint }}</p>
   </div>
 </template>
+
+<style scoped>
+@keyframes ui-otp-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.ui-otp-caret {
+  animation: ui-otp-blink 1.1s steps(1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-otp-caret {
+    animation: none;
+  }
+}
+</style>

@@ -144,7 +144,9 @@ defineExpose({
           v-bind="triggerAttrs"
           @click="toggle"
         >
-          <span aria-hidden="true" class="text-[0.7em] leading-none">▼</span>
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </UiButton>
       </div>
     </template>

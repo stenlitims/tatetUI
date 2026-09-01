@@ -61,6 +61,18 @@ const panelStyle = computed(() => {
   return style
 })
 
+/*
+ * Точка, з якої панель «виростає» при відкритті. Масштабування від центру
+ * виглядає як спалах на місці; від кута біля тригера — як розкриття.
+ */
+const ORIGIN: Record<NonNullable<typeof props.placement>, string> = {
+  'bottom-start': 'origin-top-left',
+  bottom: 'origin-top',
+  'bottom-end': 'origin-top-right',
+  top: 'origin-bottom',
+  right: 'origin-left',
+}
+
 const triggerAttrs = computed(() => ({
   'aria-haspopup': props.panelRole === 'none' ? undefined : props.panelRole,
   'aria-expanded': isOpen.value,
@@ -282,6 +294,7 @@ defineExpose({
           :role="panelRole === 'none' ? undefined : panelRole"
           :aria-label="ariaLabel"
           class="fixed rounded-control border border-line bg-dropdown py-1 shadow-overlay"
+          :class="ORIGIN[placement]"
           :style="panelStyle"
           @keydown="onPanelKeydown"
         >

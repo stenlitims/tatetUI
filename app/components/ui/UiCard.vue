@@ -31,7 +31,7 @@ const paddings = {
   <component
     :is="as"
     class="rounded-card border border-line bg-card shadow-card"
-    :class="hoverable ? 'transition duration-150 hover:-translate-y-0.5 hover:shadow-raised' : ''"
+    :class="hoverable ? 'transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised active:translate-y-0 active:shadow-card' : ''"
   >
     <div v-if="$slots.header" class="border-b border-line px-4 py-3 sm:px-5">
       <slot name="header" />

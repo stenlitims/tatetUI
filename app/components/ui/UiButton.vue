@@ -87,7 +87,7 @@ const variants: Record<Variant, string> = {
   solid:
     'bg-accent-solid text-accent-contrast hover:bg-accent-solid-hover active:bg-accent-solid-hover shadow-card',
   soft: 'bg-primary-50 text-accent hover:bg-primary-100 active:bg-primary-100 border border-primary-200',
-  outline: 'border border-line bg-card text-ink hover:bg-hover active:bg-hover',
+  outline: 'border border-line bg-card text-ink hover:border-line-strong hover:bg-hover active:bg-hover',
   ghost: 'text-muted hover:text-ink hover:bg-hover active:bg-hover active:text-ink',
   danger:
     'bg-danger-solid text-danger-contrast hover:bg-danger-solid-hover active:bg-danger-solid-hover shadow-card',
@@ -138,7 +138,9 @@ const touchTargetClass =
 const isDisabled = computed(() => props.disabled || props.loading)
 
 const classes = computed(() => [
-  'relative inline-flex items-center rounded-control font-medium transition duration-150 select-none active:scale-[0.98]',
+  // Перелік властивостей явний: `transition` (all) анімував би ще й width під
+  // час зміни тексту, і кнопка «пливла» б. Тривалість — типова з токенів.
+  'relative inline-flex items-center rounded-control font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] select-none active:scale-[0.98]',
   touchTargetClass,
   // Видиме фокус-кільце. У всіх чотирьох вихідних проєктах focus:outline-none
   // стоїть майже всюди без заміни — керування з клавіатури стає сліпим.

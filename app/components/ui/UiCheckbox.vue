@@ -93,12 +93,14 @@ defineExpose({ focus: () => inputEl.value?.focus() })
           :aria-checked="indeterminate ? 'mixed' : modelValue"
           :aria-invalid="!!error || undefined"
           :aria-describedby="describedBy"
-          class="peer h-5 w-5 appearance-none rounded-[0.3rem] border border-line bg-input transition-colors checked:border-accent-solid checked:bg-accent-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="peer h-5 w-5 appearance-none rounded-[0.3rem] border border-line bg-input transition-[border-color,background-color,box-shadow] not-disabled:hover:border-line-strong checked:border-accent-solid checked:bg-accent-solid checked:not-disabled:hover:border-accent-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
           @change="onChange"
         />
+        <!-- animate-check-in: галочка «виростає», а не вмикається — стан
+             змінився помітно, але за 180 мс. -->
         <svg
           v-if="modelValue && !indeterminate"
-          class="pointer-events-none absolute h-3.5 w-3.5 text-accent-contrast"
+          class="pointer-events-none absolute h-3.5 w-3.5 text-accent-contrast animate-check-in"
           viewBox="0 0 24 24"
           fill="none"
           aria-hidden="true"

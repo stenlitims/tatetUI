@@ -8,6 +8,7 @@ emitDescriptions:
   update:modelValue: Зміна значення. Для `type="number"` порожнє поле віддає `null`, а не `NaN`.
   focus: Поле отримало фокус.
   blur: Поле втратило фокус.
+  clear: Натиснуто кнопку очищення (`clearable`). Значення вже скинуто через `update:modelValue`.
 status: stable
 order: 10
 ---
@@ -24,6 +25,15 @@ order: 10
 ## Стани
 
 ::component-preview{name="input-states" stage="min-h-64"}
+::
+
+## Очищення та пароль
+
+`clearable` додає хрестик, коли поле не порожнє; `passwordToggle` — око
+для `type="password"`. Обидві кнопки живуть усередині поля, тож відступ
+тексту рахується автоматично і не наїжджає на них.
+
+::component-preview{name="input-actions"}
 ::
 
 ## API

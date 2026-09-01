@@ -21,9 +21,17 @@ export type FieldSize = 'sm' | 'md' | 'lg'
 /*  Базове поле / тригер                                              */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Фокус — межа акцентного кольору плюс м'яке кільце 3px на 30% альфи, а не
+ * суцільне кільце 2px. Суцільне кільце на полі з межею читається як подвійна
+ * рамка; м'яке — як «підсвітка», і при цьому лишається видимим (межа стає
+ * акцентною — саме вона несе контраст). Наведення підсилює межу — поле має
+ * відповідати на курсор ще до кліку.
+ */
 const fieldBase =
-  'w-full rounded-control border border-line bg-input text-ink placeholder:text-muted transition-colors ' +
-  'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:border-accent-solid'
+  'w-full rounded-control border border-line bg-input text-ink placeholder:text-muted transition-[border-color,box-shadow,background-color] ' +
+  'not-disabled:hover:border-line-strong ' +
+  'focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:border-accent-solid focus-visible:hover:border-accent-solid'
 
 /*
  * Мобільні розміри ДОВЖЕ, а не вище: 45px (h-12 за кореня 15px) — це
@@ -69,7 +77,8 @@ const fieldPadRight: Record<FieldSize, string> = {
 }
 
 const fieldDisabled = 'opacity-50 cursor-not-allowed'
-const fieldError = 'border-danger focus-visible:ring-danger focus-visible:border-danger'
+const fieldError =
+  'border-danger not-disabled:hover:border-danger focus-visible:ring-danger/30 focus-visible:border-danger focus-visible:hover:border-danger'
 
 /* ------------------------------------------------------------------ */
 /*  Лейбл / підказка / помилка                                        */
@@ -88,14 +97,14 @@ export const helperTextClass = 'mt-1 text-sm text-muted'
 /* ------------------------------------------------------------------ */
 
 export const dropdownPanelClass =
-  'absolute z-[1100] mt-1 w-full min-w-max max-h-80 overflow-y-auto scrollbar-thin rounded-control ' +
+  'absolute z-[1100] mt-1 w-full min-w-max max-h-80 overflow-y-auto scrollbar-thin rounded-control origin-top ' +
   'border border-line bg-dropdown shadow-overlay'
 
 export const dropdownEmptyClass = 'px-3 py-2 text-center text-sm text-muted'
 
 export const dropdownSearchInputClass =
-  'w-full rounded-control border border-line bg-input px-2 py-1.5 text-sm text-ink ' +
-  'placeholder:text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'w-full rounded-control border border-line bg-input px-2 py-1.5 text-sm text-ink transition-[border-color,box-shadow] ' +
+  'placeholder:text-muted focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:border-accent-solid'
 
 /* ------------------------------------------------------------------ */
 /*  Пункти випадайки                                                  */
@@ -131,11 +140,11 @@ const iconSizes: Record<FieldSize, string> = {
 
 export const dropdownTransitionProps = {
   enterActiveClass: 'transition duration-150 ease-out',
-  enterFromClass: 'transform scale-95 opacity-0',
-  enterToClass: 'transform scale-100 opacity-100',
+  enterFromClass: 'scale-[0.97] -translate-y-1 opacity-0',
+  enterToClass: 'scale-100 translate-y-0 opacity-100',
   leaveActiveClass: 'transition duration-100 ease-in',
-  leaveFromClass: 'transform scale-100 opacity-100',
-  leaveToClass: 'transform scale-95 opacity-0',
+  leaveFromClass: 'scale-100 translate-y-0 opacity-100',
+  leaveToClass: 'scale-[0.97] -translate-y-1 opacity-0',
 }
 
 /* ------------------------------------------------------------------ */

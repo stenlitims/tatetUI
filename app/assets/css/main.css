@@ -69,6 +69,29 @@
   td {
     font-variant-numeric: tabular-nums;
   }
+
+  /* Заголовки не лишають одне слово на останньому рядку. */
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  /* Виділення тексту — брендове, а не системне синє, яке в темній темі
+     сперечається з тлом. */
+  ::selection {
+    background-color: color-mix(in oklab, var(--accent-solid) 28%, transparent);
+    color: inherit;
+  }
+
+  /* Плавна прокрутка до якорів змісту — лише тим, хто не просив прибрати
+     рух. Стрибок на 2000px під reduced-motion — саме те, чого просили
+     уникнути. */
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 }
 
 /* -------------------------------------------------------------------- */
@@ -130,7 +153,67 @@
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    /* Без скидання затримки анімація з fill-mode: both тримає елемент
+       НЕВИДИМИМ увесь час затримки — hero з каскадом 0/80/160 мс просто
+       з'являвся б по частинах з паузами. */
+    animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* -------------------------------------------------------------------- */
+/*  Перехід між сторінками                                              */
+/*                                                                      */
+/*  Коротке згасання з рухом на 4px. Достатньо, щоб зміна сторінки не    */
+/*  була стрибком, і замало, щоб її помічали як анімацію. Підключається  */
+/*  через app.pageTransition у nuxt.config.ts; reduced-motion гасить     */
+/*  блок вище.                                                           */
+/* -------------------------------------------------------------------- */
+
+.page-enter-active {
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out);
+}
+
+.page-leave-active {
+  transition: opacity var(--duration-fast) var(--ease-in);
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+.page-leave-to {
+  opacity: 0;
+}
+
+/* -------------------------------------------------------------------- */
+/*  Перемикання теми — кругове розкриття (View Transitions API)         */
+/*                                                                      */
+/*  Знімок старої теми лишається на місці, нова «розходиться» колом від  */
+/*  точки кліку. Центр і радіус ставить useTheme через змінні. Браузер  */
+/*  без API просто перемикає клас — це не вимога, а прикраса.           */
+/* -------------------------------------------------------------------- */
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: ui-theme-reveal 420ms var(--ease-in-out);
+}
+
+@keyframes ui-theme-reveal {
+  from {
+    clip-path: circle(0 at var(--theme-x, 50%) var(--theme-y, 50%));
+  }
+  to {
+    clip-path: circle(var(--theme-r, 150vmax) at var(--theme-x, 50%) var(--theme-y, 50%));
   }
 }

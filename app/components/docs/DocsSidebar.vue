@@ -1,7 +1,18 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { docsNav } from '~/config/docsNav'
 
 const route = useRoute()
+
+/*
+ * Активний пункт має бути видно одразу. У сайдбарі ~60 посилань, і після
+ * переходу на сторінку з кінця списку (Kbd, Prose) активний пункт лишався
+ * за нижнім краєм — треба було прокручувати меню, щоб зрозуміти, де ти.
+ */
+onMounted(() => {
+  const active = document.querySelector<HTMLElement>('[data-docs-nav] [aria-current="page"]')
+  active?.scrollIntoView({ block: 'nearest' })
+})
 
 const emit = defineEmits<{
   /** Клік по посиланню. Мобільна навігація на цьому закривається. */
@@ -14,7 +25,7 @@ function isActive(to: string) {
 </script>
 
 <template>
-  <nav aria-label="Розділи документації" class="text-sm">
+  <nav aria-label="Розділи документації" class="text-sm" data-docs-nav>
     <div v-for="group in docsNav" :key="group.title" class="mb-6">
       <p class="mb-2 px-3 text-xs font-semibold tracking-wide text-muted uppercase">
         {{ group.title }}

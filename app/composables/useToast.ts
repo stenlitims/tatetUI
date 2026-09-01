@@ -31,6 +31,8 @@ export interface Toast {
   message: string
   type: ToastType
   actions?: ToastAction[]
+  /** Повна тривалість показу, мс. `0` — без автозакриття. */
+  duration: number
 }
 
 /**
@@ -52,14 +54,28 @@ let toastId = 0
  * хрестиком, а через секунду спрацьовував відкладений splice і зносив
  * ІНШИЙ тост, який на той час опинився на його місці в масиві.
  */
-const timers = new Map<number, ReturnType<typeof setTimeout>>()
+interface Timer {
+  handle: ReturnType<typeof setTimeout> | null
+  /** Скільки лишилося, мс — щоб продовжити після паузи з того ж місця. */
+  remaining: number
+  startedAt: number
+}
+
+const timers = new Map<number, Timer>()
 
 function clearTimer(id: number) {
   const timer = timers.get(id)
-  if (timer) {
-    clearTimeout(timer)
-    timers.delete(id)
-  }
+  if (!timer) return
+  if (timer.handle) clearTimeout(timer.handle)
+  timers.delete(id)
+}
+
+function startTimer(id: number, remaining: number, onDone: () => void) {
+  timers.set(id, {
+    handle: setTimeout(onDone, remaining),
+    remaining,
+    startedAt: Date.now(),
+  })
 }
 
 export function useToast() {
@@ -72,24 +88,44 @@ export function useToast() {
     toasts.value = toasts.value.filter((item) => item.id !== id)
   }
 
+  /**
+   * Зупинити відлік автозакриття — поки курсор чи фокус на тості.
+   *
+   * Без паузи тост з кнопкою «Скасувати» зникає саме тоді, коли користувач
+   * веде до неї курсор: середній час прочитати повідомлення і навести —
+   * близько трьох секунд, тобто рівно типова тривалість.
+   */
+  function pause(id: number) {
+    const timer = timers.get(id)
+    if (!timer?.handle) return
+    clearTimeout(timer.handle)
+    timer.handle = null
+    timer.remaining = Math.max(0, timer.remaining - (Date.now() - timer.startedAt))
+  }
+
+  /** Продовжити відлік із того місця, де його зупинив `pause`. */
+  function resume(id: number) {
+    const timer = timers.get(id)
+    if (!timer || timer.handle) return
+    // Мінімум секунда після того, як курсор пішов: якщо лишалося 50 мс,
+    // тост зник би з-під курсора, ніби його змахнули.
+    startTimer(id, Math.max(timer.remaining, 1000), () => dismiss(id))
+  }
+
   /** Показати тост. Повертає його id — його можна передати в `dismiss`. */
   function show(options: ToastOptions): number {
     const id = toastId++
+    const duration = options.duration ?? 3000
     toasts.value.push({
       id,
       title: options.title,
       message: options.message,
       type: options.type ?? 'info',
       actions: options.actions,
+      duration,
     })
 
-    const duration = options.duration ?? 3000
-    if (duration > 0) {
-      timers.set(
-        id,
-        setTimeout(() => dismiss(id), duration),
-      )
-    }
+    if (duration > 0) startTimer(id, duration, () => dismiss(id))
     return id
   }
 
@@ -107,5 +143,5 @@ export function useToast() {
   const info = (message: string, options?: Omit<ToastOptions, 'type' | 'message'>) =>
     show({ ...options, message, type: 'info' })
 
-  return { toasts, show, dismiss, success, error, warning, info }
+  return { toasts, show, dismiss, pause, resume, success, error, warning, info }
 }

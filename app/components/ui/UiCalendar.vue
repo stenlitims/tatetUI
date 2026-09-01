@@ -245,9 +245,11 @@ function dayClass(state: ReturnType<typeof dayState>) {
   // Середина діапазону — підкладка без заливки.
   if (state.inRange) return `${base} cursor-pointer bg-primary-50 text-accent`
 
-  if (state.outside) return `${base} cursor-pointer text-muted opacity-60 hover:bg-hover`
-  if (state.today) return `${base} cursor-pointer font-semibold text-accent hover:bg-hover`
-  return `${base} cursor-pointer text-ink hover:bg-hover`
+  // Поза діапазоном — заокруглений hover, як у обраної дати: інакше при
+  // наведенні клітинка квадратна, а після кліку — кругла, і день «стрибає».
+  if (state.outside) return `${base} cursor-pointer rounded-control text-muted opacity-60 hover:bg-hover`
+  if (state.today) return `${base} cursor-pointer rounded-control font-semibold text-accent hover:bg-hover`
+  return `${base} cursor-pointer rounded-control text-ink hover:bg-hover`
 }
 
 function ariaLabelFor(date: Date, state: ReturnType<typeof dayState>) {
@@ -369,12 +371,14 @@ defineExpose({
             <button
               v-if="gridIndex === 0"
               type="button"
-              class="flex h-10 w-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
+              class="relative flex h-10 w-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
               aria-label="Попередній місяць"
               :disabled="disabled"
               @click="setMonth(addMonths(viewMonth, -1))"
             >
-              <span aria-hidden="true">‹</span>
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
             <span v-else class="h-10 w-10 md:h-8 md:w-8" aria-hidden="true" />
 
@@ -388,12 +392,14 @@ defineExpose({
             <button
               v-if="gridIndex === grids.length - 1"
               type="button"
-              class="flex h-10 w-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
+              class="relative flex h-10 w-10 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8 pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
               aria-label="Наступний місяць"
               :disabled="disabled"
               @click="setMonth(addMonths(viewMonth, 1))"
             >
-              <span aria-hidden="true">›</span>
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
             </button>
             <span v-else class="h-10 w-10 md:h-8 md:w-8" aria-hidden="true" />
           </div>

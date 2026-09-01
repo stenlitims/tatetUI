@@ -97,9 +97,13 @@ const sizeClasses: Record<'sm' | 'md' | 'lg', string> = {
 
 const classes = computed(() => [
   'w-full rounded-control border bg-input text-ink placeholder:text-muted',
-  'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  // Той самий контракт фокуса, що в fieldBase (uiFieldStyles): акцентна
+  // межа + м'яке кільце. Не через fieldClass, бо висота тут мінімальна.
+  'transition-[border-color,box-shadow] focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30',
   sizeClasses[props.size],
-  hasError.value ? 'border-danger focus-visible:ring-danger' : 'border-line focus-visible:border-accent-solid',
+  hasError.value
+    ? 'border-danger focus-visible:ring-danger/30 focus-visible:border-danger'
+    : 'border-line not-disabled:hover:border-line-strong focus-visible:border-accent-solid focus-visible:hover:border-accent-solid',
   props.disabled ? 'cursor-not-allowed opacity-50' : '',
   props.autoresize ? 'resize-none overflow-y-auto scrollbar-thin' : 'resize-y',
   props.inputClass ?? '',

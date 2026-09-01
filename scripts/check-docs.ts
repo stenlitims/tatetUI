@@ -71,6 +71,9 @@ const NON_COLOR_UTILITY = new Set([
   'gradient-to-tl', 'gradient-to-br', 'gradient-to-bl', 'linear', 'radial', 'conic',
   // спільні ключові слова
   'transparent', 'current', 'inherit',
+  // назви CSS-властивостей усередині transition-[border-color,…]: це
+  // перелік того, ЩО анімувати, а не колір
+  'color', 'decoration-color',
 ])
 
 const SELF_EVIDENT = [

@@ -126,7 +126,7 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
         :aria-valuetext="ariaValueText"
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
-        class="ui-slider h-12 w-full cursor-pointer appearance-none bg-transparent disabled:cursor-not-allowed disabled:opacity-50 md:h-6"
+        class="ui-slider h-12 w-full cursor-pointer appearance-none bg-transparent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:h-6"
         @input="emit('update:modelValue', Number(($event.target as HTMLInputElement).value))"
       />
     </div>
@@ -173,6 +173,27 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
   background: var(--bg-card);
   border: 2px solid var(--accent-solid);
   box-shadow: var(--shadow-card);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+/*
+ * Повзунок відповідає на курсор і на захоплення: росте на наведенні і
+ * отримує ореол, поки його тягнуть або поле у фокусі. Ореол — це і є
+ * фокус-кільце повзунка: нативний outline малювався б навколо всього
+ * input, тобто навколо порожньої смуги, а не навколо ручки.
+ */
+.ui-slider:not(:disabled):hover::-webkit-slider-thumb {
+  transform: scale(1.15);
+}
+
+.ui-slider:not(:disabled):active::-webkit-slider-thumb,
+.ui-slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 4px color-mix(in oklab, var(--ring) 30%, transparent);
 }
 
 .ui-slider::-moz-range-track {
@@ -194,6 +215,21 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
   background: var(--bg-card);
   border: 2px solid var(--accent-solid);
   box-shadow: var(--shadow-card);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.ui-slider:not(:disabled):hover::-moz-range-thumb {
+  transform: scale(1.15);
+}
+
+.ui-slider:not(:disabled):active::-moz-range-thumb,
+.ui-slider:focus-visible::-moz-range-thumb {
+  transform: scale(1.15);
+  box-shadow:
+    var(--shadow-card),
+    0 0 0 4px color-mix(in oklab, var(--ring) 30%, transparent);
 }
 
 /*

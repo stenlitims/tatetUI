@@ -147,6 +147,12 @@ export default defineNuxtConfig({
   },
 
   app: {
+    /*
+     * Перехід між сторінками. mode: 'out-in' — стара сторінка зникає,
+     * і лише тоді з'являється нова; інакше обидві на мить стоять поруч і
+     * висота документа стрибає. Класи .page-* живуть у main.css.
+     */
+    pageTransition: { name: 'page', mode: 'out-in' },
     head: {
       htmlAttrs: { lang: 'uk' },
       meta: [

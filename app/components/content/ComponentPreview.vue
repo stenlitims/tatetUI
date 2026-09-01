@@ -136,7 +136,7 @@ function tabClass(value: 'preview' | 'code') {
     <div
       v-show="tab === 'preview'"
       class="flex flex-wrap items-center justify-center gap-4 p-8"
-      :class="[stage, bare ? '' : 'bg-main']"
+      :class="[stage, bare ? '' : 'preview-stage bg-main']"
     >
       <component :is="Demo" />
     </div>
@@ -163,6 +163,19 @@ function tabClass(value: 'preview' | 'code') {
   Область дії тримає сам клас .preview-code.
 -->
 <style>
+/*
+  Сцена демо — точкова сітка на тлі сторінки. Компонент на ній читається
+  як об'єкт на поверхні, а не як частина тексту документа, і межі
+  прозорих елементів (ghost-кнопки, розділювачі) стає видно.
+*/
+.preview-stage {
+  background-image: radial-gradient(
+    color-mix(in oklab, var(--ink) 10%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 16px 16px;
+}
+
 /*
   Плагін віддає підсвітку з defaultColor: false — кольори лежать в
   інлайнових --shiki-light / --shiki-dark на кожному span, а тему
