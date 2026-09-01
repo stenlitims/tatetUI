@@ -13,9 +13,22 @@ const props = withDefaults(
     label?: string
     /** Показати числове значення праворуч від підпису. */
     showValue?: boolean
+    /**
+     * Колір смуги. `accent` — звичайний перебіг; статусні тони — коли
+     * смуга сама є повідомленням: квота на 90% — `warning`, невдалий
+     * upload — `danger`.
+     */
+    tone?: 'accent' | 'success' | 'warning' | 'danger'
   }>(),
-  { modelValue: null, max: 100, size: 'sm', label: undefined, showValue: false },
+  { modelValue: null, max: 100, size: 'sm', label: undefined, showValue: false, tone: 'accent' },
 )
+
+const BAR_TONE: Record<NonNullable<typeof props.tone>, string> = {
+  accent: 'bg-accent-solid',
+  success: 'bg-success',
+  warning: 'bg-warning',
+  danger: 'bg-danger',
+}
 
 defineSlots<Record<string, never>>()
 
@@ -52,11 +65,13 @@ const percent = computed(() => {
     >
       <div
         v-if="percent == null"
-        class="ui-progress-indeterminate h-full w-1/3 rounded-full bg-accent-solid"
+        class="ui-progress-indeterminate h-full w-1/3 rounded-full"
+        :class="BAR_TONE[tone]"
       />
       <div
         v-else
-        class="h-full rounded-full bg-accent-solid transition-[width] duration-300 ease-out"
+        class="h-full rounded-full transition-[width,background-color] duration-(--duration-slow) ease-out"
+        :class="BAR_TONE[tone]"
         :style="{ width: `${percent}%` }"
       />
     </div>

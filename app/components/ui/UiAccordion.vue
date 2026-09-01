@@ -20,8 +20,13 @@ const props = withDefaults(
     defaultOpen?: string[]
     /** Показувати шеврон праворуч. */
     showToggle?: boolean
+    /**
+     * Лише одна відкрита секція: відкриття наступної закриває попередню.
+     * Для FAQ і майстрів налаштувань, де секції взаємовиключні.
+     */
+    single?: boolean
   }>(),
-  { modelValue: undefined, defaultOpen: () => [], showToggle: true },
+  { modelValue: undefined, defaultOpen: () => [], showToggle: true, single: false },
 )
 
 const emit = defineEmits<{
@@ -71,7 +76,9 @@ function toggle(item: AccordionItem) {
   if (item.disabled) return
   const open = !isOpen(item.id)
   internalOpen.value = open
-    ? [...internalOpen.value, item.id]
+    ? props.single
+      ? [item.id]
+      : [...internalOpen.value, item.id]
     : internalOpen.value.filter((id) => id !== item.id)
   emit('update:modelValue', [...internalOpen.value])
   if (open) emit('open', item.id)
@@ -117,7 +124,7 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
           :aria-expanded="isOpen(item.id)"
           :aria-controls="`${baseId}-${item.id}-panel`"
           :disabled="item.disabled"
-          class="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          class="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           :class="item.disabled ? 'text-muted' : 'text-ink hover:bg-hover'"
           @click="toggle(item)"
           @keydown="onHeaderKeydown($event, index)"
@@ -125,8 +132,8 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
           <slot name="label" :item="item" :open="isOpen(item.id)">{{ item.label }}</slot>
           <svg
             v-if="showToggle"
-            class="h-4 w-4 shrink-0 text-muted transition-transform duration-200"
-            :class="isOpen(item.id) ? 'rotate-180' : ''"
+            class="h-4 w-4 shrink-0 text-muted transition-[transform,color] ease-emphasized group-hover:text-ink"
+            :class="isOpen(item.id) ? 'rotate-180 text-accent' : ''"
             viewBox="0 0 24 24"
             fill="none"
             aria-hidden="true"
@@ -144,7 +151,7 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
         :aria-labelledby="`${baseId}-${item.id}-button`"
         :aria-hidden="!isOpen(item.id)"
         :inert="!isOpen(item.id)"
-        class="grid transition-[grid-template-rows] duration-200 ease-out"
+        class="grid transition-[grid-template-rows] duration-(--duration-slow) ease-emphasized"
         :style="{ gridTemplateRows: isOpen(item.id) ? '1fr' : '0fr' }"
       >
         <div class="overflow-hidden">

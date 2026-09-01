@@ -130,9 +130,11 @@ function visibleTime(item: TimelineItem): string {
 
       <span class="relative z-10 shrink-0">
         <slot name="dot" :item="item" :index="index">
+          <!-- ring-card відриває крапку від лінії конектора: без просвіту
+               крапка й лінія зливаються в одну паличку з потовщенням. -->
           <span
             aria-hidden="true"
-            class="block rounded-full"
+            class="block rounded-full ring-4 ring-card"
             :class="[DENSITY[density].dot, DOT_TONE[item.tone ?? 'neutral']]"
           />
         </slot>

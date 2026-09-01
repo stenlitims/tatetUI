@@ -1,6 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
+import UiAccordion from '~/components/ui/UiAccordion.vue'
+import UiAvatar from '~/components/ui/UiAvatar.vue'
+import UiChip from '~/components/ui/UiChip.vue'
 import UiInput from '~/components/ui/UiInput.vue'
+import UiProgress from '~/components/ui/UiProgress.vue'
 import UiInputOtp from '~/components/ui/UiInputOtp.vue'
 import UiTabs from '~/components/ui/UiTabs.vue'
 import { useToast } from '~/composables/useToast'
@@ -172,5 +176,77 @@ describe('UiTabs — індикатор', () => {
     await nextTick()
     expect(tabs[1]!.getAttribute('aria-selected')).toBe('true')
     expect(mounted.host.querySelectorAll('[role="tablist"] > span[aria-hidden="true"]')).toHaveLength(1)
+  })
+})
+
+describe('UiChip — removable', () => {
+  it('span-чип рендерить кнопку з доступною назвою і емітить remove', async () => {
+    let removed = 0
+    mounted = await mountComponent(UiChip, { removable: true, onRemove: () => (removed += 1) }, { default: () => 'Київ' })
+    const button = mounted.host.querySelector<HTMLButtonElement>('button')!
+    expect(button).not.toBeNull()
+    await nextTick()
+    expect(button.getAttribute('aria-label')).toBe('Видалити Київ')
+    button.click()
+    expect(removed).toBe(1)
+  })
+
+  it('клікабельний чип не вкладає button у button, видаляє через Delete', async () => {
+    let removed = 0
+    let clicked = 0
+    mounted = await mountComponent(
+      UiChip,
+      { removable: true, clickable: true, onRemove: () => (removed += 1), onClick: () => (clicked += 1) },
+      { default: () => 'Фільтр' },
+    )
+    expect(mounted.host.querySelectorAll('button')).toHaveLength(1)
+    const chip = mounted.host.querySelector<HTMLButtonElement>('button')!
+    chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }))
+    expect(removed).toBe(1)
+    // Клік по хрестику-іконці не активує сам чип.
+    chip.querySelector<HTMLElement>('span[aria-hidden="true"]:last-child')!.click()
+    expect(removed).toBe(2)
+    expect(clicked).toBe(0)
+  })
+})
+
+describe('UiAccordion — single', () => {
+  it('відкриття наступної секції закриває попередню', async () => {
+    const updates: string[][] = []
+    mounted = await mountComponent(UiAccordion, {
+      single: true,
+      defaultOpen: ['a'],
+      items: [
+        { id: 'a', label: 'A' },
+        { id: 'b', label: 'B' },
+      ],
+      'onUpdate:modelValue': (ids: string[]) => updates.push(ids),
+    })
+    const buttons = [...mounted.host.querySelectorAll<HTMLButtonElement>('h3 button')]
+    buttons[1]!.click()
+    await nextTick()
+    expect(updates.at(-1)).toEqual(['b'])
+    expect(buttons[0]!.getAttribute('aria-expanded')).toBe('false')
+    expect(buttons[1]!.getAttribute('aria-expanded')).toBe('true')
+  })
+})
+
+describe('UiAvatar — статус', () => {
+  it('додає стан у доступну назву і малює крапку', async () => {
+    mounted = await mountComponent(UiAvatar, { name: 'Марія Ковалишин', status: 'online', size: 40 })
+    const root = mounted.host.querySelector<HTMLElement>('[role="img"]')!
+    expect(root.getAttribute('aria-label')).toBe('Марія Ковалишин, онлайн')
+    const dot = root.querySelector<HTMLElement>('.bg-success')!
+    expect(dot).not.toBeNull()
+    expect(dot.style.width).toBe('11px')
+  })
+})
+
+describe('UiProgress — tone', () => {
+  it('фарбує смугу статусним токеном, aria лишається', async () => {
+    mounted = await mountComponent(UiProgress, { modelValue: 92, tone: 'warning' })
+    const bar = mounted.host.querySelector<HTMLElement>('[role="progressbar"]')!
+    expect(bar.firstElementChild!.className).toContain('bg-warning')
+    expect(bar.getAttribute('aria-valuenow')).toBe('92')
   })
 })

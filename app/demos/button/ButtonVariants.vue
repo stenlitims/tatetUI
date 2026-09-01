@@ -9,5 +9,6 @@ import UiButton from '~/components/ui/UiButton.vue'
     <UiButton variant="outline">outline</UiButton>
     <UiButton variant="ghost">ghost</UiButton>
     <UiButton variant="danger">danger</UiButton>
+    <UiButton variant="link">link</UiButton>
   </div>
 </template>

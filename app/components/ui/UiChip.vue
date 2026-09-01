@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = withDefaults(
   defineProps<{
@@ -18,6 +18,11 @@ const props = withDefaults(
     title?: string
     /** Кольорова крапка замість іконки — компактний індикатор статусу. */
     dot?: boolean
+    /**
+     * Хрестик видалення праворуч. Сам чип не зникає — лише повідомляє
+     * `remove`; список тримає батько (обрані фільтри, теги запису).
+     */
+    removable?: boolean
   }>(),
   { tone: 'neutral', size: 'xs' },
 )
@@ -25,7 +30,16 @@ const props = withDefaults(
 const emit = defineEmits<{
   /** Клік. Спрацьовує лише коли задано `clickable`. */
   click: [event: MouseEvent]
+  /** Натиснуто хрестик `removable`. */
+  remove: []
 }>()
+
+// Текст для доступної назви хрестика: «Видалити <текст чипа>».
+const chipEl = ref<HTMLElement | null>(null)
+const removeLabel = computed(() => {
+  const text = props.label || chipEl.value?.textContent?.trim()
+  return text ? `Видалити ${text}` : 'Видалити'
+})
 
 defineSlots<{
   /** Текст чипа. */
@@ -69,11 +83,13 @@ const classes = computed(() => [
   -->
   <component
     :is="clickable ? 'button' : 'span'"
+    ref="chipEl"
     :type="clickable ? 'button' : undefined"
     :class="classes"
     :aria-label="label"
     :title="title"
     @click="clickable && emit('click', $event)"
+    @keydown.delete="clickable && removable && emit('remove')"
   >
     <span
       v-if="dot"
@@ -82,5 +98,21 @@ const classes = computed(() => [
     />
     <slot v-else name="icon" />
     <slot />
+    <!-- Кнопка всередині чипа лише коли сам чип — span: <button> у <button>
+         невалідний. Клікабельний чип із removable рендерить хрестик як
+         span-іконку, а видалення лишається на клавіатурі через Delete. -->
+    <component
+      :is="clickable ? 'span' : 'button'"
+      v-if="removable"
+      :type="clickable ? undefined : 'button'"
+      :aria-label="clickable ? undefined : removeLabel"
+      :aria-hidden="clickable ? 'true' : undefined"
+      class="-mr-1 flex h-4 w-4 items-center justify-center rounded-full opacity-70 transition-[opacity,background-color] hover:bg-current/15 hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      @click.stop="emit('remove')"
+    >
+      <svg class="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+      </svg>
+    </component>
   </component>
 </template>

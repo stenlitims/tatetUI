@@ -271,7 +271,7 @@ const inputClasses = computed(() =>
  * добудовує невидимий ::after, як у UiSwitch.
  */
 const STEPPER_CLASS =
-  'ui-number-stepper absolute top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9'
+  'ui-number-stepper absolute top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink active:bg-line focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-9 md:w-9'
 
 defineExpose({
   /** Ставить фокус на поле. */
@@ -301,7 +301,9 @@ defineExpose({
         @pointercancel="stopHold"
         @pointerleave="stopHold"
       >
-        <span aria-hidden="true" class="text-lg leading-none">−</span>
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
       </button>
 
       <!--
@@ -353,7 +355,9 @@ defineExpose({
         @pointercancel="stopHold"
         @pointerleave="stopHold"
       >
-        <span aria-hidden="true" class="text-lg leading-none">+</span>
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+        </svg>
       </button>
     </div>
 

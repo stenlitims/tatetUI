@@ -1111,9 +1111,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                 class="border-b border-line transition-colors last:border-0"
                 :class="[
                   showSettings ? 'bg-card' : '',
+                  // Підсвітка рядка на наведенні — і в некликабельній
+                  // таблиці: у широкому рядку око губить, до якого запису
+                  // належить комірка праворуч.
                   rowClickable
                     ? 'cursor-pointer hover:bg-hover focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-ring'
-                    : '',
+                    : 'hover:bg-subtle',
                   selectable && selectedSet.has(item[keyRow] as string | number) ? 'bg-primary-50' : '',
                   rowClass?.(item),
                 ]"

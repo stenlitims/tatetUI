@@ -8,6 +8,7 @@ dependsOn:
   - app/composables/useFocusTrap.ts
   - app/composables/useReducedMotion.ts
   - app/utils/uiFieldStyles.ts
+  - app/components/ui/UiKbd.vue
 emitDescriptions:
   update:modelValue: Зміна стану відкриття. Використовуйте через `v-model`.
   select: Обрано команду. У payload приходять `groupId` та `item` — id групи й елемента, не їхні назви.

@@ -194,7 +194,7 @@ defineExpose({ open, close })
   </span>
 
   <Teleport to="body" :disabled="!teleportReady">
-    <Transition enter-active-class="transition duration-150 ease-out" enter-from-class="translate-y-1 opacity-0" leave-active-class="transition duration-100 ease-in" leave-to-class="translate-y-1 opacity-0">
+    <Transition enter-active-class="transition duration-150 ease-out" enter-from-class="translate-y-1 scale-[0.98] opacity-0" leave-active-class="transition duration-100 ease-in" leave-to-class="translate-y-1 scale-[0.98] opacity-0">
       <div
         v-if="modelValue"
         :id="panelId"
@@ -202,6 +202,7 @@ defineExpose({ open, close })
         role="dialog"
         :aria-label="ariaLabel"
         class="fixed rounded-overlay border border-line bg-dropdown p-4 text-ink shadow-overlay"
+        :class="placement.startsWith('top') ? 'origin-bottom' : 'origin-top'"
         :style="{ ...position, width }"
         @mouseenter="panelHovered = true; clearTimers()"
         @mouseleave="panelHovered = false; scheduleClose()"

@@ -11,9 +11,29 @@ const props = withDefaults(
     size?: number
     /** Палітра заливки, коли картинки немає. */
     tone?: 'primary' | 'neutral'
+    /**
+     * Індикатор присутності у правому нижньому куті. Колір дублюється
+     * словом у доступній назві: «Марія, онлайн».
+     */
+    status?: 'online' | 'offline' | 'busy' | 'away'
   }>(),
-  { src: undefined, name: undefined, size: 32, tone: 'primary' },
+  { src: undefined, name: undefined, size: 32, tone: 'primary', status: undefined },
 )
+
+const STATUS: Record<NonNullable<typeof props.status>, { dot: string; label: string }> = {
+  online: { dot: 'bg-success', label: 'онлайн' },
+  offline: { dot: 'bg-line-strong', label: 'офлайн' },
+  busy: { dot: 'bg-danger', label: 'зайнятий' },
+  away: { dot: 'bg-warning', label: 'відійшов' },
+}
+
+const accessibleName = computed(() => {
+  const base = props.name ?? 'Аватар'
+  return props.status ? `${base}, ${STATUS[props.status].label}` : base
+})
+
+// Крапка масштабується з аватаром: 28% діаметра, не менше 8px.
+const statusSize = computed(() => Math.max(8, Math.round(props.size * 0.28)))
 
 defineSlots<{
   /** Власний вміст замість картинки й ініціалів (іконка, логотип). */
@@ -57,12 +77,17 @@ const fontSizeClass = computed(() =>
 </script>
 
 <template>
+  <!-- Обрізання — на внутрішньому колі, а не на корені: індикатор статусу
+       виходить за межі кола і не має обрізатись. -->
   <span
-    class="relative inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full font-semibold uppercase"
-    :class="toneClass"
+    class="relative inline-flex shrink-0 select-none"
     :style="{ width: `${size}px`, height: `${size}px` }"
     role="img"
-    :aria-label="name ?? 'Аватар'"
+    :aria-label="accessibleName"
+  >
+  <span
+    class="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full font-semibold uppercase"
+    :class="toneClass"
   >
     <!-- Ініціали під картинкою до завантаження: аватар ніколи не порожній,
          а картинка проявляється поверх, а не вмикається стрибком. -->
@@ -86,5 +111,13 @@ const fontSizeClass = computed(() =>
     <slot v-if="!src || failed">
       <span v-if="initials" :class="fontSizeClass" aria-hidden="true">{{ initials }}</span>
     </slot>
+  </span>
+  <span
+    v-if="status"
+    aria-hidden="true"
+    class="absolute right-0 bottom-0 rounded-full ring-2 ring-card"
+    :class="STATUS[status].dot"
+    :style="{ width: `${statusSize}px`, height: `${statusSize}px` }"
+  />
   </span>
 </template>

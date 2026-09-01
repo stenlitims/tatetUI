@@ -377,7 +377,7 @@ defineExpose({
       <button
         v-if="clearable && selectedOption && !disabled"
         type="button"
-        class="absolute inset-y-0 right-7 flex items-center px-1 text-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="absolute top-1/2 right-8 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         @click="clear"
       >
         <span class="sr-only">Очистити вибір</span>

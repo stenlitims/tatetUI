@@ -4,6 +4,7 @@ description: Компактна позначка статусу з шістьм�
 component: UiChip
 emitDescriptions:
   click: Клік. Спрацьовує лише коли задано `clickable`.
+  remove: Натиснуто хрестик `removable` (або Delete на клікабельному чипі). Список тримає батько.
 status: stable
 order: 13
 ---

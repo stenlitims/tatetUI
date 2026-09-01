@@ -103,13 +103,18 @@ function onKeydown(event: KeyboardEvent, index: number) {
       <label
         v-for="(option, index) in options"
         :key="option.value"
-        class="relative flex min-h-11 items-start gap-2.5 rounded-control border bg-card px-3 py-2.5 transition-colors"
+        class="relative flex min-h-11 items-start gap-2.5 rounded-control border bg-card px-3 py-2.5 transition-[border-color,background-color,box-shadow]"
         :class="[
-          option.value === modelValue ? 'border-accent-solid bg-primary-50' : 'border-line hover:bg-hover',
+          option.value === modelValue
+            ? 'border-accent-solid bg-primary-50 ring-[3px] ring-ring/10'
+            : 'border-line hover:border-line-strong hover:bg-hover',
           disabled || option.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
           orientation === 'horizontal' ? 'min-w-36 flex-1' : 'w-full',
         ]"
       >
+        <!-- Радіо намальовано власним стилем, а не accent-color: нативний
+             кружечок у кожній ОС свій і не збігається з чекбоксом поруч.
+             Крапка — це товста межа (border-[5px]) без зайвих елементів. -->
         <input
           :ref="(el) => (inputs[index] = el as HTMLInputElement)"
           type="radio"
@@ -119,7 +124,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
           :disabled="disabled || option.disabled"
           :required="required"
           :tabindex="disabled ? -1 : index === tabStop ? 0 : -1"
-          class="peer mt-0.5 h-4 w-4 shrink-0 accent-[var(--accent-solid)] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="peer mt-0.5 h-4 w-4 shrink-0 appearance-none rounded-full border border-line bg-input transition-[border-color,border-width,box-shadow] not-disabled:hover:border-line-strong checked:border-[5px] checked:border-accent-solid checked:not-disabled:hover:border-accent-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
           @change="select(option)"
           @keydown="onKeydown($event, index)"
         />

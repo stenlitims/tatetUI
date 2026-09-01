@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, shallowRef } from 'vue'
+import { onMounted, ref, shallowRef } from 'vue'
 import { useToast, type ToastType } from '~/composables/useToast'
 
 /**
@@ -43,6 +43,54 @@ function onFocusOut(id: number, event: FocusEvent) {
   if (next && (event.currentTarget as HTMLElement).contains(next)) return
   resume(id)
 }
+
+/*
+ * Змахування. На телефоні хрестик 16px — не мета для пальця, а тост
+ * закривають саме там, де він заважає. Жест — угору (тости зверху) або
+ * вбік; рух униз гаситься опором, бо туди зникати нема куди.
+ *
+ * Поріг 48px: менше — випадковий дотик під час прокрутки, і тост
+ * повертається на місце.
+ */
+const SWIPE_THRESHOLD = 48
+const drag = ref<{ id: number; x: number; y: number } | null>(null)
+let origin = { x: 0, y: 0 }
+
+function onPointerDown(id: number, event: PointerEvent) {
+  if (event.button !== 0) return
+  // Кнопки всередині тоста — це кліки, а не початок жесту.
+  if ((event.target as HTMLElement).closest('button')) return
+  origin = { x: event.clientX, y: event.clientY }
+  drag.value = { id, x: 0, y: 0 }
+  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+}
+
+function onPointerMove(event: PointerEvent) {
+  if (!drag.value) return
+  const dx = event.clientX - origin.x
+  const dy = event.clientY - origin.y
+  // Домінантна вісь, щоб тост не «плавав» по діагоналі.
+  if (Math.abs(dx) > Math.abs(dy)) drag.value = { ...drag.value, x: dx, y: 0 }
+  else drag.value = { ...drag.value, x: 0, y: dy > 0 ? dy * 0.2 : dy }
+}
+
+function onPointerUp() {
+  if (!drag.value) return
+  const { id, x, y } = drag.value
+  drag.value = null
+  if (Math.abs(x) >= SWIPE_THRESHOLD || -y >= SWIPE_THRESHOLD) dismiss(id)
+}
+
+function dragStyle(id: number) {
+  if (drag.value?.id !== id) return undefined
+  const { x, y } = drag.value
+  const distance = Math.max(Math.abs(x), Math.abs(y))
+  return {
+    transform: `translate(${x}px, ${y}px)`,
+    opacity: String(Math.max(0.3, 1 - distance / 160)),
+    transition: 'none',
+  }
+}
 </script>
 
 <template>
@@ -65,14 +113,19 @@ function onFocusOut(id: number, event: FocusEvent) {
         <div
           v-for="toast in toasts"
           :key="toast.id"
-          class="pointer-events-auto w-[calc(100vw-2rem)] max-w-sm rounded-card border p-3 shadow-raised backdrop-blur-sm"
+          class="pointer-events-auto w-[calc(100vw-2rem)] max-w-sm touch-none rounded-card border p-3 shadow-raised backdrop-blur-sm transition-[transform,opacity]"
           :class="TONES[toast.type].shell"
+          :style="dragStyle(toast.id)"
           :role="toast.type === 'error' ? 'alert' : 'status'"
           :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
           @mouseenter="pause(toast.id)"
           @mouseleave="resume(toast.id)"
           @focusin="pause(toast.id)"
           @focusout="onFocusOut(toast.id, $event)"
+          @pointerdown="onPointerDown(toast.id, $event)"
+          @pointermove="onPointerMove"
+          @pointerup="onPointerUp"
+          @pointercancel="onPointerUp"
         >
           <div class="flex items-start gap-3">
             <svg

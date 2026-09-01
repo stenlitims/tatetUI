@@ -14,6 +14,7 @@ import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
 import { useReducedMotion } from '~/composables/useReducedMotion'
 import { fieldClass } from '~/utils/uiFieldStyles'
+import UiKbd from '~/components/ui/UiKbd.vue'
 
 /**
  * ⌘K-палітра команд.
@@ -378,7 +379,7 @@ onBeforeUnmount(() => {
                   role="option"
                   :aria-selected="row.index === activeIndex"
                   class="flex cursor-pointer items-center justify-between gap-3 rounded-control px-2.5 py-2.5 text-sm transition-colors md:py-2"
-                  :class="row.index === activeIndex ? 'bg-hover text-ink' : 'text-ink hover:bg-hover'"
+                  :class="row.index === activeIndex ? 'bg-primary-50 text-accent' : 'text-ink hover:bg-hover'"
                   @mouseenter="activeIndex = row.index!"
                   @click="selectAt(row.index!)"
                 >
@@ -400,6 +401,18 @@ onBeforeUnmount(() => {
             <div v-else class="px-3 py-6 text-center text-sm text-muted">
               <slot name="empty">{{ emptyText }}</slot>
             </div>
+          </div>
+
+          <!-- Підказки клавіш. Палітру відкривають хоткеєм, тобто з
+               клавіатури — і саме тут людина вперше бачить, що стрілки й
+               Enter працюють без миші. На дотику рядок зайвий. -->
+          <div
+            class="hidden items-center gap-4 border-t border-line bg-subtle px-3 py-2 text-xs text-muted pointer-fine:flex"
+            aria-hidden="true"
+          >
+            <span class="flex items-center gap-1"><UiKbd combo="ArrowUp" /><UiKbd combo="ArrowDown" /> навігація</span>
+            <span class="flex items-center gap-1"><UiKbd combo="Enter" /> обрати</span>
+            <span class="ml-auto flex items-center gap-1"><UiKbd combo="Escape" /> закрити</span>
           </div>
         </div>
       </div>

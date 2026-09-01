@@ -5,8 +5,12 @@ import UiLoadingDots from './UiLoadingDots.vue'
 
 const props = withDefaults(
   defineProps<{
-    /** Візуальна вага. `solid` — головна дія на екрані, вона має бути одна. */
-    variant?: 'solid' | 'soft' | 'outline' | 'ghost' | 'danger'
+    /**
+     * Візуальна вага. `solid` — головна дія на екрані, вона має бути одна.
+     * `link` — виглядає як посилання в тексті, але лишається кнопкою:
+     * «Показати ще», «Скинути фільтри» посеред абзацу чи підвалу картки.
+     */
+    variant?: 'solid' | 'soft' | 'outline' | 'ghost' | 'danger' | 'link'
     /**
      * Висота кнопки. На мобільному ієрархія лишається: `sm` 9, `md` 10,
      * `lg` 12 (у rem за кореня 15px), а точність дотику тримає невидима
@@ -91,6 +95,7 @@ const variants: Record<Variant, string> = {
   ghost: 'text-muted hover:text-ink hover:bg-hover active:bg-hover active:text-ink',
   danger:
     'bg-danger-solid text-danger-contrast hover:bg-danger-solid-hover active:bg-danger-solid-hover shadow-card',
+  link: 'h-auto px-0 text-accent underline-offset-4 hover:underline active:opacity-80',
 }
 
 /*
@@ -149,6 +154,9 @@ const classes = computed(() => [
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset',
   variants[props.variant],
   sizes[props.size],
+  // link не має власної висоти й паддінгу — розмір дає лише шрифт;
+  // масштаб натискання теж зайвий, бо стискати нема чого.
+  props.variant === 'link' ? 'h-auto px-0 md:h-auto md:px-0 active:scale-100' : '',
   props.block ? 'w-full justify-center' : '',
   isDisabled.value ? 'opacity-50 cursor-not-allowed' : '',
 ])

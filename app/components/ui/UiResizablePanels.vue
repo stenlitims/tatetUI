@@ -232,11 +232,18 @@ onBeforeUnmount(() => stopDragging())
       :aria-valuenow="value"
       :aria-disabled="disabled ? 'true' : undefined"
       :tabindex="disabled ? -1 : 0"
-      class="group relative z-10 flex shrink-0 touch-none items-center justify-center bg-subtle outline-none before:block before:bg-line hover:before:bg-accent-solid focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      class="group relative z-10 flex shrink-0 touch-none items-center justify-center bg-subtle outline-none before:block before:bg-line before:transition-colors hover:before:bg-accent-solid focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       :class="[separatorSizeClass, separatorClass, { 'cursor-not-allowed opacity-50': disabled, 'before:bg-accent-solid': dragging }]"
       @pointerdown="startDragging"
       @keydown="onKeydown"
     >
+      <!-- Ручка: пігулка, що проявляється на наведенні й під час
+           перетягування. Лінія сама по собі не каже, що її можна тягнути. -->
+      <span
+        aria-hidden="true"
+        class="absolute rounded-full bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        :class="[isHorizontal ? 'h-8 w-1' : 'h-1 w-8', dragging ? 'opacity-100 bg-accent-solid' : '']"
+      />
       <span class="sr-only">{{ Math.round(value) }}%</span>
     </div>
 

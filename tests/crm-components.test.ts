@@ -54,13 +54,15 @@ describe('UiStatCard', () => {
     await mounted.update({ deltaGood: 'none' })
     expect(mounted.host.querySelector('.text-success')).toBeNull()
     expect(mounted.host.querySelector('.text-danger')).toBeNull()
-    expect(mounted.host.textContent).toContain('▲')
+    // Стрілка — SVG, а не текстовий гліф: лишається на місці і в нейтральному тоні.
+    expect(mounted.host.querySelector('svg path')?.getAttribute('d')).toContain('M7 17')
   })
 
   it('стрілка прихована, а зміна має словесний еквівалент', async () => {
     mounted = await mountComponent(UiStatCard, { label: 'Виторг', value: '100', delta: -8 })
-    const arrow = [...mounted.host.querySelectorAll('span')].find((el) => el.textContent === '▼')!
+    const arrow = mounted.host.querySelector('svg')!
     expect(arrow.getAttribute('aria-hidden')).toBe('true')
+    expect(arrow.querySelector('path')?.getAttribute('d')).toContain('M7 7l10 10')
     const spoken = [...mounted.host.querySelectorAll('.sr-only')].map((el) => el.textContent)
     expect(spoken.some((text) => text?.includes('падіння на 8'))).toBe(true)
   })

@@ -353,7 +353,7 @@ defineExpose({
         <li v-for="(tag, index) in modelValue" :key="`${tag}-${index}`" class="contents">
           <slot name="tag" :tag="tag" :index="index" :remove="() => removeAt(index)">
             <span
-              class="inline-flex items-center gap-1 rounded-control border px-2 py-1 text-xs font-medium transition-colors"
+              class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors"
               :class="armedForRemoval && index === modelValue.length - 1
                 ? 'border-danger-line bg-danger-bg text-danger'
                 : 'border-line bg-subtle text-ink'"
@@ -361,7 +361,7 @@ defineExpose({
               {{ tag }}
               <button
                 type="button"
-                class="-mr-1 flex h-5 w-5 items-center justify-center rounded text-muted transition-colors hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="-mr-1 flex h-5 w-5 items-center justify-center rounded-full text-muted transition-colors hover:bg-danger-bg hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 :aria-label="`Видалити ${tag}`"
                 :disabled="disabled"
                 @click.stop="removeAt(index)"

@@ -68,9 +68,9 @@ const direction = computed<'up' | 'down' | 'flat'>(() => {
  * метрику зеленим.
  */
 const TONE: Record<DeltaGood, Record<'up' | 'down' | 'flat', string>> = {
-  up: { up: 'text-success', down: 'text-danger', flat: 'text-muted' },
-  down: { up: 'text-danger', down: 'text-success', flat: 'text-muted' },
-  none: { up: 'text-muted', down: 'text-muted', flat: 'text-muted' },
+  up: { up: 'bg-success-bg text-success', down: 'bg-danger-bg text-danger', flat: 'bg-neutral-bg text-muted' },
+  down: { up: 'bg-danger-bg text-danger', down: 'bg-success-bg text-success', flat: 'bg-neutral-bg text-muted' },
+  none: { up: 'bg-neutral-bg text-muted', down: 'bg-neutral-bg text-muted', flat: 'bg-neutral-bg text-muted' },
 }
 
 const deltaTone = computed(() => TONE[props.deltaGood][direction.value])
@@ -132,8 +132,18 @@ const rootClass = computed(() => [
 
     <UiSkeleton v-if="loading" class="mt-3 h-4 w-36" />
     <div v-else-if="hasDelta || hint || $slots.footer" class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
-      <span v-if="hasDelta" class="inline-flex items-center gap-1 font-medium" :class="deltaTone">
-        <span aria-hidden="true">{{ direction === 'up' ? '▲' : direction === 'down' ? '▼' : '■' }}</span>
+      <!-- Дельта — пігулка зі стрілкою-SVG: текстові ▲▼ кожен шрифт малює
+           по-своєму й не на базовій лінії. -->
+      <span
+        v-if="hasDelta"
+        class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-medium tabular-nums"
+        :class="deltaTone"
+      >
+        <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path v-if="direction === 'up'" d="M7 17 17 7M8 7h9v9" />
+          <path v-else-if="direction === 'down'" d="M7 7l10 10M17 8v9H8" />
+          <path v-else d="M5 12h14" />
+        </svg>
         <span aria-hidden="true">{{ deltaText }}</span>
         <span class="sr-only">{{ deltaLabel }}</span>
       </span>

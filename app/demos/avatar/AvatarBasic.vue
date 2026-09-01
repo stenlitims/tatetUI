@@ -10,5 +10,7 @@ import UiAvatar from '~/components/ui/UiAvatar.vue'
     <!-- Битий URL навмисно: демонструє падіння на ініціали -->
     <UiAvatar src="https://example.invalid/no-photo.png" name="Немає фото" :size="32" />
     <UiAvatar tone="neutral" name="Сервісний акаунт" :size="32" />
+    <UiAvatar name="Оксана Литвин" :size="40" status="online" />
+    <UiAvatar name="Денис Кравець" :size="40" status="busy" tone="neutral" />
   </div>
 </template>

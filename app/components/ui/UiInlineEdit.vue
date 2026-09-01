@@ -144,14 +144,27 @@ function onKeydown(event: KeyboardEvent) {
     v-else
     ref="displayEl"
     type="button"
-    class="inline-flex min-h-12 w-full cursor-text items-center rounded-control px-1.5 text-left text-base transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:py-1 md:text-sm"
+    class="group inline-flex min-h-12 w-full cursor-text items-center gap-2 rounded-control px-1.5 text-left text-base transition-colors hover:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-0 md:py-1 md:text-sm"
     :title="'Клікніть, щоб редагувати'"
     :aria-label="`${ariaLabel}: ${displayText}`"
     @click="startEdit"
   >
-    <slot name="display" :value="modelValue ?? null">
-      <span :class="modelValue == null ? 'text-muted' : 'text-ink'">{{ displayText }}</span>
-    </slot>
+    <span class="min-w-0 flex-1">
+      <slot name="display" :value="modelValue ?? null">
+        <span :class="modelValue == null ? 'text-muted' : 'text-ink'">{{ displayText }}</span>
+      </slot>
+    </span>
+    <!-- Олівець проявляється на наведенні й фокусі: без нього текст, який
+         можна редагувати, нічим не відрізняється від того, який не можна. -->
+    <svg
+      class="h-3.5 w-3.5 shrink-0 text-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+      <path d="m13.5 6.5 3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+    </svg>
   </button>
 
   <p v-if="error && editing" :id="errorId" :class="errorTextClass" role="alert">{{ error }}</p>
