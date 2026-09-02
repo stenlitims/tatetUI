@@ -30,7 +30,7 @@ export default defineNuxtConfig({
      * Без цього vue-component-meta будує окрему TS-програму на КОЖЕН із
      * десятка SFC, і кожна тягне типи @tiptap — найдорожча частина збірки.
      */
-    exclude: [/[\\/]ui[\\/]rich-text-editor[\\/]/, /[\\/]ui[\\/]tree-table[\\/]/],
+    exclude: [/[\\/]ui[\\/]rich-text-editor[\\/]/, /[\\/]ui[\\/]table[\\/]/],
     // `type` вимкнено свідомо: це повний тип компонента, у таблиці API він
     // не потрібен, а в JSON виходить на порядок більшим за все інше разом.
     metaFields: { type: false, props: true, slots: true, events: true, exposed: true },

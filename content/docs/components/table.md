@@ -6,6 +6,8 @@ dependsOn:
   - app/components/ui/UiSkeleton.vue
   - app/components/ui/UiMenu.vue
   - app/components/ui/UiCheckbox.vue
+  - app/components/ui/table/ColumnSettings.vue
+  - app/utils/tableColumns.ts
   - app/utils/tableSelection.ts
 emitDescriptions:
   update:sort: Нове сортування або `null`, якщо скинуто. Використовуйте через `v-model:sort`.
@@ -28,6 +30,25 @@ order: 17
 
 ::component-preview{name="table-settings" stage="min-h-96"}
 ::
+
+Сама панель — спільний компонент із `UiTreeTable`
+(`app/components/ui/table/ColumnSettings.vue`), як і арифметика ширин,
+порівняння значень при сортуванні й зведення збереженої розкладки
+(`app/utils/tableColumns.ts`). Це не економія рядків, а гарантія: дві
+копії тієї самої панелі розходяться мовчки й розходилися — у дереві
+кнопки порядку мали зону дотику 45×45 і SVG-стрілки, тут лишались
+текстові «↑↓» без зони.
+
+## Закріплена перша колонка
+
+`stickyColumn` тримає першу видиму колонку на місці при горизонтальній
+прокрутці — той самий контракт, що `stickyTreeColumn` у `UiTreeTable`, і
+той самий вигляд: край колонки отримує тінь, щойно під нею починає їхати
+вміст. Має сенс лише тоді, коли перша колонка ідентифікує рядок — назва,
+SKU, номер; закріплена колонка зі статусом лишає читача без орієнтира.
+
+З `selectable` колонка прапорців теж закріплюється — інакше перша ж
+прокрутка ховала б її під колонкою даних.
 
 ## Стани
 

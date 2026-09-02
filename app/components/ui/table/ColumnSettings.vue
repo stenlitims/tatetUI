@@ -1,24 +1,25 @@
 <script setup lang="ts">
 /*
- * Панель налаштувань колонок дерева-таблиці.
+ * Панель налаштувань колонок — СПІЛЬНА для UiTable і UiTreeTable.
  *
- * Винесена з UiTreeTable за одним критерієм — тут НЕМАЄ жодного
- * споживацького слота. Рядки за тим самим критерієм лишились у
- * головному файлі: слоти `cell-*` довелося б прокидати через v-for по
- * $slots, що не типізується проти defineSlots і вбило б секцію «Слоти»
- * в таблиці API (language-tools#3429).
+ * Раніше цей екран існував двічі: власна копія в кожній таблиці. Копії
+ * розійшлися рівно так, як розходяться всі копії — у дереві кнопки
+ * порядку отримали зону дотику й SVG-стрілки, у плоскій таблиці лишились
+ * текстові «↑↓» без зони; ширина колонки в одній мала табличні цифри, в
+ * іншій ні. Спільний файл робить розбіжність неможливою, а не
+ * малоймовірною.
  *
- * Тека `tree-table/` не потрапляє ні в readdir(UI_DIR) перевірки
- * документації, ні в хук prerender:routes — обидва нерекурсивні. Тож
- * власної сторінки цей файл не потребує, як і RteToolbar.
+ * Тека `table/` не потрапляє ні в readdir(UI_DIR) перевірки документації,
+ * ні в хук prerender:routes — обидва нерекурсивні. Тож власної сторінки
+ * цей файл не потребує, як і RteToolbar.
  */
 import UiMenu from '../UiMenu.vue'
-import { clampWidth } from '~/utils/treeTable'
+import { clampWidth } from '~/utils/tableColumns'
 
 /*
- * Структурний тип замість імпорту TreeTableHeader із UiTreeTable.vue:
- * той імпортує цей файл, і типовий імпорт назад замкнув би коло.
- * Структурна типізація робить TreeTableHeader[] сумісним і без нього.
+ * Структурний тип замість імпорту TableHeader/TreeTableHeader: обидві
+ * таблиці імпортують цей файл, і типовий імпорт назад замкнув би коло.
+ * Структурна типізація робить обидва масиви сумісними і без нього.
  */
 interface SettingsColumn {
   value: string
@@ -30,28 +31,34 @@ interface SettingsColumn {
   visible?: boolean
 }
 
-const props = defineProps<{
-  /** Робоча копія колонок — та сама, що йде в `<colgroup>`. */
-  headers: SettingsColumn[]
-  /** Поточна щільність. Вона ж обирає висоту рядка. */
-  density: 'sm' | 'md'
-  /** Показати перемикач щільності. */
-  densityToggle: boolean
-  /** Колонка ієрархії: її не можна ні сховати, ні зрушити з місця. */
-  pinned: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** Робоча копія колонок — та сама, що йде в `<colgroup>`. */
+    headers: SettingsColumn[]
+    /** Поточна щільність. У дереві вона ж обирає висоту рядка. */
+    density: 'sm' | 'md'
+    /** Показати перемикач щільності. */
+    densityToggle: boolean
+    /**
+     * Колонка, закріплена першою: її не можна ні сховати, ні зрушити з
+     * місця. У дереві це колонка ієрархії; у плоскій таблиці закріпленої
+     * колонки немає, і проп не передають.
+     */
+    pinned?: string
+  }>(),
+  { pinned: undefined },
+)
 
 const emit = defineEmits<{
   'update:headers': [value: SettingsColumn[]]
   'update:density': [value: 'sm' | 'md']
-  /** Розгорнути всі гілки дерева. */
-  expandAll: []
-  /** Згорнути всі гілки дерева. */
-  collapseAll: []
   reset: []
 }>()
 
-defineSlots<Record<string, never>>()
+defineSlots<{
+  /** Додаткова секція над кнопками скидання: у дерева — керування гілками. */
+  extra?: () => unknown
+}>()
 
 // Невидима зона дотику 45×45 для дрібних кнопок панелі. Вимагає relative
 // на самій кнопці. Літерал, а не інтерполяція: JIT сканує рядки коду.
@@ -65,6 +72,9 @@ const iconButtonClass =
   'hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
   'disabled:cursor-not-allowed disabled:opacity-40'
 
+/** Перший індекс, який взагалі можна рухати. Закріплена колонка — нульовий. */
+const firstMovable = () => (props.pinned ? 1 : 0)
+
 function label(header: SettingsColumn) {
   return header.title || header.text || header.value
 }
@@ -74,9 +84,10 @@ function visibleCount() {
 }
 
 /**
- * Колонку ієрархії ховати не можна ніколи: вона несе відступ, шеврон і
- * напрямні. Без неї решта перетворюється на плоску таблицю, у якій
- * вкладеність існує, але не видима — гірше за відсутню колонку.
+ * Останню видиму колонку сховати не можна: це давало б `colspan="0"` і
+ * таблицю без жодного шляху назад. Закріплену — теж ніколи: у дереві
+ * саме вона несе відступ, шеврон і напрямні, без неї вкладеність існує,
+ * але не видима.
  */
 function canHide(header: SettingsColumn) {
   if (header.value === props.pinned || header.required) return false
@@ -95,32 +106,38 @@ function toggleVisibility(header: SettingsColumn) {
 }
 
 function move(index: number, delta: number) {
-  // Індекс 0 — колонка ієрархії: ані вона не рухається, ані під неї не
-  // підставляються інші.
+  const min = firstMovable()
   const target = index + delta
-  if (index === 0 || target < 1 || target >= props.headers.length) return
+  if (index < min || target < min || target >= props.headers.length) return
   const next = [...props.headers]
   const [column] = next.splice(index, 1)
   next.splice(target, 0, column!)
   emit('update:headers', next)
 }
 
+/*
+ * Індекс перетягування — звичайний об'єкт, а не ref: він не бере участі в
+ * рендері, і реактивність тут коштувала б перерахунку на кожен dragover.
+ */
 const dragIndex = { value: -1 }
 
 function onDragStart(index: number, event: DragEvent) {
-  if (index === 0) {
+  if (index < firstMovable()) {
     event.preventDefault()
     return
   }
   dragIndex.value = index
+  // Firefox не почне перетягування без setData.
   event.dataTransfer?.setData('text/plain', String(index))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
 }
 
 function onDrop(index: number) {
   const from = dragIndex.value
   dragIndex.value = -1
-  if (from < 1) return
-  const to = Math.max(1, index)
+  const min = firstMovable()
+  if (from < min) return
+  const to = Math.max(min, index)
   if (from === to) return
   const next = [...props.headers]
   const [column] = next.splice(from, 1)
@@ -129,7 +146,10 @@ function onDrop(index: number) {
 }
 
 function setWidth(header: SettingsColumn, raw: string) {
-  const width = clampWidth(Number(raw))
+  const parsed = Number(raw)
+  // Порожнє поле дає NaN — лишаємо ширину як є, а не скидаємо в мінімум.
+  if (!Number.isFinite(parsed)) return
+  const width = clampWidth(parsed)
   emit(
     'update:headers',
     props.headers.map((item) => (item.value === header.value ? { ...item, width } : item)),
@@ -189,9 +209,11 @@ function showAll() {
           </button>
         </div>
         <!--
-          Щільність тут міняє ВИСОТУ рядка, а не паддінг: висота входить
-          в арифметику вікна множенням, тож мусить бути числом ще до
-          рендеру. Наслідок — перемикач зсуває всю геометрію списку.
+          У дереві щільність міняє ВИСОТУ рядка, а не паддінг: висота
+          входить в арифметику вікна множенням, тож мусить бути числом ще
+          до рендеру. У плоскій таблиці рядок росте за вмістом, і там це
+          саме паддінг. Панель однакова, наслідок різний — і це єдина
+          різниця, яку варто тримати в голові.
         -->
       </div>
 
@@ -199,15 +221,15 @@ function showAll() {
         <div
           v-for="(header, index) in headers"
           :key="header.value"
-          class="flex items-center gap-2 px-2 py-1.5 hover:bg-hover"
-          :draggable="index > 0"
+          class="flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-hover"
+          :draggable="index >= (pinned ? 1 : 0)"
           @dragstart="onDragStart(index, $event)"
           @dragover.prevent
           @drop.prevent="onDrop(index)"
         >
           <span
             class="text-muted"
-            :class="index > 0 ? 'cursor-grab active:cursor-grabbing' : 'opacity-30'"
+            :class="index >= (pinned ? 1 : 0) ? 'cursor-grab active:cursor-grabbing' : 'opacity-30'"
             aria-hidden="true"
           >
             <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
@@ -232,7 +254,7 @@ function showAll() {
             <button
               type="button"
               :class="[iconButtonClass, touchTargetClass]"
-              :disabled="index <= 1"
+              :disabled="index <= (pinned ? 1 : 0)"
               :aria-label="`Перемістити «${label(header)}» вище`"
               @click="move(index, -1)"
             >
@@ -243,7 +265,7 @@ function showAll() {
             <button
               type="button"
               :class="[iconButtonClass, touchTargetClass]"
-              :disabled="index === 0 || index === headers.length - 1"
+              :disabled="index < (pinned ? 1 : 0) || index === headers.length - 1"
               :aria-label="`Перемістити «${label(header)}» нижче`"
               @click="move(index, 1)"
             >
@@ -266,25 +288,7 @@ function showAll() {
         </div>
       </div>
 
-      <div class="border-t border-line px-3 py-2">
-        <p class="mb-1.5 text-xs font-medium text-muted">Гілки</p>
-        <div class="flex gap-1">
-          <button
-            type="button"
-            class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            @click="emit('expandAll')"
-          >
-            Розгорнути всі
-          </button>
-          <button
-            type="button"
-            class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            @click="emit('collapseAll')"
-          >
-            Згорнути всі
-          </button>
-        </div>
-      </div>
+      <slot name="extra" />
 
       <div class="flex gap-1 border-t border-line px-2 py-2">
         <button

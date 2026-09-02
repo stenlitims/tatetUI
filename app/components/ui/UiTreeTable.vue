@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import UiCheckbox from './UiCheckbox.vue'
 import UiSkeleton from './UiSkeleton.vue'
-import TreeTableSettings from './tree-table/TreeTableSettings.vue'
+import TableColumnSettings from './table/ColumnSettings.vue'
 import { useReducedMotion } from '~/composables/useReducedMotion'
 import {
   keysBetween,
@@ -14,19 +14,21 @@ import {
 import {
   branchSelection,
   cascadeSelect,
-  clampWidth,
-  columnsMinWidth,
-  compareValues,
   flattenTree,
   indexTree,
-  mergeColumnSettings,
   reconcileLazySelection,
   windowRange,
-  COLUMN_DEFAULT_WIDTH,
-  type StoredColumn,
   type TreeKeyIndex,
   type TreeRow,
 } from '~/utils/treeTable'
+import {
+  clampWidth,
+  columnsMinWidth,
+  compareValues,
+  mergeColumnSettings,
+  COLUMN_DEFAULT_WIDTH,
+  type StoredColumn,
+} from '~/utils/tableColumns'
 
 export interface TreeTableHeader {
   /** Ключ поля у вузлі. Він же — суфікс іменованих слотів. */
@@ -1323,17 +1325,40 @@ defineExpose({
     </Transition>
 
     <div v-if="showSettings" class="mb-2 flex items-center justify-end">
-      <TreeTableSettings
+      <TableColumnSettings
         :headers="localHeaders"
         :density="localDensity"
         :density-toggle="densityToggle"
         :pinned="treeColumnValue"
         @update:headers="onSettingsHeaders"
         @update:density="onSettingsDensity"
-        @expand-all="expandAll"
-        @collapse-all="collapseAll"
         @reset="resetAll"
-      />
+      >
+        <!-- Керування гілками — єдине, чого немає в плоскій таблиці, тож
+             воно приходить слотом, а не другим набором пропсів у спільній
+             панелі. -->
+        <template #extra>
+          <div class="border-t border-line px-3 py-2">
+            <p class="mb-1.5 text-xs font-medium text-muted">Гілки</p>
+            <div class="flex gap-1">
+              <button
+                type="button"
+                class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                @click="expandAll"
+              >
+                Розгорнути всі
+              </button>
+              <button
+                type="button"
+                class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                @click="collapseAll"
+              >
+                Згорнути всі
+              </button>
+            </div>
+          </div>
+        </template>
+      </TableColumnSettings>
     </div>
 
     <div class="relative">
@@ -1933,4 +1958,17 @@ defineExpose({
   box-shadow: 4px 0 8px -4px color-mix(in oklab, var(--ink) 18%, transparent);
   clip-path: inset(0 -12px 0 0);
 }
+
+/*
+ * Останній рядок не малює роздільник: він збігся б із межею контейнера і
+ * дав подвійну лінію. Правилом у scoped-CSS, а не утилітою
+ * `last:[&>td]:after:hidden` — перевірено на зібраному CSS: таке
+ * поєднання варіантів Tailwind не генерує взагалі, і клас у розмітці
+ * мовчки нічого не робить. Правило, якого немає, виглядає точно як
+ * правило, що не спрацювало.
+ */
+tbody tr:last-child > td::after {
+  display: none;
+}
+
 </style>

@@ -4,11 +4,12 @@ description: Дерево-таблиця з віртуальним скроло�
 component: UiTreeTable
 dependsOn:
   - app/utils/treeTable.ts
+  - app/utils/tableColumns.ts
   - app/utils/tableSelection.ts
   - app/utils/overlayPosition.ts
   - app/utils/uiFieldStyles.ts
   - app/composables/useReducedMotion.ts
-  - app/components/ui/tree-table/TreeTableSettings.vue
+  - app/components/ui/table/ColumnSettings.vue
   - app/components/ui/UiCheckbox.vue
   - app/components/ui/UiMenu.vue
   - app/components/ui/UiSkeleton.vue
@@ -225,6 +226,16 @@ Roving tabindex: Tab бере лише активний рядок. ↑↓ ру�
 під `display: none` нульовий бокс. `matchMedia` тут неможливий — він
 правдивий лише після монтування, і гілка по брейкпойнту розійшлася б із
 прередереним HTML на все тіло таблиці.
+
+Панель налаштувань колонок — спільний компонент із `UiTable`
+(`app/components/ui/table/ColumnSettings.vue`), як і арифметика ширин,
+порівняння значень і зведення збереженої розкладки
+(`app/utils/tableColumns.ts` — імпортуйте звідти напряму, `treeTable.ts`
+цих функцій не ре-експортує). Дві копії тієї самої панелі розходяться
+мовчки: у дереві кнопки порядку встигли отримати зону дотику й
+SVG-стрілки, а в плоскій таблиці лишались текстові «↑↓» без зони.
+Керування гілками приходить у панель слотом — це єдине, чого в плоскій
+таблиці немає.
 
 З `tableId` розкладка зберігається під ключем
 `tree_table_settings_${tableId}`, а відкриті гілки — окремо, під

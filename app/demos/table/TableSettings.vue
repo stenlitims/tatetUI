@@ -44,6 +44,7 @@ const items = ref<Row[]>([
       :settings-version="2"
       max-height="18rem"
       sticky-header
+      sticky-column
       mobile-cards
     >
       <template #cell-price="{ item }">{{ (item.price as number).toLocaleString('uk') }} ₴</template>
@@ -52,7 +53,8 @@ const items = ref<Row[]>([
     <p class="text-xs text-muted">
       Потягніть межу заголовка, щоб змінити ширину; подвійний клік скидає.
       Кнопка над таблицею — видимість, порядок і щільність. Усе
-      зберігається й переживає перезавантаження.
+      зберігається й переживає перезавантаження. Прокрутіть таблицю вбік:
+      колонка SKU лишається на місці, решта їде під неї.
     </p>
   </div>
 </template>

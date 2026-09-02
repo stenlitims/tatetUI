@@ -2,17 +2,19 @@ import { describe, expect, it } from 'vitest'
 import {
   branchSelection,
   cascadeSelect,
-  clampWidth,
-  columnsMinWidth,
-  compareValues,
   filterTree,
   flattenTree,
   indexTree,
-  mergeColumnSettings,
   reconcileLazySelection,
   windowRange,
   type TreeRow,
 } from '~/utils/treeTable'
+import {
+  clampWidth,
+  columnsMinWidth,
+  compareValues,
+  mergeColumnSettings,
+} from '~/utils/tableColumns'
 
 interface Node extends Record<string, unknown> {
   id: number
