@@ -388,10 +388,20 @@ onBeforeUnmount(() => {
                 </h3>
               </slot>
             </div>
+            <!--
+              Хрестик лишається дрібним (h-8 = 30px) — це вторинна дія в
+              шапці, збільшувати заливку означало б сперечатися з назвою
+              панелі. Тому точність дотику тримає невидима зона 45×45 через
+              `pointer-coarse:after:` — той самий патерн, що в UiButton і
+              UiSwitch. Без неї на телефоні єдина кнопка закриття була
+              нижчою за мінімальну ціль у 44px (W3C 2.5.8 Target Size).
+              `relative` тут не декор: без нього `::after` рахував би
+              зміщення від шапки, а не від кнопки.
+            -->
             <button
               v-if="closable"
               type="button"
-              class="flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               aria-label="Закрити"
               @click="requestClose('button')"
             >

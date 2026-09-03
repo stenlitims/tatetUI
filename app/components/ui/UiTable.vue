@@ -1100,7 +1100,17 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
               class="flex justify-between gap-3 text-sm"
             >
               <dt class="shrink-0 text-muted">{{ header.text }}</dt>
-              <dd class="min-w-0 text-right text-ink">
+              <!--
+                `break-words` обов'язковий, а не косметика. `min-w-0` дозволяє
+                комірці стиснутись, але НЕ дозволяє розірвати слово: значення
+                на кшталт ідентифікатора чи ключа (`product.creative.system`,
+                URL, хеш) лишається одним неподільним токеном і розпирає
+                картку. Тоді сторінка отримує горизонтальну прокрутку, якої на
+                телефоні бути не повинно — виміряно 442px вмісту на екрані
+                320px. Клас впливає лише на слова, ЩО НЕ ВМІЩАЮТЬСЯ; звичайний
+                текст переносить далі по пробілах.
+              -->
+              <dd class="min-w-0 text-right break-words text-ink">
                 <slot :name="`cell-${header.value}`" :item="item" :header="header">
                   {{ item[header.value] ?? '—' }}
                 </slot>
