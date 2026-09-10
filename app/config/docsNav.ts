@@ -107,6 +107,7 @@ export const docsNav: NavGroup[] = [
       { title: 'Breadcrumb', to: '/docs/components/breadcrumb' },
       { title: 'Card', to: '/docs/components/card' },
       { title: 'Accordion', to: '/docs/components/accordion' },
+      { title: 'Expand', to: '/docs/components/expand' },
       { title: 'Stepper', to: '/docs/components/stepper' },
     ],
   },
