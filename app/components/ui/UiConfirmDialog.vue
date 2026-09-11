@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useConfirm } from '~/composables/useConfirm'
 import UiButton from './UiButton.vue'
 import UiInput from './UiInput.vue'
@@ -21,9 +21,6 @@ defineSlots<Record<string, never>>()
 const { _state, _accept, _cancel } = useConfirm()
 const { isOpen, options, inputValue } = _state
 
-const inputRef = ref<InstanceType<typeof UiInput> | null>(null)
-const confirmRef = ref<InstanceType<typeof UiButton> | null>(null)
-
 const open = computed({
   get: () => isOpen.value,
   // UiModal може закритися сам (Escape, хрестик) — це рівносильно скасуванню.
@@ -39,16 +36,23 @@ const canAccept = computed(() => {
 })
 
 /*
- * Фокус ставимо вручну після відкриття: у полі введення, якщо це prompt,
- * інакше на кнопці підтвердження. UiModal типово фокусує саму панель — це
- * правильний дефолт для форм на мобільних, але для діалогу з однією дією
- * зайвий Tab перед підтвердженням дратує.
+ * Фокус віддаємо через `initialFocus` самої модалки, а не власним
+ * `.focus()` після nextTick.
+ *
+ * UiModal ставить фокус усередині `focusTrap.activate()` — тобто ПІЗНІШЕ
+ * за будь-який watch у цьому компоненті, — і мовчки перебивав наш виклик:
+ * фокус завжди лишався на панелі. Найпомітніше це було в prompt, де
+ * набрати відповідь можна було лише клікнувши в поле.
+ *
+ * На небезпечній дії фокус отримує «Скасувати», а не підтвердження:
+ * діалог з'являється раптово, і Enter, натиснутий за інерцією, не має
+ * незворотно нічого видаляти. Де скасування немає (alert) або дія
+ * безпечна — фокус стоїть на підтвердженні, щоб не тиснути Tab.
  */
-watch(isOpen, async (value) => {
-  if (!value) return
-  await nextTick()
-  if (options.value.input) inputRef.value?.focus()
-  else confirmRef.value?.focus()
+const initialFocus = computed(() => {
+  if (options.value.input) return '[data-confirm-input] input'
+  if (options.value.danger && !options.value.hideCancel) return '[data-confirm-cancel]'
+  return '[data-confirm-accept]'
 })
 
 function onKeydown(event: KeyboardEvent) {
@@ -65,13 +69,14 @@ function onKeydown(event: KeyboardEvent) {
     size="sm"
     :close-on-backdrop="!options.input"
     :closable="!options.input?.required"
+    :initial-focus="initialFocus"
   >
     <p v-if="options.message" class="text-muted">{{ options.message }}</p>
 
     <UiInput
       v-if="options.input"
-      ref="inputRef"
       v-model="inputValue"
+      data-confirm-input
       :label="options.input.label"
       :placeholder="options.input.placeholder"
       :required="options.input.required"
@@ -80,11 +85,11 @@ function onKeydown(event: KeyboardEvent) {
     />
 
     <template #footer>
-      <UiButton v-if="!options.hideCancel" variant="outline" @click="_cancel()">
+      <UiButton v-if="!options.hideCancel" variant="outline" data-confirm-cancel @click="_cancel()">
         {{ options.cancelText }}
       </UiButton>
       <UiButton
-        ref="confirmRef"
+        data-confirm-accept
         :variant="options.danger ? 'danger' : 'solid'"
         :disabled="!canAccept"
         @click="_accept()"

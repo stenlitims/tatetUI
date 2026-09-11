@@ -57,11 +57,23 @@ function settle(value: boolean | string | null) {
 }
 
 export function useConfirm() {
-  function open(next: ConfirmOptions): void {
+  /**
+   * Показує діалог і бере на себе проміс виклику.
+   *
+   * Резолвер приходить АРГУМЕНТОМ і лягає в `resolvePromise` лише після
+   * перевірки нижче. Якщо записати його до неї — а саме так тут колись і
+   * було, — перевірка «чи відкритий попередній діалог» бачила щойно
+   * записаний власний резолвер і гасила його: кожен confirm() віддавав
+   * false ще до появи діалога на екрані, кнопки лишалися без ефекту.
+   */
+  function open(next: ConfirmOptions, resolve: (value: never) => void): void {
     // Другий виклик, поки перший ще відкритий: закриваємо перший як
     // «скасовано». Інакше його проміс не зарезолвиться ніколи, і await на
-    // ньому зависне назавжди.
-    if (resolvePromise.value) settle(false)
+    // ньому зависне назавжди. Значення — те саме, що дала б кнопка
+    // скасування ТОГО діалога: витіснений prompt чекає на string | null.
+    if (resolvePromise.value) settle(options.value.input ? null : false)
+
+    resolvePromise.value = resolve
 
     options.value = {
       ...DEFAULTS,
@@ -78,8 +90,7 @@ export function useConfirm() {
     const next =
       typeof messageOrOptions === 'string' ? { message: messageOrOptions } : messageOrOptions
     return new Promise<boolean>((resolve) => {
-      resolvePromise.value = resolve as (value: never) => void
-      open({ ...next, input: null })
+      open({ ...next, input: null }, resolve as (value: never) => void)
     })
   }
 
@@ -88,16 +99,17 @@ export function useConfirm() {
     const next =
       typeof messageOrOptions === 'string' ? { message: messageOrOptions } : messageOrOptions
     return new Promise<boolean>((resolve) => {
-      resolvePromise.value = resolve as (value: never) => void
-      open({ confirmText: 'Зрозуміло', ...next, hideCancel: true, input: null })
+      open(
+        { confirmText: 'Зрозуміло', ...next, hideCancel: true, input: null },
+        resolve as (value: never) => void,
+      )
     })
   }
 
   /** Запит рядка. Повертає введене або `null`, якщо скасовано. */
   function promptText(next: ConfirmOptions & { input?: ConfirmInputOptions }): Promise<string | null> {
     return new Promise<string | null>((resolve) => {
-      resolvePromise.value = resolve as (value: never) => void
-      open({ ...next, input: next.input ?? {} })
+      open({ ...next, input: next.input ?? {} }, resolve as (value: never) => void)
     })
   }
 
