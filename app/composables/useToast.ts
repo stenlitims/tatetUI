@@ -88,6 +88,12 @@ export function useToast() {
     toasts.value = toasts.value.filter((item) => item.id !== id)
   }
 
+  /** Прибрати всю чергу, включно з постійними тостами, і скасувати таймери. */
+  function dismissAll(): void {
+    for (const id of timers.keys()) clearTimer(id)
+    toasts.value = []
+  }
+
   /**
    * Зупинити відлік автозакриття — поки курсор чи фокус на тості.
    *
@@ -143,5 +149,5 @@ export function useToast() {
   const info = (message: string, options?: Omit<ToastOptions, 'type' | 'message'>) =>
     show({ ...options, message, type: 'info' })
 
-  return { toasts, show, dismiss, pause, resume, success, error, warning, info }
+  return { toasts, show, dismiss, dismissAll, pause, resume, success, error, warning, info }
 }
