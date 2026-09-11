@@ -106,7 +106,7 @@ const props = withDefaults(
      * карток — із ТИХ САМИХ слотів `cell-*`. Одне API, дві верстки.
      */
     mobileCards?: boolean
-    /** Закріпити шапку. Вимагає `maxHeight`, інакше не діє. */
+    /** Закріпити шапку. Вимагає `maxHeight` або `fill`, інакше не діє. */
     stickyHeader?: boolean
     /**
      * Закріпити ПЕРШУ видиму колонку при горизонтальній прокрутці — той
@@ -116,6 +116,22 @@ const props = withDefaults(
     stickyColumn?: boolean
     /** Напр. `"24rem"`. Без нього `stickyHeader` не має де закріплюватись. */
     maxHeight?: string
+    /**
+     * Висоту задає БАТЬКО, а не число тут. Контейнер прокрутки обіймає
+     * вміст, поки той вміщається, і стискається до залишку висоти, щойно
+     * перестав, — тож пагінація під таблицею лишається на екрані замість
+     * їхати за нижню межу вікна, а під короткою таблицею не висить
+     * порожня смуга на третину екрана.
+     *
+     * Вимагає ланцюжка flex-колонок із ВИЗНАЧЕНОЮ висотою (`h-dvh`,
+     * `h-full`) і `min-h-0` на кожній ланці. Без такого ланцюжка стискати
+     * немає до чого, і таблиця рендериться на всю свою висоту — саме тому
+     * `fill` безпечний і на сторінці, що прокручується: там він просто
+     * знімає кліть `maxHeight` і нічого не ламає.
+     *
+     * Перекриває `maxHeight`.
+     */
+    fill?: boolean
     /**
      * Вмикає меню налаштувань і збереження розкладки в localStorage під
      * ключем `table_settings_${tableId}`. Без нього таблиця некерована
@@ -465,6 +481,14 @@ const densityClass = computed(() => DENSITY_CLASSES[localDensity.value])
 const densitySelectionClass = computed(() => DENSITY_SELECTION[localDensity.value])
 
 /*
+ * Шапка кріпиться лише всередині контейнера з ВЛАСНОЮ прокруткою, а таким
+ * його роблять дві різні речі — `maxHeight` і `fill`. Умова мусить знати
+ * про обидві: інакше перехід з одного на інший мовчки віддирає шапку, і
+ * це виглядає як баг CSS, хоча це умова в шаблоні.
+ */
+const canStickHeader = computed(() => props.stickyHeader && (props.fill || !!props.maxHeight))
+
+/*
  * Ширина flex-колонки входить у мінімум, а не виключається з нього.
  *
  * За table-layout: fixed колонка без width отримує ЗАЛИШОК. Якщо мінімум
@@ -700,7 +724,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
 </script>
 
 <template>
-  <div :class="{ 'select-none': !!resizing || selectable }">
+  <!--
+    У режимі `fill` каркас навмисно БЕЗ `flex-1`: колонка з `min-h-0`
+    обіймає вміст і стискається лише коли не вміщається. З `flex-1`
+    таблиця на три рядки розтягувалась би на весь екран порожнім тлом.
+  -->
+  <div :class="[{ 'select-none': !!resizing || selectable }, fill ? 'flex min-h-0 flex-col' : '']">
     <!--
       Панель ЗОВНІ контейнера з overflow-auto: усередині нього вона з'їхала б
       горизонтально разом із таблицею і зникла б з очей рівно тоді, коли
@@ -756,7 +785,13 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       />
     </div>
 
-    <div class="relative">
+    <!--
+      Нижче `md` ця обгортка лишається в потоці порожньою (контейнер
+      прокрутки всередині сховано, картки — сусідній вузол). Саме тому
+      тут `min-h-0` без `flex-1`: порожній `flex-1` з'їв би весь вільний
+      простір і зіштовхнув картки за екран.
+    -->
+    <div class="relative" :class="fill ? 'flex min-h-0 flex-col' : ''">
       <!--
         bg-card на контейнері обов'язковий, а не косметика: компонент і сам
         малює card у трьох місцях — кнопку налаштувань, градієнт прокрутки і
@@ -767,8 +802,8 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       <div
         ref="scrollEl"
         class="scrollbar-thin relative overflow-auto rounded-card border border-line bg-card"
-        :class="mobileCards ? 'hidden md:block' : ''"
-        :style="maxHeight ? { maxHeight } : undefined"
+        :class="[mobileCards ? 'hidden md:block' : '', fill ? 'min-h-0' : '']"
+        :style="!fill && maxHeight ? { maxHeight } : undefined"
         @scroll.passive="measure"
       >
         <!--
@@ -810,7 +845,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                 class="border-b border-line bg-subtle"
                 :class="[
                   densitySelectionClass,
-                  stickyHeader && maxHeight ? 'sticky top-0' : '',
+                  canStickHeader ? 'sticky top-0' : '',
                   stickyColumn ? 'sticky left-0 z-30' : 'z-20',
                 ]"
               >
@@ -834,7 +869,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                 :class="[
                   densityClass,
                   alignClass(header),
-                  stickyHeader && maxHeight ? 'sticky top-0' : '',
+                  canStickHeader ? 'sticky top-0' : '',
                   isStickyColumn(header) ? 'sticky z-30' : 'z-20',
                   isStickyColumn(header) && canScrollLeft ? 'ui-table-sticky-edge' : '',
                 ]"
