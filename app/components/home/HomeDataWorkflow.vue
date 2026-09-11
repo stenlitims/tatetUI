@@ -225,7 +225,7 @@ async function removeDrafts(closeMenu: () => void) {
         </template>
       </UiTable>
 
-      <div class="border-t border-line px-4 pb-4">
+      <div class="border-t border-line p-4">
         <UiPagination
           v-model:page="page"
           v-model:page-size="pageSize"

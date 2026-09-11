@@ -74,7 +74,12 @@ function onPageSizeChange(event: Event) {
 </script>
 
 <template>
-  <div v-if="normalizedTotalPages > 1 || pageSizeOptions?.length" class="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
+  <!--
+    Власного зовнішнього відступу немає навмисно: ритм колонки задає батько
+    (`gap-*`), і `mt-4` тут означав би, що під таблицею проміжок інший, ніж
+    між усіма іншими блоками тієї самої сторінки.
+  -->
+  <div v-if="normalizedTotalPages > 1 || pageSizeOptions?.length" class="flex flex-col items-center justify-between gap-3 sm:flex-row">
     <div class="flex items-center gap-3 text-sm text-muted">
       <span v-if="rangeText">{{ rangeText }}</span>
       <label v-if="pageSizeOptions?.length" class="flex items-center gap-1.5 text-xs">

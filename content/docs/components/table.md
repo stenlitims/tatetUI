@@ -136,17 +136,29 @@ SKU, номер; закріплена колонка зі статусом ли�
 
 ```vue
 <div class="flex h-dvh flex-col">
-  <main class="flex min-h-0 flex-1 flex-col gap-3 p-3">
-    <PageHeader />
-    <UiTable fill sticky-header :headers="headers" :items="items" />
-    <UiPagination v-model:page="page" :total-pages="pages" />
+  <main class="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+    <section class="flex min-h-96 flex-1 flex-col gap-3">
+      <PageHeader />
+      <UiTable fill sticky-header :headers="headers" :items="items" />
+      <UiPagination v-model:page="page" :total-pages="pages" />
+    </section>
   </main>
 </div>
 ```
 
+`min-h-96` на секції — не окраса. Таблиця з `fill` єдина в колонці має
+`min-h-0`, тож вона забирає ВЕСЬ дефіцит висоти: у вікні 1280×320 без
+підлоги від неї лишається сама шапка. Підлога стоїть на секції, а не на
+таблиці, саме тому, що на таблиці вона тримала б порожнечу під короткими
+списками; на секції зайва висота йде під пагінацію, де її не видно, а
+переповнення бере на себе `overflow-y-auto` на `<main>`.
+
 Саме тому `fill` безпечний і на сторінці, що прокручується: визначеної
 висоти згори там немає, стискати немає до чого, і властивість просто знімає
-кліть `maxHeight` — таблиця показує всі рядки, а гортає сторінка.
+кліть `maxHeight` — таблиця показує всі рядки, а гортає сторінка. Для
+таблиці, вбудованої в довгу сторінку, це НЕ завжди те, що треба: якщо
+колонки не вміщаються по ширині, горизонтальний скролбар поїде в самий низ
+високого блока. Там лишайте `maxHeight`.
 
 ## Одне API, дві верстки
 
