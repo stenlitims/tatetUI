@@ -87,11 +87,16 @@ const role = computed(() => (props.tone === 'danger' ? 'alert' : undefined))
       </div>
     </div>
 
+    <!--
+      Хрестик ~22px — на дотику він добирає невидиму зону 45×45 (той самий
+      патерн, що в UiButton). Без неї палець промахувався повз «Закрити» і
+      влучав у текст повідомлення.
+    -->
     <button
       v-if="dismissible"
       type="button"
       aria-label="Закрити"
-      class="-m-1 shrink-0 self-start rounded-control p-1 text-muted transition-colors hover:bg-ink/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="relative -m-1 shrink-0 self-start rounded-control p-1 text-muted transition-colors hover:bg-ink/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
       @click="emit('dismiss')"
     >
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -4,7 +4,7 @@ description: Реалізовані пріоритети UI-компоненті
 order: 3
 ---
 
-Обидва цикли завершено — усі кандидати реалізовані, мають живі приклади,
+Три цикли завершено — усі кандидати реалізовані, мають живі приклади,
 API-сторінки та accessibility-контракти. Початкові пріоритети були
 звірені з каталогами
 [Radix Primitives](https://www.radix-ui.com/primitives/docs/components),
@@ -61,6 +61,31 @@ API-сторінки та accessibility-контракти. Початкові �
 `new Date(рік, місяць, день)`, а не додаванням мілісекунд. Це не стиль:
 `+ 86 400 000` ламає сітку місяця двічі на рік, у ночі переходу на літній і
 зимовий час.
+
+## Цикл 3 — те, що продукти пишуть заново
+
+Третій цикл зібрано не з каталогів інших бібліотек, а з кодових баз
+продуктів: CRM, CMS, маркетплейсу, чату й дашбордів. Кожен компонент нижче
+знайшовся щонайменше у двох із них, написаний окремо й по-різному —
+спінер `Loading.vue`, `ProgressRing`, `AdminDirtyBar`, `PageHeader`,
+`KpiCard` зі спарклайном, `ImageLightbox`, дзвіночок із лічильником,
+групи кнопок у панелях інструментів.
+
+| Компонент | Для чого | Основа композиції | Складність a11y | Статус |
+|---|---|---|---|---|
+| [`UiFormField`](/docs/components/form-field) | Лейбл, опис і помилка для будь-якого контрола | Field styles | `legend` першою дитиною, один опис | stable |
+| [`UiRating`](/docs/components/rating) | Оцінка у відгуку, середня оцінка в картці | Native radio | стрілки без зациклення, зняття оцінки | stable |
+| [`UiActionBar`](/docs/components/action-bar) | Масові дії, незбережені зміни | Button | постійний live-регіон, sticky проти fixed | stable |
+| [`UiButtonGroup`](/docs/components/button-group) | Зчеплені кнопки панелі інструментів | Button | `group` з назвою, не `toolbar` | stable |
+| [`UiPageHeader`](/docs/components/page-header) | Шапка сторінки чи розділу | Breadcrumb + Tabs | рівень заголовка окремо від кегля | stable |
+| [`UiSparkline`](/docs/components/sparkline) | Тренд у плитці метрики чи рядку | StatCard | один `role="img"` з підсумком | stable |
+| [`UiLightbox`](/docs/components/lightbox) | Перегляд фото на весь екран | Overlay stack + Carousel gestures | пастка фокуса, оголошення кадру | stable |
+| [`UiSpinner`](/docs/components/spinner) | Очікування без відомої тривалості | — | статус лише з назвою | stable |
+| [`UiProgressRing`](/docs/components/progress-ring) | Прогрес у щільному місці | Progress | невизначений стан без `aria-valuenow` | stable |
+| [`UiIndicator`](/docs/components/indicator) | Лічильник чи крапка на іконці | Avatar, Button | число в назві кнопки, не в значку | stable |
+
+Разом із циклом у `tokens.css` з'явилась роль `--rating`: зірка оцінки — не
+попередження, і бренд має змогу перефарбувати її окремо від статусів.
 
 ## Як наступний компонент переходить у роботу
 

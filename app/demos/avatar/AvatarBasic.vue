@@ -12,5 +12,7 @@ import UiAvatar from '~/components/ui/UiAvatar.vue'
     <UiAvatar tone="neutral" name="Сервісний акаунт" :size="32" />
     <UiAvatar name="Оксана Литвин" :size="40" status="online" />
     <UiAvatar name="Денис Кравець" :size="40" status="busy" tone="neutral" />
+    <!-- Компанія — квадрат; ініціали беруться з букв, а не з лапок: «ТС». -->
+    <UiAvatar name="ТОВ «Сігма Трейд»" :size="40" shape="square" />
   </div>
 </template>

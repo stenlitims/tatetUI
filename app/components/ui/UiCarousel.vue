@@ -142,7 +142,19 @@ function toggleAutoplay() {
   autoplayPaused.value = !autoplayPaused.value
 }
 
+/*
+ * Клавіші обробляються лише на самій каруселі та її власних контролах.
+ * keydown спливає з усього вмісту слайда: стрілка в полі вводу чи на
+ * посиланні всередині слайда гортала карусель, preventDefault не давав
+ * рухати курсор, а слайд із фокусом ставав inert — фокус падав у <body>.
+ */
+function isOwnKeyTarget(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null
+  return target === event.currentTarget || !!target?.hasAttribute('data-carousel-control')
+}
+
 function onKeydown(event: KeyboardEvent) {
+  if (!isOwnKeyTarget(event)) return
   if (event.key === 'ArrowLeft') previous()
   else if (event.key === 'ArrowRight') next()
   else if (event.key === 'Home') goTo(0)
@@ -315,7 +327,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
     >
       <div
         ref="trackEl"
-        class="flex w-full will-change-transform transition-transform duration-300 ease-out motion-reduce:transition-none"
+        class="flex w-full will-change-transform transition-transform duration-(--duration-slow) ease-emphasized motion-reduce:transition-none"
         :class="dragging ? 'transition-none' : ''"
         :style="trackStyle"
       >
@@ -333,17 +345,20 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         </div>
       </div>
 
-      <!-- На мобільному стрілок немає: свайп із фліком — основний жест, а
+      <!-- На дотику стрілок немає: свайп із фліком — основний жест, а
            кнопки поверх тексту лиш закривали слайд і конфліктували з
-           пальцем. На десктопі — поверх слайда, на вертикальній середині:
-           стандарт сучасних каруселей. Кола з напівпрозорим тлом і blur
-           читаються на будь-якому наповненні слайда. -->
+           пальцем. Ховаються за ТИПОМ вказівника, а не шириною: за шириною
+           планшет отримував дрібні стрілки без зони дотику, а вузьке вікно
+           десктопа — жодних стрілок для миші. Поверх слайда, на вертикальній
+           середині: стандарт сучасних каруселей. Кола з напівпрозорим тлом і
+           blur читаються на будь-якому наповненні слайда. -->
       <button
         v-if="count > 1"
         type="button"
         :disabled="previousDisabled"
         aria-label="Попередній слайд"
-        class="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:flex md:h-9 md:w-9"
+        class="absolute left-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:hidden"
+        data-carousel-control
         @click="previous"
       >
         <slot name="previous" :disabled="previousDisabled">
@@ -358,7 +373,8 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         type="button"
         :disabled="nextDisabled"
         aria-label="Наступний слайд"
-        class="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:flex md:h-9 md:w-9"
+        class="absolute right-3 top-1/2 z-10 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-line bg-card/85 text-ink shadow-card backdrop-blur-sm transition-colors hover:bg-card active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 pointer-coarse:hidden"
+        data-carousel-control
         @click="next"
       >
         <slot name="next" :disabled="nextDisabled">
@@ -380,12 +396,13 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         :key="index"
         type="button"
         class="ui-carousel-dot group relative flex h-6 w-6 items-center justify-center rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-carousel-control
         :aria-label="`Перейти до слайда ${index + 1}`"
         :aria-current="index === current ? 'true' : undefined"
         @click="goTo(index)"
       >
         <span
-          class="block rounded-full transition-all duration-200"
+          class="block rounded-full transition-[width,background-color] duration-(--duration-base) ease-emphasized"
           :class="index === current ? 'h-2 w-6 bg-accent-solid' : 'h-2 w-2 bg-line-strong group-hover:bg-accent'"
         />
       </button>
@@ -394,6 +411,7 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
         v-if="autoplay"
         type="button"
         class="pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12 relative ms-2 flex h-9 w-9 items-center justify-center rounded-full text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-carousel-control
         :aria-label="autoplayPaused ? 'Продовжити автопрокрутку' : 'Призупинити автопрокрутку'"
         @click="toggleAutoplay"
       >

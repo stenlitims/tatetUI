@@ -12,7 +12,7 @@ import {
 import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
-import { useReducedMotion } from '~/composables/useReducedMotion'
+import { readDurationToken, useReducedMotion } from '~/composables/useReducedMotion'
 import { fieldClass } from '~/utils/uiFieldStyles'
 import UiKbd from '~/components/ui/UiKbd.vue'
 
@@ -141,22 +141,44 @@ watch(matches, () => {
   activeIndex.value = 0
 })
 
+/*
+ * Підсвічений рядок має бути видимим. aria-activedescendant сам нічого не
+ * прокручує, тож у списку з max-h-80 після восьмого рядка стрілки водили
+ * підсвітку за нижній край, і людина вибирала наосліп.
+ */
+watch(activeIndex, (index) => {
+  if (!props.modelValue) return
+  void nextTick(() => {
+    document.getElementById(optionId(index))?.scrollIntoView?.({ block: 'nearest' })
+  })
+})
+
 /* ------------------------------------------------------------------ */
 /*  Overlay-стек, лок прокрутки, пастка фокуса                        */
 /* ------------------------------------------------------------------ */
 
-const layer = useOverlayLayer()
+// Escape — через спільний стек: закривається лише верхній шар, і підказка
+// чи меню поверх палітри отримують його першими.
+const layer = useOverlayLayer(undefined, { onEscape: () => closePalette() })
 const scrollLock = useScrollLock()
 const focusTrap = useFocusTrap(() => panelEl.value)
 const prefersReducedMotion = useReducedMotion()
 
 // Transition-и висять на ДІТЯХ кореня — Vue не виведе тривалість сам.
+// Числа — з тих самих токенів, що й CSS нижче.
 const transitionDuration = computed(() =>
-  prefersReducedMotion.value ? 0 : { enter: 200, leave: 150 },
+  prefersReducedMotion.value
+    ? 0
+    : { enter: readDurationToken('--duration-base', 180), leave: readDurationToken('--duration-fast', 120) },
 )
 
 async function handleOpen() {
-  query.value = ''
+  if (query.value) {
+    query.value = ''
+    // Запит скинуто — споживач з асинхронним пошуком мусить про це дізнатися,
+    // інакше під порожнім полем лишилися б результати старого запиту.
+    emit('search', '')
+  }
   activeIndex.value = 0
   layer.activate()
   scrollLock.lock()
@@ -233,12 +255,13 @@ function onPanelKeydown(event: KeyboardEvent) {
   }
 }
 
-function onKeyDown(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
-  // isTopmost — щоб Escape закривав ЛИШЕ верхній оверлей, а не всі відкриті.
-  if (!props.modelValue || !layer.isTopmost.value) return
-  event.stopPropagation()
-  closePalette()
+/**
+ * pointermove, а не mouseenter: коли стрілки прокручують список під
+ * нерухомим курсором, браузер шле mouseenter рядку, що заїхав під нього, —
+ * і підсвітка стрибала б назад під мишу посеред навігації з клавіатури.
+ */
+function onRowPointerMove(index: number) {
+  if (activeIndex.value !== index) activeIndex.value = index
 }
 
 /* ------------------------------------------------------------------ */
@@ -254,10 +277,20 @@ function onKeyDown(event: KeyboardEvent) {
  * й застосункові комбінації (знайти й замінити, адресний рядок) цінніші,
  * ніж ще один спосіб відкрити палітру.
  */
+/**
+ * `key` — щоб Ctrl+K працював на Dvorak чи Colemak, де «K» стоїть деінде;
+ * `code` — для кирилиці: на українській розкладці key дає «л», і хоткей
+ * мовчки не спрацьовував саме для основної аудиторії (той самий капкан
+ * описано в UiTreeTable).
+ */
+function isPaletteHotkey(event: KeyboardEvent) {
+  if (!(event.metaKey || event.ctrlKey)) return false
+  const key = event.key.toLowerCase()
+  return key === 'k' || (event.code === 'KeyK' && !/^[a-z]$/.test(key))
+}
+
 function onHotkey(event: KeyboardEvent) {
-  if (!props.hotkey) return
-  if (!(event.metaKey || event.ctrlKey)) return
-  if (event.key.toLowerCase() !== 'k') return
+  if (!props.hotkey || !isPaletteHotkey(event)) return
 
   const active = document.activeElement
   if (
@@ -297,13 +330,11 @@ function onRootClick(event: MouseEvent) {
 
 onMounted(() => {
   teleportReady.value = true
-  document.addEventListener('keydown', onKeyDown)
   document.addEventListener('keydown', onHotkey)
   if (props.modelValue) void handleOpen()
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeyDown)
   document.removeEventListener('keydown', onHotkey)
   // Компонент могли знищити відкритим (навігація) — handleClose знімає і
   // лок прокрутки, і пастку фокуса, і шар зі стеку.
@@ -380,7 +411,7 @@ onBeforeUnmount(() => {
                   :aria-selected="row.index === activeIndex"
                   class="flex cursor-pointer items-center justify-between gap-3 rounded-control px-2.5 py-2.5 text-sm transition-colors md:py-2"
                   :class="row.index === activeIndex ? 'bg-primary-50 text-accent' : 'text-ink hover:bg-hover'"
-                  @mouseenter="activeIndex = row.index!"
+                  @pointermove="onRowPointerMove(row.index!)"
                   @click="selectAt(row.index!)"
                 >
                   <slot
@@ -423,12 +454,16 @@ onBeforeUnmount(() => {
 <style scoped>
 /*
  * Тривалість задана явно через :duration у шаблоні, бо transition-и висять
- * на ДІТЯХ — з кореневого елемента Vue вивести її не може.
+ * на ДІТЯХ — з кореневого елемента Vue вивести її не може. Палітра легша за
+ * модалку: поява --duration-base, вихід --duration-fast.
  */
 
-.ui-command-palette-enter-active .ui-command-palette-backdrop,
+.ui-command-palette-enter-active .ui-command-palette-backdrop {
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
 .ui-command-palette-leave-active .ui-command-palette-backdrop {
-  transition: opacity 150ms ease;
+  transition: opacity var(--duration-fast) var(--ease-in);
 }
 
 .ui-command-palette-enter-from .ui-command-palette-backdrop,
@@ -438,14 +473,14 @@ onBeforeUnmount(() => {
 
 .ui-command-palette-enter-active .ui-command-palette-panel {
   transition:
-    opacity 200ms ease,
-    transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-emphasized);
 }
 
 .ui-command-palette-leave-active .ui-command-palette-panel {
   transition:
-    opacity 150ms ease,
-    transform 150ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity var(--duration-fast) var(--ease-in),
+    transform var(--duration-fast) var(--ease-emphasized);
 }
 
 .ui-command-palette-enter-from .ui-command-palette-panel,

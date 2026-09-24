@@ -41,6 +41,19 @@ export function isSameDay(first: Date, second: Date): boolean {
   return compareDay(first, second) === 0
 }
 
+/**
+ * Календарний день як `YYYY-MM-DD` за ЛОКАЛЬНИМ часом.
+ *
+ * Не `toISOString()`: той переводить опівніч у UTC, і в Києві 24 вересня
+ * серіалізувалося як `2026-09-23T21:00:00.000Z` — сервер, що бере перші
+ * десять символів, отримував учорашній день.
+ */
+export function toDateKey(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${date.getFullYear()}-${month}-${day}`
+}
+
 /** Той самий день іншого місяця. Кількість днів у місяці враховується. */
 export function addDays(date: Date, amount: number): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() + amount)

@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, useAttrs, useId, watch } from 'vue'
 import {
   errorTextClass,
   fieldClass,
   helperTextClass,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на поле-spinbutton.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -22,7 +26,10 @@ const props = withDefaults(
     stepFast?: number
     /** Скільки знаків після коми лишати. Округлення відбувається на blur. */
     precision?: number
-    /** Суфікс одиниці: %, грн, шт. Потрапляє і в `aria-valuetext`. */
+    /**
+     * Суфікс одиниці: %, грн, шт. Видно праворуч у полі (зі степерами — перед
+     * «+») і потрапляє в `aria-valuetext`. Розрахований на коротку одиницю.
+     */
     unit?: string
     /**
      * Групувати тисячі, поки поле поза фокусом. У фокусі показується сире
@@ -63,6 +70,9 @@ const emit = defineEmits<{
 // Слотів немає навмисно: обидва внутрішні краї поля зайняті кнопками
 // «−»/«+», і слот leading/trailing зіткнувся б із ними. Одиниця — props.
 defineSlots<Record<string, never>>()
+
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
 
 const generatedId = useId()
 const inputId = computed(() => props.id || `${generatedId}-number`)
@@ -247,8 +257,17 @@ onBeforeUnmount(() => {
   if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', stopHold)
 })
 
-const atMin = computed(() => typeof props.min === 'number' && (props.modelValue ?? props.min) <= props.min)
-const atMax = computed(() => typeof props.max === 'number' && (props.modelValue ?? props.max) >= props.max)
+/*
+ * Межа досягнута лише тоді, коли значення Є. Порожнє поле трактувалося як
+ * уже рівне min/max: з обома межами вимикалися обидві кнопки, хоча nudge()
+ * уміє стартувати з порожнього — від min або від 0.
+ */
+const atMin = computed(
+  () => typeof props.min === 'number' && props.modelValue !== null && props.modelValue <= props.min,
+)
+const atMax = computed(
+  () => typeof props.max === 'number' && props.modelValue !== null && props.modelValue >= props.max,
+)
 
 const valueText = computed(() => {
   if (props.modelValue === null) return undefined
@@ -260,7 +279,10 @@ const inputClasses = computed(() =>
     error: hasError.value,
     disabled: props.disabled,
     padLeft: props.steppers ? 'pl-12 md:pl-9' : undefined,
-    padRight: props.steppers ? 'pr-12 md:pr-9' : props.unit ? 'pr-10' : undefined,
+    // Зі степерами одиниця стоїть перед «+», тож справа місця треба на обох.
+    padRight: props.steppers
+      ? props.unit ? 'pr-24 md:pr-20' : 'pr-12 md:pr-9'
+      : props.unit ? 'pr-10' : undefined,
     extra: 'text-center tabular-nums',
   }),
 )
@@ -282,7 +304,7 @@ defineExpose({
 </script>
 
 <template>
-  <div>
+  <div v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
@@ -331,16 +353,21 @@ defineExpose({
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
         :class="inputClasses"
+        v-bind="fieldAttrs.control"
         @input="onInput"
         @focus="onFocus"
         @blur="onBlur"
         @keydown="onKeydown"
       >
 
+      <!-- Одиниця видима завжди. Раніше вона ховалася разом зі степерами
+           (а вони типово ввімкнені), і «кг» чи «грн» знав лише скрінрідер.
+           aria-hidden: для нього одиниця вже є в aria-valuetext. -->
       <span
-        v-if="unit && !steppers"
+        v-if="unit"
         aria-hidden="true"
-        class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted"
+        class="pointer-events-none absolute top-1/2 -translate-y-1/2 text-sm text-muted"
+        :class="steppers ? 'right-14 md:right-11' : 'right-3'"
       >{{ unit }}</span>
 
       <button

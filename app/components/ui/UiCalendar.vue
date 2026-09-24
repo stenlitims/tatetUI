@@ -124,24 +124,51 @@ function initialMonth(): Date {
 }
 
 const viewMonth = ref(initialMonth())
-watch(() => props.month, (value) => { if (value) viewMonth.value = startOfMonth(value) })
+
+/** Чи лежить дата у ВЛАСНОМУ місяці однієї з показаних сіток (не як сусідній день). */
+function isInView(date: Date) {
+  const first = startOfMonth(viewMonth.value)
+  const last = addDays(addMonths(first, props.months), -1)
+  return compareDay(date, first) >= 0 && compareDay(date, last) <= 0
+}
+
+function initialFocus(): Date {
+  // Обрана дата — лише якщо вона на екрані: з явним `month` вона могла
+  // опинитися в іншому місяці, і сітка лишалася без жодної зупинки Tab.
+  for (const candidate of [selectedSingle.value, selectedRange.value?.[0], todayDate.value]) {
+    if (candidate && isInView(candidate)) return startOfDay(candidate)
+  }
+  const first = startOfMonth(viewMonth.value)
+  const clamped = clampDate(first, props.min, props.max)
+  return isInView(clamped) ? clamped : first
+}
+
+const focusedDate = ref(initialFocus())
+
+/*
+ * Гортання кнопками чи v-model:month не рухало фокусований день. Щойно він
+ * виїжджав за показані місяці, жодна клітинка не мала tabindex="0", і Tab
+ * просто перестрибував сітку. Тепер фокус переходить на той самий день
+ * місяця в першому показаному (31 → останній день коротшого місяця).
+ */
+function keepFocusInView() {
+  if (isInView(focusedDate.value)) return
+  const first = startOfMonth(viewMonth.value)
+  const lastDay = addDays(addMonths(first, 1), -1).getDate()
+  focusedDate.value = new Date(first.getFullYear(), first.getMonth(), Math.min(focusedDate.value.getDate(), lastDay))
+}
+
+watch(() => props.month, (value) => {
+  if (!value) return
+  viewMonth.value = startOfMonth(value)
+  keepFocusInView()
+})
 
 function setMonth(next: Date) {
   viewMonth.value = startOfMonth(next)
   emit('update:month', viewMonth.value)
+  keepFocusInView()
 }
-
-function initialFocus(): Date {
-  if (selectedSingle.value) return startOfDay(selectedSingle.value)
-  if (selectedRange.value) return startOfDay(selectedRange.value[0])
-  const first = startOfMonth(viewMonth.value)
-  if (todayDate.value.getMonth() === first.getMonth() && todayDate.value.getFullYear() === first.getFullYear()) {
-    return todayDate.value
-  }
-  return clampDate(first, props.min, props.max)
-}
-
-const focusedDate = ref(initialFocus())
 
 /* ------------------------------------------------------------------ */
 /*  Сітка                                                             */
@@ -184,6 +211,14 @@ function isDisabled(date: Date) {
 /** Кінець діапазону для підсвічування: або наведена дата, або фокус. */
 const previewEnd = computed(() => hovered.value ?? focusedDate.value)
 
+/*
+ * Сусідній день може бути зупинкою Tab лише тоді, коли свого місяця цієї
+ * дати на екрані немає. З двома місяцями 1–11 жовтня стоять і в хвості
+ * вересневої сітки, і в жовтневій: без цього правила було дві зупинки Tab, а
+ * стрілки приводили фокус на бляклу копію в лівому місяці.
+ */
+const focusedInView = computed(() => isInView(focusedDate.value))
+
 function dayState(date: Date, month: Date) {
   const range = selectedRange.value
   const pending = pendingStart.value
@@ -209,6 +244,8 @@ function dayState(date: Date, month: Date) {
       ? !!selectedSingle.value && isSameDay(date, selectedSingle.value)
       : inRange
 
+  const outside = isOutside(date, month)
+
   return {
     date,
     selected,
@@ -217,8 +254,8 @@ function dayState(date: Date, month: Date) {
     rangeEnd,
     today: isSameDay(date, todayDate.value),
     disabled: isDisabled(date),
-    outside: isOutside(date, month),
-    focused: isSameDay(date, focusedDate.value),
+    outside,
+    focused: isSameDay(date, focusedDate.value) && (!outside || !focusedInView.value),
   }
 }
 
@@ -311,6 +348,24 @@ async function moveFocus(next: Date) {
 }
 
 function onKeydown(event: KeyboardEvent) {
+  // Escape скасовує НЕЗАВЕРШЕНИЙ діапазон звідки завгодно в календарі; якщо
+  // скасовувати нічого — подія йде далі, щоб закрилася панель, у якій
+  // календар лежить.
+  if (event.key === 'Escape') {
+    if (pendingStart.value) {
+      event.stopPropagation()
+      pendingStart.value = null
+    }
+    return
+  }
+
+  /*
+   * Решта клавіш — лише з клітинки дня. Слухач стоїть на корені, тож Enter і
+   * пробіл на кнопках «Попередній/Наступний місяць» (і в слотах header/footer)
+   * гасилися preventDefault і обирали сфокусований день замість гортання.
+   */
+  if (!(event.target as Element | null)?.closest?.('[role="gridcell"]')) return
+
   const current = focusedDate.value
   const step: Record<string, () => Date> = {
     ArrowLeft: () => addDays(current, -1),
@@ -337,20 +392,16 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     select(current)
-    return
-  }
-
-  // Escape скасовує НЕЗАВЕРШЕНИЙ діапазон; якщо скасовувати нічого —
-  // подія йде далі, щоб закрилася панель, у якій календар лежить.
-  if (event.key === 'Escape' && pendingStart.value) {
-    event.stopPropagation()
-    pendingStart.value = null
   }
 }
 
 defineExpose({
-  /** Ставить фокус на активну клітинку сітки. */
-  focus: () => gridEl.value?.querySelector<HTMLElement>('[data-focused="true"]')?.focus(),
+  /**
+   * Ставить фокус на активну клітинку сітки. `options` — як у нативного
+   * focus(): панель-обгортка передає `preventScroll`, поки ще не спозиціонована.
+   */
+  focus: (options?: FocusOptions) =>
+    gridEl.value?.querySelector<HTMLElement>('[data-focused="true"]')?.focus(options),
   /** Перемотує показ до місяця вказаної дати. */
   goToMonth: (date: Date) => setMonth(date),
 })

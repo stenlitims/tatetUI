@@ -7,11 +7,13 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useAttrs,
   useId,
   watch,
 } from 'vue'
 import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
+  clearButtonClass,
   dropdownEmptyClass,
   dropdownPanelClass,
   dropdownTransitionProps,
@@ -22,8 +24,12 @@ import {
   itemHighlighted,
   itemSelected,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на поле-комбобокс.
+defineOptions({ inheritAttrs: false })
 
 export interface SelectOption {
   value: string | number
@@ -54,7 +60,10 @@ const props = withDefaults(
     hint?: string
     /** Дозволяє скинути вибір хрестиком. */
     clearable?: boolean
-    /** Дозволяє звужувати список набором тексту. */
+    /**
+     * Дозволяє звужувати список набором тексту. Без фільтра поле поводиться
+     * як нативний `<select>`: Enter і пробіл відкривають список.
+     */
     filterable?: boolean
     /** Стабільний DOM id. `name` використовується лише для форми. */
     id?: string
@@ -73,6 +82,9 @@ defineSlots<{
   /** Власний рендер пункту списку. */
   option?: (props: { option: SelectOption; highlighted: boolean; selected: boolean }) => unknown
 }>()
+
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
 
 const generatedId = useId()
 const inputId = computed(() => props.id ?? `${generatedId}-select`)
@@ -208,7 +220,20 @@ function syncQueryToSelection() {
   query.value = selectedOption.value?.label ?? ''
 }
 
-watch(() => props.modelValue, syncQueryToSelection, { immediate: true })
+/*
+ * Стежимо і за значенням, і за НАЗВОЮ обраного пункту. Форма редагування
+ * зазвичай отримує значення раніше за список опцій — поки тут був лише
+ * modelValue, поле лишалося порожнім, доки користувач не відкриє й не
+ * закриє його. Під час набору не чіпаємо: підвантаження опцій переписало б
+ * запит просто під пальцями.
+ */
+watch(
+  [() => props.modelValue, () => selectedOption.value?.label],
+  () => {
+    if (!isTyping.value) syncQueryToSelection()
+  },
+  { immediate: true },
+)
 
 watch(filteredOptions, (options) => {
   if (!isOpen.value) return
@@ -226,16 +251,39 @@ function selectOption(option: SelectOption) {
 
 function clear() {
   emit('update:modelValue', null)
+  isTyping.value = false
   query.value = ''
   inputEl.value?.focus()
 }
 
 function onInput(event: Event) {
-  isTyping.value = true
   query.value = (event.target as HTMLInputElement).value
+  // open() скидає isTyping, тож відкриваємо ДО позначки набору. У зворотному
+  // порядку перша літера, набрана в закрите поле, не фільтрувала список, а
+  // Enter обирав перший пункт повного списку, а не знайдений.
+  if (!isOpen.value) void open()
+  isTyping.value = true
   highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
   emit('search', query.value)
+}
+
+/*
+ * Клік у поле лише ВІДКРИВАЄ список. Поки тут був перемикач, клік усередині
+ * відкритого поля — просто щоб переставити каретку — закривав список і
+ * стирав набраний запит. Закрити мишею можна шевроном, кліком поза полем
+ * чи вибором. Без фільтра поле — по суті кнопка, тож там клік перемикає.
+ */
+function onFieldPointerDown() {
   if (!isOpen.value) void open()
+  else if (!props.filterable) close()
+}
+
+// mousedown.prevent у шаблоні: фокус лишається в полі, а не падає на <body>.
+function onChevronMouseDown() {
+  if (props.disabled) return
+  if (isOpen.value) return close()
+  inputEl.value?.focus()
+  void open()
 }
 
 /* ---------------------------------------------------------------- */
@@ -281,8 +329,25 @@ function onKeydown(event: KeyboardEvent) {
       if (!isOpen.value) return void open()
       return moveHighlight(-1)
     case 'Enter': {
-      if (!isOpen.value) return
+      if (!isOpen.value) {
+        // Без фільтра — як нативний <select>: Enter відкриває список. Поле з
+        // фільтром лишає Enter на закритому полі формі (сабміт).
+        if (!props.filterable) {
+          event.preventDefault()
+          void open()
+        }
+        return
+      }
       event.preventDefault()
+      const option = filteredOptions.value[highlightedIndex.value]
+      if (option) selectOption(option)
+      return
+    }
+    case ' ': {
+      // У полі з фільтром пробіл — частина запиту.
+      if (props.filterable) return
+      event.preventDefault()
+      if (!isOpen.value) return void open()
       const option = filteredOptions.value[highlightedIndex.value]
       if (option) selectOption(option)
       return
@@ -345,13 +410,14 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl">
+  <div ref="rootEl" v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
     </label>
 
     <div class="relative">
+      <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
       <input
         :id="inputId"
         ref="inputEl"
@@ -369,15 +435,16 @@ defineExpose({
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
         autocomplete="off"
+        v-bind="fieldAttrs.control"
         @input="onInput"
         @keydown="onKeydown"
-        @pointerdown="isOpen ? close() : open()"
+        @pointerdown="onFieldPointerDown"
       />
 
       <button
         v-if="clearable && selectedOption && !disabled"
         type="button"
-        class="absolute top-1/2 right-8 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        :class="['absolute top-1/2 right-8 -translate-y-1/2', clearButtonClass]"
         @click="clear"
       >
         <span class="sr-only">Очистити вибір</span>
@@ -386,7 +453,13 @@ defineExpose({
         </svg>
       </button>
 
-      <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted">
+      <!-- Шеврон — єдиний перемикач мишею: клік у саме поле лише відкриває. -->
+      <span
+        class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted"
+        :class="disabled ? 'pointer-events-none' : 'cursor-pointer'"
+        aria-hidden="true"
+        @mousedown.prevent="onChevronMouseDown"
+      >
         <svg
           class="h-4 w-4 transition-transform"
           :class="isOpen ? 'rotate-180' : ''"

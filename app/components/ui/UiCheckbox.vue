@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, shallowRef, useId, watch } from 'vue'
-import { errorTextClass, helperTextClass } from '~/utils/uiFieldStyles'
+import { computed, nextTick, onMounted, shallowRef, useAttrs, useId, useSlots, watch } from 'vue'
+import { errorTextClass, helperTextClass, splitFieldAttrs } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку (ширина в таблиці, відступи), решта — на сам
+// <input>: aria-label на <div> прапорцю назви не дає.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -42,13 +46,23 @@ defineSlots<{
   default?: (props: { checked: boolean; indeterminate: boolean }) => unknown
 }>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+const slots = useSlots()
+
 const generatedId = useId()
 const checkboxId = computed(() => props.id ?? `${generatedId}-checkbox`)
+const labelTextId = `${generatedId}-label`
 const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 const descriptionId = `${generatedId}-description`
 const inputEl = shallowRef<HTMLInputElement | null>(null)
 
+/*
+ * Пояснення — постійна частина прапорця, тож воно йде в опис завжди, а з
+ * помилки й підказки — рівно одне: інакше скрінрідер зачитав би підказку,
+ * яку користувач щойно порушив, раніше за причину відмови.
+ */
 const describedBy = computed(() => {
   const ids = []
   if (props.description) ids.push(descriptionId)
@@ -56,6 +70,14 @@ const describedBy = computed(() => {
   else if (props.hint) ids.push(hintId)
   return ids.length ? ids.join(' ') : undefined
 })
+
+/*
+ * Назва — лише текст мітки. <label> обгортає і мітку, і пояснення, тож без
+ * явного aria-labelledby пояснення потрапляло в назву І в опис — скрінрідер
+ * читав його двічі. Без видимої мітки назву дає aria-label споживача, і
+ * порожній labelledby не має її перебивати.
+ */
+const labelledBy = computed(() => (props.label || slots.default ? labelTextId : undefined))
 
 function syncIndeterminate() {
   if (inputEl.value) inputEl.value.indeterminate = props.indeterminate
@@ -74,13 +96,14 @@ defineExpose({ focus: () => inputEl.value?.focus() })
 </script>
 
 <template>
-  <div>
+  <div v-bind="fieldAttrs.root">
     <label
       :for="checkboxId"
       class="flex min-w-0 w-full items-start gap-2.5"
       :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
     >
       <span class="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+        <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
         <input
           :id="checkboxId"
           ref="inputEl"
@@ -92,8 +115,10 @@ defineExpose({ focus: () => inputEl.value?.focus() })
           :required="required"
           :aria-checked="indeterminate ? 'mixed' : modelValue"
           :aria-invalid="!!error || undefined"
+          :aria-labelledby="labelledBy"
           :aria-describedby="describedBy"
           class="peer h-5 w-5 appearance-none rounded-[0.3rem] border border-line bg-input transition-[border-color,background-color,box-shadow] not-disabled:hover:border-line-strong checked:border-accent-solid checked:bg-accent-solid checked:not-disabled:hover:border-accent-solid focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
+          v-bind="fieldAttrs.control"
           @change="onChange"
         />
         <!-- animate-check-in: галочка «виростає», а не вмикається — стан
@@ -114,7 +139,7 @@ defineExpose({ focus: () => inputEl.value?.focus() })
         />
       </span>
       <span class="min-w-0 flex-1">
-        <span class="block text-sm font-medium text-ink">
+        <span :id="labelTextId" class="block text-sm font-medium text-ink">
           <slot :checked="modelValue" :indeterminate="indeterminate">{{ label }}</slot>
           <span v-if="required" class="text-danger" aria-hidden="true"> *</span>
         </span>

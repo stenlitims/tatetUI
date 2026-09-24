@@ -31,10 +31,13 @@ defineSlots<{
 </script>
 
 <template>
-  <component :is="as" class="ui-prose">
-    <!-- v-html і слот взаємовиключні: якщо задано html, слот ігнорується.
-         Змішувати їх не можна — v-html затирає дітей. -->
-    <div v-if="html != null" v-html="html" />
-    <slot v-else />
+  <!-- v-html і слот взаємовиключні: якщо задано html, слот ігнорується.
+       HTML вставляється ПРЯМО в корінь з класом ui-prose, без обгортки:
+       зайвий <div> між класом і блоками вмісту вимикав правила з `>`
+       (останній блок лишався з нижнім відступом), і той самий HTML
+       виглядав інакше, ніж у редакторі, — клас багів docs-prose. -->
+  <component :is="as" v-if="html != null" class="ui-prose" v-html="html" />
+  <component :is="as" v-else class="ui-prose">
+    <slot />
   </component>
 </template>

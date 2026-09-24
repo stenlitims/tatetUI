@@ -84,7 +84,14 @@ function onKeydown(event: KeyboardEvent) {
  */
 function onGlobalKeydown(event: KeyboardEvent) {
   if (!(event.metaKey || event.ctrlKey)) return
-  if (event.key.toLowerCase() !== 'k') return
+  /*
+   * key, а для нелатинських розкладок — code. На українській розкладці та
+   * сама клавіша дає key 'л', і хоткей просто не працював для основної
+   * аудиторії сайту. Лише code теж не можна: у Dvorak клавіша з літерою K
+   * стоїть деінде. Та сама умова, що в UiCommandPalette.
+   */
+  const key = event.key.toLowerCase()
+  if (key !== 'k' && !(event.code === 'KeyK' && !/^[a-z]$/.test(key))) return
 
   const active = document.activeElement
   if (

@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, ref, useId, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
 export interface TabItem {
   id: string
@@ -25,21 +24,35 @@ const props = withDefaults(
      */
     size?: 'sm' | 'md'
     /**
+     * Розташування списку. `vertical` ставить вкладки стовпчиком ліворуч від
+     * панелі — для сторінок налаштувань із багатьма розділами; клавіатура
+     * тоді перемикає стрілками ↑/↓, а не ←/→.
+     */
+    orientation?: 'horizontal' | 'vertical'
+    /**
      * Назва query-параметра, з яким синхронізується активна вкладка.
-     * Напр. `"tab"` — стан читається з `?tab=` і пишеться туди через
-     * `router.replace`. Потрібен лише для вкладок, що мають переживати
-     * перезавантаження сторінки.
+     * Напр. `"tab"` — стан читається з `?tab=` після монтування і пишеться
+     * туди через `router.replace`. Потрібен лише для вкладок, що мають
+     * переживати перезавантаження сторінки. Без встановленого роутера
+     * нічого не синхронізує.
      */
     queryParam?: string
     /** Доступна назва для `role="tablist"`. */
     ariaLabel?: string
   }>(),
-  { modelValue: undefined, variant: 'underline', size: 'md', queryParam: undefined, ariaLabel: 'Вкладки' },
+  {
+    modelValue: undefined,
+    variant: 'underline',
+    size: 'md',
+    orientation: 'horizontal',
+    queryParam: undefined,
+    ariaLabel: 'Вкладки',
+  },
 )
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
-  /** Активна вкладка змінилася (клік, клавіатура або навігація за URL). */
+  /** Користувач перемкнув вкладку: клік, клавіатура або «Назад/Вперед» у браузері. */
   change: [id: string]
 }>()
 
@@ -52,12 +65,40 @@ defineSlots<{
   [key: `tab-${string}`]: (props: { tab: TabItem; active: boolean }) => unknown
 }>()
 
-const route = useRoute()
-const router = useRouter()
+/*
+ * Роутер — з globalProperties, а не імпортом vue-router. Імпорт робив пакет
+ * обов'язковим навіть для вкладок без queryParam: у Vite-проєкті без
+ * роутера компонент не збирався, а без встановленого роутера кожен
+ * екземпляр сипав попередження про injection. Тепер без роутера queryParam
+ * просто нічого не синхронізує.
+ */
+interface QueryRouter {
+  currentRoute: { value: { query: Record<string, unknown> } }
+  replace(to: { query: Record<string, unknown> }): unknown
+}
+
+const globals = getCurrentInstance()?.appContext.config.globalProperties as { $router?: unknown } | undefined
+const router = globals?.$router as QueryRouter | undefined
 
 const baseId = useId()
+const tabDomId = (id: string) => `${baseId}-tab-${id}`
+const panelDomId = (id: string) => `${baseId}-panel-${id}`
 const tablistEl = ref<HTMLElement | null>(null)
-const tabButtonEls = ref<(HTMLElement | null)[]>([])
+const vertical = computed(() => props.orientation === 'vertical')
+
+/*
+ * Кнопки — з DOM за id, а не з масиву template-ref. Масив після видалення
+ * вкладки з середини отримував null на місці сусідньої кнопки (unmount
+ * старого вузла викликав ref-функцію зі старим індексом уже ПІСЛЯ патчу
+ * нового), і фокус стрілками туди мовчки не переходив.
+ */
+function tabButtons(): HTMLElement[] {
+  return Array.from(tablistEl.value?.children ?? []).filter(
+    (element): element is HTMLElement => element.getAttribute('role') === 'tab',
+  )
+}
+
+const buttonFor = (id: string) => tabButtons().find((element) => element.id === tabDomId(id))
 
 /*
  * Індикатор активної вкладки — один елемент, що КОВЗАЄ між кнопками, а не
@@ -72,65 +113,108 @@ const indicator = ref<{ left: number; top: number; width: number; height: number
 let resizeObserver: ResizeObserver | null = null
 
 function measureIndicator() {
-  const index = props.tabs.findIndex((tab) => tab.id === active.value)
-  const button = tabButtonEls.value[index]
+  const button = buttonFor(active.value)
   if (!button || !tablistEl.value) {
     indicator.value = null
     return
   }
-  indicator.value = {
+  const next = {
     left: button.offsetLeft,
     top: button.offsetTop,
     width: button.offsetWidth,
     height: button.offsetHeight,
   }
+  const current = indicator.value
+  // Observer дзвонить на кожну кнопку окремо — без порівняння кожен дзвінок
+  // давав би зайвий ререндер з тими самими числами.
+  if (
+    current
+    && current.left === next.left
+    && current.top === next.top
+    && current.width === next.width
+    && current.height === next.height
+  ) return
+  indicator.value = next
 }
 
 const indicatorStyle = computed(() => {
   if (!indicator.value) return undefined
   const { left, top, width, height } = indicator.value
-  return props.variant === 'underline'
-    ? { transform: `translateX(${left}px)`, width: `${width}px` }
-    : { transform: `translate(${left}px, ${top}px)`, width: `${width}px`, height: `${height}px` }
-})
-
-onMounted(() => {
-  measureIndicator()
-  // Ширина кнопки міняється зі шрифтом і переносом — індикатор мусить
-  // слідувати, інакше після зміни вікна він стоїть під сусіднім словом.
-  if (typeof ResizeObserver !== 'undefined' && tablistEl.value) {
-    resizeObserver = new ResizeObserver(() => measureIndicator())
-    resizeObserver.observe(tablistEl.value)
+  if (props.variant === 'pills') {
+    return { transform: `translate(${left}px, ${top}px)`, width: `${width}px`, height: `${height}px` }
   }
+  return vertical.value
+    ? { transform: `translateY(${top}px)`, height: `${height}px` }
+    : { transform: `translateX(${left}px)`, width: `${width}px` }
 })
 
-onBeforeUnmount(() => resizeObserver?.disconnect())
-
-// Template-refs у v-for накопичуються між рендерами: без скидання масив
-// тримав би хибні елементи після зміни набору вкладок (той самий патерн,
-// що в UiSelect).
-onBeforeUpdate(() => {
-  tabButtonEls.value = []
-})
+/*
+ * Спостерігаємо КОЖНУ кнопку, а не лише список. У underline список —
+ * блочний flex на всю ширину контейнера: коли вкладка ширшає (довантажився
+ * веб-шрифт, у слоті `tab-<id>` виріс лічильник), розмір списку не
+ * змінюється, observer мовчить, і індикатор лишається під старою шириною.
+ */
+function observeTabs() {
+  if (!resizeObserver || !tablistEl.value) return
+  resizeObserver.disconnect()
+  resizeObserver.observe(tablistEl.value)
+  for (const button of tabButtons()) resizeObserver.observe(button)
+}
 
 const firstEnabled = computed(
   () => props.tabs.find((tab) => !tab.disabled)?.id ?? props.tabs[0]?.id ?? '',
 )
-const isEnabledId = (id: string) => props.tabs.some((tab) => tab.id === id && !tab.disabled)
-const active = ref(
-  props.modelValue && isEnabledId(props.modelValue) ? props.modelValue : firstEnabled.value,
-)
+const isEnabledId = (id: string | undefined): id is string =>
+  !!id && props.tabs.some((tab) => tab.id === id && !tab.disabled)
+const active = ref(isEnabledId(props.modelValue) ? props.modelValue : firstEnabled.value)
 
-// Відновлення стану з URL має пріоритет над props.modelValue.
-if (props.queryParam && typeof route.query[props.queryParam] === 'string') {
-  const fromQuery = route.query[props.queryParam] as string
-  if (isEnabledId(fromQuery)) active.value = fromQuery
+function queryValue(): string | undefined {
+  if (!props.queryParam) return undefined
+  const value = router?.currentRoute.value.query[props.queryParam]
+  return typeof value === 'string' ? value : undefined
+}
+
+function syncQuery(id: string) {
+  if (!props.queryParam || !router) return
+  // Перша вкладка не пише параметр: URL лишається чистим для стану за замовчуванням.
+  const wanted = id === firstEnabled.value ? undefined : id
+  if (queryValue() === wanted) return
+  const query = { ...router.currentRoute.value.query, [props.queryParam]: wanted }
+  if (wanted === undefined) delete query[props.queryParam]
+  void router.replace({ query })
+}
+
+/*
+ * Єдиний шлях зміни вкладки. Раніше їх було чотири, і кожен забував щось
+ * своє: вкладка з URL (початкова і «Назад/Вперед») не доходила до v-model і
+ * не давала change — батько «скидав» вкладку на значення, яке вже вважав
+ * поточним, і нічого не відбувалося; зміна v-model згори не писала URL, і
+ * перезавантаження повертало стару вкладку.
+ *
+ * source вирішує лише побічні ефекти:
+ *   user    — клік чи клавіатура: v-model, change, URL;
+ *   history — «Назад/Вперед»: v-model і change, URL уже правильний;
+ *   restore — ?param= при монтуванні: лише v-model, це не дія користувача;
+ *   model   — v-model змінили згори: лише URL, батько значення вже знає.
+ */
+type Source = 'user' | 'history' | 'restore' | 'model'
+
+function setActive(id: string, source: Source) {
+  if (id === active.value || !isEnabledId(id)) return
+  active.value = id
+  if (source !== 'model') emit('update:modelValue', id)
+  if (source === 'user' || source === 'history') emit('change', id)
+  if (source === 'user' || source === 'model') syncQuery(id)
 }
 
 watch(
   () => props.modelValue,
   (value) => {
-    if (value !== undefined && value !== active.value && isEnabledId(value)) active.value = value
+    if (value === undefined || value === active.value) return
+    if (isEnabledId(value)) setActive(value, 'model')
+    // Вимкнена чи неіснуюча вкладка не показується — і батько має про це
+    // дізнатися, інакше його v-model розходиться з тим, що на екрані.
+    else emit('update:modelValue', active.value)
   },
 )
 
@@ -141,71 +225,151 @@ watch(
     const next = firstEnabled.value
     active.value = next
     if (next) emit('update:modelValue', next)
+    if (isEnabledId(next)) syncQuery(next)
   },
   { deep: true },
 )
 
-// Назад/вперед у браузері: вкладка слідує за URL.
-watch(
-  () => (props.queryParam ? route.query[props.queryParam] : undefined),
-  (value) => {
-    if (typeof value === 'string' && isEnabledId(value)) {
-      if (value !== active.value) active.value = value
-    }
-  },
-)
-
-function syncQuery(id: string) {
-  if (!props.queryParam) return
-  const query = { ...route.query, [props.queryParam]: id }
-  // Перший таб не пише параметр: URL лишається чистим для стану за замовчуванням.
-  if (id === firstEnabled.value) delete query[props.queryParam]
-  void router.replace({ query })
-}
+// «Назад/Вперед» у браузері: вкладка слідує за URL. Відсутній параметр
+// свідомо ігноруємо — сторінка, що йде під час page-transition, бачить URL
+// НАСТУПНОЇ сторінки і інакше перемикалась би на першу вкладку.
+watch(queryValue, (value) => {
+  if (value !== undefined) setActive(value, 'history')
+})
 
 function select(id: string) {
-  if (id === active.value || !isEnabledId(id)) return
-  active.value = id
-  emit('update:modelValue', id)
-  emit('change', id)
-  syncQuery(id)
+  setActive(id, 'user')
 }
+
+onMounted(() => {
+  /*
+   * URL читається тут, а не в setup. Прередерена сторінка рендериться без
+   * ?tab=, і клієнт, що читав параметр ще до гідрації, отримував
+   * розбіжність: стара вкладка лишалася з активними класами поруч із новою.
+   */
+  const fromQuery = queryValue()
+  if (isEnabledId(fromQuery) && fromQuery !== active.value) setActive(fromQuery, 'restore')
+  // Невалідний modelValue (неіснуюча чи вимкнена вкладка) — повідомити
+  // батька, що показано насправді.
+  else if (props.modelValue !== undefined && props.modelValue !== active.value) {
+    emit('update:modelValue', active.value)
+  }
+
+  measureIndicator()
+  // Ширина кнопки міняється зі шрифтом і переносом — індикатор мусить
+  // слідувати, інакше після зміни вікна він стоїть під сусіднім словом.
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => measureIndicator())
+    observeTabs()
+  }
+})
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
 
 // Після будь-якої зміни активної вкладки чи набору кнопок — переміряти.
 // nextTick: кнопки вже мають бути в DOM у новому складі.
-watch([active, () => props.tabs, () => props.variant], () => void nextTick(measureIndicator), {
-  deep: true,
-})
+watch(
+  [active, () => props.tabs, () => props.variant, () => props.size, () => props.orientation],
+  () =>
+    void nextTick(() => {
+      observeTabs()
+      measureIndicator()
+    }),
+  { deep: true },
+)
 
 function onKeydown(event: KeyboardEvent, index: number) {
-  if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return
+  const nextKey = vertical.value ? 'ArrowDown' : 'ArrowRight'
+  const previousKey = vertical.value ? 'ArrowUp' : 'ArrowLeft'
+  if (![nextKey, previousKey, 'Home', 'End'].includes(event.key)) return
   event.preventDefault()
   const enabled = props.tabs.map((tab, i) => ({ tab, i })).filter(({ tab }) => !tab.disabled)
   if (!enabled.length) return
   let pos = enabled.findIndex(({ i }) => i === index)
   if (pos === -1) pos = 0
-  if (event.key === 'ArrowRight') pos = (pos + 1) % enabled.length
-  else if (event.key === 'ArrowLeft') pos = (pos - 1 + enabled.length) % enabled.length
+  if (event.key === nextKey) pos = (pos + 1) % enabled.length
+  else if (event.key === previousKey) pos = (pos - 1 + enabled.length) % enabled.length
   else if (event.key === 'Home') pos = 0
   else pos = enabled.length - 1
   const target = enabled[pos]!
   select(target.tab.id)
-  void nextTick(() => tabButtonEls.value[target.i]?.focus())
+  void nextTick(() => buttonFor(target.tab.id)?.focus())
+}
+
+/*
+ * Невидима зона дотику 45×45 виходить за межі кнопки. Контейнер прокрутки
+ * (overflow-x-auto — отже й overflow-y) обрізав її по своїй рамці: тап на
+ * 2px вище кнопки вже не влучав, а сама стрічка ще й прокручувалась
+ * вертикально на ~3px. Паддінг на coarse-вказівнику вміщує зону всередину,
+ * від'ємний марджин компенсує його, тож верстка навколо не зсувається.
+ */
+const scrollerClass = computed(() =>
+  vertical.value
+    ? 'shrink-0'
+    : 'scrollbar-none overflow-x-auto pointer-coarse:-my-1.5 pointer-coarse:py-1.5',
+)
+
+// Межа underline — на самому списку, а не на обгортці: паддінг обгортки
+// вище інакше відсунув би її від індикатора.
+const tablistClass = computed(() => {
+  if (props.variant === 'pills') {
+    return [
+      'relative gap-1 rounded-control bg-hover p-1',
+      vertical.value ? 'flex flex-col' : 'inline-flex min-w-max items-center',
+    ]
+  }
+  return vertical.value
+    ? 'relative flex flex-col gap-1 border-e border-line'
+    : 'relative flex min-w-max gap-1 border-b border-line'
+})
+
+const indicatorClass = computed(() => {
+  if (props.variant === 'pills') {
+    return 'top-0 left-0 rounded-[calc(var(--radius-control)_-_0.125rem)] bg-card shadow-card'
+  }
+  return vertical.value
+    ? 'top-0 end-0 w-0.5 rounded-full bg-accent-solid'
+    : 'bottom-0 left-0 h-0.5 rounded-full bg-accent-solid'
+})
+
+function tabClass(tab: TabItem) {
+  const isActive = tab.id === active.value
+  return [
+    // relative — і для індикатора pills (кнопка над підкладкою), і для
+    // невидимої зони дотику нижче: без нього ::after прив'язувався до
+    // контейнера прокрутки, а не до кнопки.
+    'relative inline-flex items-center gap-1.5 whitespace-nowrap font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+    vertical.value ? 'justify-start text-left' : 'justify-center',
+    // Невидима зона на дотику: щонайменше 45×45 і не вужча за саму кнопку —
+    // широка вертикальна вкладка інакше мала б зону лише посередині.
+    "pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-[max(100%,3rem)]",
+    tab.disabled ? 'cursor-not-allowed opacity-50' : '',
+    props.variant === 'underline'
+      ? [
+          props.size === 'sm' ? 'h-9 px-3 text-sm md:h-8' : 'h-10 px-3.5 text-sm md:h-9',
+          vertical.value ? 'rounded-s-control border-e-2' : 'rounded-t-control border-b-2',
+          isActive
+            ? [indicator.value ? 'border-transparent' : 'border-accent-solid', 'text-accent']
+            : 'border-transparent text-muted hover:border-line-strong hover:text-ink',
+        ]
+      : [
+          props.size === 'sm' ? 'h-8 px-3 text-xs md:h-7' : 'h-9 px-3.5 text-sm md:h-8',
+          'rounded-[calc(var(--radius-control)_-_0.125rem)]',
+          isActive ? [indicator.value ? '' : 'bg-card shadow-card', 'text-ink'] : 'text-muted hover:text-ink',
+        ],
+  ]
 }
 </script>
 
 <template>
-  <div>
-    <div class="scrollbar-none overflow-x-auto" :class="variant === 'underline' ? 'border-b border-line' : ''">
+  <div :class="vertical ? 'flex items-start gap-6' : ''">
+    <div :class="scrollerClass">
       <div
         ref="tablistEl"
         role="tablist"
         :aria-label="ariaLabel"
-        :class="
-          variant === 'underline'
-            ? 'relative flex min-w-max gap-1'
-            : 'relative inline-flex min-w-max items-center gap-1 rounded-control bg-hover p-1'
-        "
+        :aria-orientation="orientation"
+        :class="tablistClass"
       >
         <!-- Індикатор стоїть ПЕРЕД кнопками в DOM: у pills він — підкладка
              активної, тож має лежати нижче тексту. -->
@@ -213,66 +377,40 @@ function onKeydown(event: KeyboardEvent, index: number) {
           v-if="indicator"
           aria-hidden="true"
           class="pointer-events-none absolute transition-[transform,width,height] duration-(--duration-slow) ease-emphasized"
-          :class="
-            variant === 'underline'
-              ? 'bottom-0 left-0 h-0.5 rounded-full bg-accent-solid'
-              : 'top-0 left-0 rounded-[calc(var(--radius-control)_-_0.125rem)] bg-card shadow-card'
-          "
+          :class="indicatorClass"
           :style="indicatorStyle"
         />
         <template v-for="(tab, index) in tabs" :key="tab.id">
           <button
-              :id="`${baseId}-tab-${tab.id}`"
-              :ref="(el) => (tabButtonEls[index] = el as HTMLElement)"
-              type="button"
-              role="tab"
-              :aria-selected="tab.id === active"
-              :aria-controls="`${baseId}-panel-${tab.id}`"
-              :tabindex="tab.id === active ? 0 : -1"
-              :disabled="tab.disabled"
-              :class="[
-                // relative — і для індикатора pills (кнопка над підкладкою),
-                // і для невидимої зони дотику нижче: без нього ::after
-                // прив'язувався до контейнера прокрутки, а не до кнопки.
-                'relative inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                // Невидима зона 45×45 на дотику — кнопка вкладки лишається
-                // компактною, як на десктопі (раніше h-11 розпирав панелі).
-                'pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[\'\'] pointer-coarse:after:h-12 pointer-coarse:after:w-12',
-                tab.disabled ? 'cursor-not-allowed opacity-50' : '',
-                variant === 'underline'
-                  ? [
-                      size === 'sm' ? 'h-9 px-3 text-sm md:h-8' : 'h-10 px-3.5 text-sm md:h-9',
-                      'rounded-t-control border-b-2',
-                      tab.id === active
-                        ? [indicator ? 'border-transparent' : 'border-accent-solid', 'text-accent']
-                        : 'border-transparent text-muted hover:border-line-strong hover:text-ink',
-                    ]
-                  : [
-                      size === 'sm' ? 'h-8 px-3 text-xs md:h-7' : 'h-9 px-3.5 text-sm md:h-8',
-                      'rounded-[calc(var(--radius-control)_-_0.125rem)]',
-                      tab.id === active
-                        ? [indicator ? '' : 'bg-card shadow-card', 'text-ink']
-                        : 'text-muted hover:text-ink',
-                    ],
-              ]"
-              @click="!tab.disabled && select(tab.id)"
-              @keydown="onKeydown($event, index)"
-            >
-              <slot :name="`tab-${tab.id}`" :tab="tab" :active="tab.id === active">
-                {{ tab.label }}
-              </slot>
-            </button>
+            :id="tabDomId(tab.id)"
+            type="button"
+            role="tab"
+            :aria-selected="tab.id === active"
+            :aria-controls="panelDomId(tab.id)"
+            :tabindex="tab.id === active ? 0 : -1"
+            :disabled="tab.disabled"
+            :class="tabClass(tab)"
+            @click="!tab.disabled && select(tab.id)"
+            @keydown="onKeydown($event, index)"
+          >
+            <slot :name="`tab-${tab.id}`" :tab="tab" :active="tab.id === active">
+              {{ tab.label }}
+            </slot>
+          </button>
         </template>
       </div>
     </div>
 
+    <!-- tabindex="0": панель без жодного фокусованого елемента (лише текст)
+         інакше недосяжна з клавіатури — Tab з вкладки перестрибував би її. -->
     <template v-for="tab in tabs" :key="tab.id">
       <div
         v-if="tab.id === active"
-        :id="`${baseId}-panel-${tab.id}`"
+        :id="panelDomId(tab.id)"
         role="tabpanel"
-        :aria-labelledby="`${baseId}-tab-${tab.id}`"
-        class="mt-4"
+        tabindex="0"
+        :aria-labelledby="tabDomId(tab.id)"
+        :class="vertical ? 'min-w-0 flex-1' : 'mt-4'"
       >
         <slot :name="`panel-${tab.id}`">
           <slot />

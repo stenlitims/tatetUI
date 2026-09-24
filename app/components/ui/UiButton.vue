@@ -108,8 +108,9 @@ const variants: Record<Variant, string> = {
  * а точність дотику тримає НЕ висота, а невидима зона 44×44 через
  * `pointer-coarse:after:` (той самий патерн, що в UiSwitch).
  *
- * `sm` на мобільному теж тримає 16px тексту — щоб текст дрібних дій був
- * узгоджений із полем поруч (base = 16px). `md:` повертає щільні розміри.
+ * `sm` на мобільному теж тримає `text-base` — той самий, що в полі поруч,
+ * щоб текст дрібних дій не був дрібнішим за введений. `md:` повертає
+ * щільні розміри.
  */
 const sizes: Record<Size, string> = {
   sm: 'h-9 px-3 text-base gap-1.5 md:h-8 md:px-2.5 md:text-xs',
@@ -117,6 +118,22 @@ const sizes: Record<Size, string> = {
   lg: 'h-12 px-5 text-base gap-2 md:h-11',
   icon: 'h-10 w-10 justify-center md:h-9 md:w-9',
   'icon-sm': 'h-9 w-9 justify-center text-base md:h-7 md:w-7 md:text-xs',
+}
+
+/*
+ * link не має власної висоти й паддінгу — розмір дає лише шрифт. Окрема
+ * таблиця, а не «перекрити» класи з `sizes`: `px-0` поверх `px-4`
+ * вирішувався порядком у ЗГЕНЕРОВАНОМУ CSS, а Tailwind ставить `.px-0`
+ * раніше за `.px-3/.px-4/.px-5` (і `active:scale-100` раніше за
+ * `active:scale-[0.98]`). Перекриття мовчки програвало: посилання посеред
+ * абзацу мало 11–19px полів з боків і стискалося при натисканні.
+ */
+const linkSizes: Record<Size, string> = {
+  sm: 'text-base gap-1.5 md:text-xs',
+  md: 'text-base gap-2 md:text-sm',
+  lg: 'text-base gap-2',
+  icon: 'justify-center',
+  'icon-sm': 'justify-center text-base md:text-xs',
 }
 
 /*
@@ -141,11 +158,15 @@ const touchTargetClass =
   "pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
 
 const isDisabled = computed(() => props.disabled || props.loading)
+const isLink = computed(() => props.variant === 'link')
 
 const classes = computed(() => [
   // Перелік властивостей явний: `transition` (all) анімував би ще й width під
   // час зміни тексту, і кнопка «пливла» б. Тривалість — типова з токенів.
-  'relative inline-flex items-center rounded-control font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] select-none active:scale-[0.98]',
+  'relative inline-flex items-center rounded-control font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] select-none',
+  // Масштаб натискання — лише в кнопок з поверхнею: у link стискати нема
+  // чого, і текст посеред абзацу «підстрибував» би.
+  isLink.value ? '' : 'active:scale-[0.98]',
   touchTargetClass,
   // Видиме фокус-кільце. У всіх чотирьох вихідних проєктах focus:outline-none
   // стоїть майже всюди без заміни — керування з клавіатури стає сліпим.
@@ -153,10 +174,7 @@ const classes = computed(() => [
   // зливається з фоном самої кнопки.
   'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset',
   variants[props.variant],
-  sizes[props.size],
-  // link не має власної висоти й паддінгу — розмір дає лише шрифт;
-  // масштаб натискання теж зайвий, бо стискати нема чого.
-  props.variant === 'link' ? 'h-auto px-0 md:h-auto md:px-0 active:scale-100' : '',
+  isLink.value ? linkSizes[props.size] : sizes[props.size],
   props.block ? 'w-full justify-center' : '',
   isDisabled.value ? 'opacity-50 cursor-not-allowed' : '',
 ])

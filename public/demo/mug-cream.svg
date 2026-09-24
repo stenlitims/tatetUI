@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3efe8"/>
+      <stop offset="0.7" stop-color="#e7dfd3"/>
+      <stop offset="0.7" stop-color="#d7cab7"/>
+      <stop offset="1" stop-color="#cbbba4"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#cfc2ae"/>
+      <stop offset="0.3" stop-color="#fbf6ee"/>
+      <stop offset="0.55" stop-color="#efe6d8"/>
+      <stop offset="1" stop-color="#bfae95"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#4d3b27" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#4d3b27" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="600" cy="738" rx="280" ry="30" fill="url(#shadow)"/>
+  <path d="M760 420C860 420 880 470 880 520C880 590 830 630 760 640" stroke="#d8ccba" stroke-width="44" fill="none" stroke-linecap="round"/>
+  <path d="M760 420C860 420 880 470 880 520C880 590 830 630 760 640" stroke="#f3ece0" stroke-width="22" fill="none" stroke-linecap="round"/>
+  <path d="M430 330H770L752 700C750 722 732 736 710 736H490C468 736 450 722 448 700Z" fill="url(#body)"/>
+  <ellipse cx="600" cy="330" rx="170" ry="28" fill="#6b4a2d"/>
+  <ellipse cx="600" cy="334" rx="156" ry="20" fill="#3b2616"/>
+  <path d="M432 340C520 356 680 356 768 340L766 380C680 396 520 396 434 380Z" fill="#8a5a33" opacity="0.85"/>
+  <path d="M470 420C466 520 470 620 482 690" stroke="#fff" stroke-width="16" stroke-linecap="round" fill="none" opacity="0.35"/>
+</svg>

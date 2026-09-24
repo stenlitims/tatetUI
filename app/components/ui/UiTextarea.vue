@@ -1,6 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, useId, watch } from 'vue'
-import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
+import { computed, nextTick, onMounted, ref, useAttrs, useId, watch } from 'vue'
+import {
+  errorTextClass,
+  fieldTextSizes,
+  helperTextClass,
+  labelClass,
+  splitFieldAttrs,
+} from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта (aria-label, spellcheck, autofocus…) — на
+// <textarea>: на <div> ці атрибути нічого не роблять.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -59,6 +69,9 @@ const emit = defineEmits<{
 
 defineSlots<Record<string, never>>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+
 const generatedId = useId()
 const textareaId = computed(() => props.id ?? `${generatedId}-textarea`)
 const errorId = `${generatedId}-error`
@@ -90,9 +103,9 @@ const describedBy = computed(() => {
  * `md` — типовий, `lg` — головне поле сторінки.
  */
 const sizeClasses: Record<'sm' | 'md' | 'lg', string> = {
-  sm: 'min-h-9 px-2.5 py-1.5 text-base md:py-1 md:text-xs',
-  md: 'min-h-11 px-3 py-2.5 text-base md:py-2 md:text-sm',
-  lg: 'min-h-13 px-3.5 py-3 text-base md:py-2.5 md:text-base',
+  sm: `min-h-9 px-2.5 py-1.5 md:py-1 ${fieldTextSizes.sm}`,
+  md: `min-h-11 px-3 py-2.5 md:py-2 ${fieldTextSizes.md}`,
+  lg: `min-h-13 px-3.5 py-3 md:py-2.5 ${fieldTextSizes.lg}`,
 }
 
 const classes = computed(() => [
@@ -146,12 +159,13 @@ defineExpose({
 </script>
 
 <template>
-  <div>
+  <div v-bind="fieldAttrs.root">
     <label v-if="label" :for="textareaId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
     </label>
 
+    <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
     <textarea
       :id="textareaId"
       ref="el"
@@ -166,6 +180,7 @@ defineExpose({
       :class="classes"
       :aria-invalid="hasError || undefined"
       :aria-describedby="describedBy"
+      v-bind="fieldAttrs.control"
       @input="onInput"
       @focus="emit('focus', $event)"
       @blur="emit('blur', $event)"

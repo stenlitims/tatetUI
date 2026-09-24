@@ -32,7 +32,7 @@ const items = [
         >
           {{ item.label }}
         </button>
-        <div class="my-1 h-px bg-line" />
+        <div role="separator" class="my-1 h-px bg-line" />
         <button
           type="button"
           role="menuitem"

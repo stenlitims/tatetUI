@@ -11,16 +11,26 @@ withDefaults(
   defineProps<{
     /** Діаметр крапки. Типово 0.25rem — пропорційно тексту кнопки. */
     size?: string
+    /** Що зачитати скрінрідеру замість крапок. */
+    label?: string
   }>(),
-  { size: '0.25rem' },
+  { size: '0.25rem', label: 'Завантаження' },
 )
 
 defineSlots<Record<string, never>>()
 </script>
 
 <template>
-  <span class="ui-loading-dots" :style="{ '--dot': size }" role="status" aria-label="Завантаження">
-    <span /><span /><span />
+  <!--
+    Стан — прихованим ТЕКСТОМ, а не aria-label. Жива область оголошує зміну
+    вмісту; aria-label вмістом не є, тож role="status" без тексту не мав що
+    сказати — «Завантаження» не звучало ніколи.
+  -->
+  <span class="ui-loading-dots" :style="{ '--dot': size }" role="status">
+    <span class="ui-loading-dot" aria-hidden="true" />
+    <span class="ui-loading-dot" aria-hidden="true" />
+    <span class="ui-loading-dot" aria-hidden="true" />
+    <span class="sr-only">{{ label }}</span>
   </span>
 </template>
 
@@ -31,7 +41,9 @@ defineSlots<Record<string, never>>()
   gap: calc(var(--dot) * 1.2);
 }
 
-.ui-loading-dots > span {
+/* Клас, а не `> span`: прихований текст — теж span, і дочірній селектор
+   намалював би його четвертою крапкою. */
+.ui-loading-dot {
   width: var(--dot);
   height: var(--dot);
   border-radius: 9999px;
@@ -41,8 +53,8 @@ defineSlots<Record<string, never>>()
 
 /* Від'ємна затримка, а не додатна: інакше перші 1.4 с усі три крапки
    стоять нерухомо, і індикатор виглядає як застиглий, а не як триваючий. */
-.ui-loading-dots > span:nth-child(1) { animation-delay: -0.32s; }
-.ui-loading-dots > span:nth-child(2) { animation-delay: -0.16s; }
+.ui-loading-dot:nth-child(1) { animation-delay: -0.32s; }
+.ui-loading-dot:nth-child(2) { animation-delay: -0.16s; }
 
 @keyframes ui-dot-bounce {
   0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
@@ -50,7 +62,7 @@ defineSlots<Record<string, never>>()
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ui-loading-dots > span {
+  .ui-loading-dot {
     animation: none;
     opacity: 0.6;
   }

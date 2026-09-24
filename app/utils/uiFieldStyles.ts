@@ -10,12 +10,30 @@
  * у Record і склеювання рядків. Заради нього не варто вводити залежність,
  * яку доведеться тягнути в кожен проєкт разом із компонентом.
  *
- * Мобільні розміри вищі за десктопні (h-11 → md:h-9) — нижче 44px палець
+ * Мобільні розміри вищі за десктопні (h-12 → md:h-9) — нижче 44px палець
  * промахується. Ієрархія розмірів на телефоні лишається в шрифті та
  * паддінгу, бо різна ВИСОТА полів пальцю нічого не дає.
  */
 
 export type FieldSize = 'sm' | 'md' | 'lg'
+
+/*
+ * Текст поля на мобільному — 16px у ПІКСЕЛЯХ, а не `text-base`.
+ *
+ * Корінь документа 15px, тож `text-base` (1rem) дає 15px, а iOS Safari при
+ * фокусі на поле з font-size < 16px АВТОМАТИЧНО зумує сторінку. Так і
+ * жилося: коментарі й документація обіцяли 16px, а кожне поле на iPhone
+ * зумувало. rem тут не годиться саме тому, що він прив'язаний до кореня,
+ * який бібліотека свідомо зменшила. `md:` повертає щільні десктопні розміри.
+ *
+ * Експортується окремо: складені поля (UiTagInput) і пошук у випадайці
+ * мусять тримати той самий поріг, не маючи власного fieldClass.
+ */
+export const fieldTextSizes: Record<FieldSize, string> = {
+  sm: 'text-[16px] md:text-xs',
+  md: 'text-[16px] md:text-sm',
+  lg: 'text-[16px] md:text-base',
+}
 
 /* ------------------------------------------------------------------ */
 /*  Базове поле / тригер                                              */
@@ -38,15 +56,13 @@ const fieldBase =
  * фактичний мінімум цільової зони дотику, тож поля на телефоні рівно на
  * 44–45px і не «ховаються» під пальцем. Десктопні висоти повертає `md:`.
  *
- * `sm` на мобільному теж тримає 16px тексту: iOS Safari при фокусі на
- * поле з font-size < 16px АВТОМАТИЧНО зумує сторінку на ~113%. Це не
- * поправна дія — це властивість браузера, і `sm` з `text-sm` (13px)
- * зумував би кожну форму з діалогом вибору. `md:` повертає 13px.
+ * `sm` на мобільному теж тримає 16px тексту (див. fieldTextSizes): з
+ * `text-xs` iOS зумував би кожну форму з діалогом вибору.
  */
 const fieldSizes: Record<FieldSize, string> = {
-  sm: 'h-12 text-base md:h-8 md:text-xs',
-  md: 'h-12 text-base md:h-9 md:text-sm',
-  lg: 'h-13 text-base md:h-10',
+  sm: `h-12 md:h-8 ${fieldTextSizes.sm}`,
+  md: `h-12 md:h-9 ${fieldTextSizes.md}`,
+  lg: `h-13 md:h-10 ${fieldTextSizes.lg}`,
 }
 
 /*
@@ -80,6 +96,19 @@ const fieldDisabled = 'opacity-50 cursor-not-allowed'
 const fieldError =
   'border-danger not-disabled:hover:border-danger focus-visible:ring-danger/30 focus-visible:border-danger focus-visible:hover:border-danger'
 
+/*
+ * Складене поле — обгортка, всередині якої живе справжній <input> (мітки,
+ * чіпи). Той самий контракт, що й fieldBase, але фокус приходить через
+ * focus-within: сама обгортка фокуса не отримує, і з focus-visible кільце
+ * не з'явилося б ніколи. Без спільного класу UiTagInput мав власне суцільне
+ * кільце з відступом, яке в стані помилки лишалося синім.
+ */
+const fieldShellBase =
+  'w-full rounded-control border bg-input text-ink transition-[border-color,box-shadow,background-color] focus-within:ring-[3px]'
+const fieldShellIdle =
+  'border-line focus-within:ring-ring/30 focus-within:border-accent-solid focus-within:hover:border-accent-solid'
+const fieldShellError = 'border-danger focus-within:ring-danger/30'
+
 /* ------------------------------------------------------------------ */
 /*  Лейбл / підказка / помилка                                        */
 /* ------------------------------------------------------------------ */
@@ -102,9 +131,36 @@ export const dropdownPanelClass =
 
 export const dropdownEmptyClass = 'px-3 py-2 text-center text-sm text-muted'
 
+// Пошук усередині панелі — теж поле вводу: 13px на телефоні зумував би
+// сторінку щоразу, коли панель відкривається й віддає йому фокус.
 export const dropdownSearchInputClass =
-  'w-full rounded-control border border-line bg-input px-2 py-1.5 text-sm text-ink transition-[border-color,box-shadow] ' +
+  `w-full rounded-control border border-line bg-input px-2 py-1.5 ${fieldTextSizes.md} text-ink transition-[border-color,box-shadow] ` +
   'placeholder:text-muted focus:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:border-accent-solid'
+
+/* ------------------------------------------------------------------ */
+/*  Дрібні кнопки всередині полів (очистити / видалити / показати)    */
+/* ------------------------------------------------------------------ */
+
+/*
+ * Невидима зона дотику 45×45 (h-12 за кореня 15px) навколо дрібної кнопки.
+ *
+ * Кнопка лишається 26px, щоб не роздувати поле, а палець влучає в 45.
+ * Зона позиціонується відносно самої кнопки, тож `relative` чи `absolute`
+ * додає місце використання: два position в одному рядку сперечалися б
+ * порядком згенерованого CSS, а не порядком у рядку.
+ */
+export const touchTargetClass =
+  "pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+
+/*
+ * Одна кнопка очищення на всю бібліотеку. Поки кожне поле малювало свою,
+ * вони розійшлися на 19, 26, 30 і 34px — і жодна не дотягувала до 44px на
+ * дотику.
+ */
+export const clearButtonClass =
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-control text-muted transition-colors ' +
+  'hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+  touchTargetClass
 
 /* ------------------------------------------------------------------ */
 /*  Пункти випадайки                                                  */
@@ -180,6 +236,33 @@ export function fieldClass(
   if (opts?.disabled) classes.push(fieldDisabled)
   if (opts?.extra) classes.push(opts.extra)
   return classes.join(' ')
+}
+
+/** Обгортка складеного поля: межа, фон і фокус через focus-within. */
+export function fieldShellClass(opts?: { error?: boolean; disabled?: boolean }): string {
+  const classes = [fieldShellBase, opts?.error ? fieldShellError : fieldShellIdle]
+  if (opts?.disabled) classes.push(fieldDisabled)
+  else if (!opts?.error) classes.push('hover:border-line-strong')
+  return classes.join(' ')
+}
+
+/**
+ * Розводить fallthrough-атрибути поля: `class` і `style` — на кореневу
+ * обгортку (відступи й ширина в сітці форми), решта — на нативний контрол.
+ *
+ * Без цього `aria-label`, `maxlength`, `inputmode`, `autofocus` осідали на
+ * `<div>` навколо поля: поле без видимого лейбла лишалося без доступної
+ * назви, а бібліотека сама обходила це селектором `[data-…] input`.
+ *
+ * Читається всередині computed: proxy `useAttrs()` відстежує звертання, тож
+ * нові атрибути від батька перераховують розподіл.
+ */
+export function splitFieldAttrs(attrs: Record<string, unknown>): {
+  root: Record<string, unknown>
+  control: Record<string, unknown>
+} {
+  const { class: rootClass, style: rootStyle, ...control } = attrs
+  return { root: { class: rootClass, style: rootStyle }, control }
 }
 
 /** Класи пункту списку у випадайці. */

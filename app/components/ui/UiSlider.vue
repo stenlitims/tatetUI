@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
-import { errorTextClass, helperTextClass, labelClass, type FieldSize } from '~/utils/uiFieldStyles'
+import { computed, useAttrs, useId } from 'vue'
+import { errorTextClass, helperTextClass, labelClass, splitFieldAttrs } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів (data-*, aria-*) — на сам range.
+defineOptions({ inheritAttrs: false })
 
 /**
  * Повзунок. Обгортка над нативним <input type="range">: без власного
@@ -59,6 +62,9 @@ const emit = defineEmits<{
 
 defineSlots<Record<string, never>>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+
 const generatedId = useId()
 const inputId = computed(() => props.id ?? `${generatedId}-slider`)
 const errorId = `${generatedId}-error`
@@ -101,18 +107,24 @@ const valueText = computed(() => (props.unit ? `${value.value}${props.unit}` : S
 // aria-valuetext робить читання людським: не «47», а «47 %».
 const ariaValueText = computed(() => (props.unit ? `${value.value} ${props.unit}` : undefined))
 
-// CSS-змінна для заливки треку зліва від повзунка — один патерн на обидві теми.
+/*
+ * CSS-змінна для заливки треку зліва від повзунка — один патерн на обидві
+ * теми. Стоїть на САМОМУ <input>: поки вона висіла на обгортці, правило
+ * `.ui-slider { --fill-percent: 0% }` на інпуті перебивало успадковане
+ * значення, і в Chrome/Safari заливка завжди була нульовою.
+ */
 const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }))
 </script>
 
 <template>
-  <div>
+  <div v-bind="fieldAttrs.root">
     <div v-if="label || showValue" class="mb-1 flex items-center justify-between gap-2">
       <label v-if="label" :for="inputId" :class="labelClass">{{ label }}</label>
       <span v-if="showValue" class="text-xs tabular-nums text-muted">{{ valueText }}</span>
     </div>
 
-    <div class="relative" :style="trackStyle">
+    <div class="relative">
+      <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
       <input
         :id="inputId"
         type="range"
@@ -126,7 +138,9 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
         :aria-valuetext="ariaValueText"
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
+        :style="trackStyle"
         class="ui-slider h-12 w-full cursor-pointer appearance-none bg-transparent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 md:h-6"
+        v-bind="fieldAttrs.control"
         @input="emit('update:modelValue', Number(($event.target as HTMLInputElement).value))"
       />
     </div>
@@ -144,8 +158,9 @@ const trackStyle = computed(() => ({ '--fill-percent': `${fillPercent.value}%` }
 <style scoped>
 /*
  * Смуга: тонкий трек із заливкою зліва. WebKit малює градієнтом від
- * CSS-змінної --fill-percent (оновлюється зі script), Firefox має
- * нативний ::-moz-range-progress.
+ * CSS-змінної --fill-percent (inline-стиль самого інпута, див. trackStyle),
+ * Firefox має нативний ::-moz-range-progress. Правило нижче — лише
+ * запасне значення: inline-стиль на тому ж елементі його перебиває.
  */
 .ui-slider {
   --fill-percent: 0%;

@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, useId, watch } from 'vue'
-import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
+import { computed, ref, useAttrs, useId, watch } from 'vue'
+import { errorTextClass, helperTextClass, labelClass, splitFieldAttrs } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на єдине справжнє поле вводу.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -52,6 +55,9 @@ const emit = defineEmits<{
 // означало б зламати і вставку з SMS, і позицію каретки.
 defineSlots<Record<string, never>>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+
 const generatedId = useId()
 const inputId = computed(() => props.id || `${generatedId}-otp`)
 const hintId = computed(() => props.hint && !props.error ? `${inputId.value}-hint` : undefined)
@@ -97,7 +103,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
 </script>
 
 <template>
-  <div class="w-full">
+  <div class="w-full" v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}<span v-if="required" class="text-danger" aria-hidden="true"> *</span>
     </label>
@@ -107,6 +113,9 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
       :class="{ 'cursor-not-allowed opacity-50': disabled }"
       @click="inputEl?.focus()"
     >
+      <!-- text-[16px]: поле невидиме, але iOS дивиться на його font-size — з
+           успадкованими 15px сторінка зумувала на фокусі. v-bind останнім:
+           aria-label споживача перебиває типовий. -->
       <input
         :id="inputId"
         ref="inputEl"
@@ -120,7 +129,8 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
         :aria-invalid="error ? 'true' : undefined"
         :aria-describedby="errorId || hintId"
         :aria-label="label ? undefined : `Одноразовий код із ${safeLength} символів`"
-        class="absolute inset-0 z-10 h-full w-full cursor-text opacity-0 disabled:cursor-not-allowed"
+        class="absolute inset-0 z-10 h-full w-full cursor-text text-[16px] opacity-0 disabled:cursor-not-allowed"
+        v-bind="fieldAttrs.control"
         @input="onInput"
         @focus="focused = true"
         @blur="focused = false"

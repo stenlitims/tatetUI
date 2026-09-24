@@ -19,7 +19,7 @@ const DEMOS_DIR = join(ROOT, 'app/demos')
 const TOKENS_FILE = join(ROOT, 'app/assets/css/tokens.css')
 const NAV_FILE = join(ROOT, 'app/config/docsNav.ts')
 const DOCS_PAGE = join(ROOT, 'app/pages/docs/[...slug].vue')
-const HOME_STATS = join(ROOT, 'app/components/home/HomeHeroDemo.vue')
+const HOME_STATS = join(ROOT, 'app/components/home/HomeHero.vue')
 const CSS_DIR = join(ROOT, 'app/assets/css')
 
 const errors: string[] = []
@@ -71,9 +71,10 @@ const NON_COLOR_UTILITY = new Set([
   'gradient-to-tl', 'gradient-to-br', 'gradient-to-bl', 'linear', 'radial', 'conic',
   // спільні ключові слова
   'transparent', 'current', 'inherit',
-  // назви CSS-властивостей усередині transition-[border-color,…]: це
-  // перелік того, ЩО анімувати, а не колір
-  'color', 'decoration-color',
+  // назви CSS-властивостей усередині transition-[border-color,…] чи
+  // `transition: stroke-dasharray …`: це перелік того, ЩО анімувати, а не
+  // колір
+  'color', 'decoration-color', 'dasharray', 'dashoffset',
 ])
 
 const SELF_EVIDENT = [
@@ -510,15 +511,15 @@ async function main() {
   /* ---------------------------------------------------------------- */
 
   /*
-   * «50 UI-файлів» і «49 публічних сторінок» — рукописні числа в hero.
+   * «Компонентів: 71» і «Сторінок документації: 70» — рукописні числа в hero.
    * Рукописне число застаріває мовчки: додав компонент — і головна вже
    * бреше, а помітить це хіба той, хто вирішить перерахувати. Це та сама
    * причина, з якої існує решта перевірок у цьому файлі.
    */
   const homeSource = await readFile(HOME_STATS, 'utf8')
   const homeStats: Array<[string, number]> = [
-    ['UI-файлів', uiFiles.length],
-    ['публічних сторінок', componentPages],
+    ['компонентів', uiFiles.length],
+    ['сторінок документації', componentPages],
   ]
 
   for (const [label, expected] of homeStats) {
@@ -526,10 +527,10 @@ async function main() {
       new RegExp(`\\{\\s*value:\\s*'(\\d+)',\\s*label:\\s*'${label}'\\s*\\}`),
     )?.[1]
     if (declared === undefined) {
-      fail('app/components/home/HomeHeroDemo.vue', `у статистиці немає рядка з label: '${label}'`)
+      fail('app/components/home/HomeHero.vue', `у статистиці немає рядка з label: '${label}'`)
     } else if (Number(declared) !== expected) {
       fail(
-        'app/components/home/HomeHeroDemo.vue',
+        'app/components/home/HomeHero.vue',
         `статистика каже ${declared} ${label}, насправді ${expected}`,
       )
     }

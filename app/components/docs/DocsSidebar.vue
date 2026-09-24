@@ -50,6 +50,12 @@ function isActive(to: string) {
             >
               {{ item.status }}
             </span>
+            <span
+              v-else-if="item.fresh"
+              class="rounded-full bg-primary-50 px-1.5 py-0.5 text-[10px] font-medium text-accent"
+            >
+              нове
+            </span>
           </NuxtLink>
         </li>
       </ul>

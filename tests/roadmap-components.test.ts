@@ -164,7 +164,7 @@ describe('roadmap overlays and navigation', () => {
       ],
       'onUpdate:modelValue': (value: string | null) => { mounted.props.modelValue = value },
     })
-    const roots = [...mounted.host.querySelectorAll<HTMLElement>('[role="menubar"] > li > [role="menuitem"]')]
+    const roots = [...mounted.host.querySelectorAll<HTMLElement>('nav > ul > li > *')]
     roots[0]!.focus()
     roots[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     expect(document.activeElement).toBe(roots[2])
@@ -176,11 +176,13 @@ describe('roadmap overlays and navigation', () => {
     mounted.unmount()
   })
 
-  it('NavigationMenu запам\'ятовує roving tabindex після стрілок', async () => {
+  it('NavigationMenu — disclosure: кожен пункт у Tab-обході, стрілки лише прискорюють', async () => {
     /*
-     * Регрес: tabindex рахувався як `index === enabledRootItems()[0]?.index`
-     * — константа. Користувач доходив стрілками до третього пункту,
-     * виходив Tab'ом і Shift+Tab повертав його на перший.
+     * Раніше меню оголошувало menubar/menuitem з roving tabindex [0, -1, -1],
+     * але не виконувало контракту меню (підменю з усіма пунктами в Tab,
+     * стрілки між групами), а посилання втрачали семантику посилань.
+     * Тепер це disclosure-навігація: Tab проходить кожен доступний пункт,
+     * ←/→/Home/End лишаються прискорювачем фокуса.
      */
     const mounted = await mountComponent(UiNavigationMenu, {
       modelValue: null,
@@ -188,20 +190,21 @@ describe('roadmap overlays and navigation', () => {
         { id: 'home', label: 'Головна', href: '#home' },
         { id: 'docs', label: 'Документація', href: '#docs' },
         { id: 'about', label: 'Про нас', href: '#about' },
+        { id: 'off', label: 'Вимкнено', href: '#off', disabled: true },
       ],
     })
-    const roots = [...mounted.host.querySelectorAll<HTMLElement>('[role="menubar"] > li > [role="menuitem"]')]
-    expect(roots.map((el) => el.tabIndex)).toEqual([0, -1, -1])
+    expect(mounted.host.querySelector('[role="menubar"], [role="menuitem"]')).toBeNull()
+    const roots = [...mounted.host.querySelectorAll<HTMLElement>('nav > ul > li > *')]
+    expect(roots.map((el) => el.tabIndex)).toEqual([0, 0, 0, -1])
 
     roots[0]!.focus()
     roots[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
     await nextTick()
     expect(document.activeElement).toBe(roots[1])
-    expect(roots.map((el) => el.tabIndex)).toEqual([-1, 0, -1])
 
     roots[1]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }))
     await nextTick()
-    expect(roots.map((el) => el.tabIndex)).toEqual([-1, -1, 0])
+    expect(document.activeElement).toBe(roots[2])
     mounted.unmount()
   })
 

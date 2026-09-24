@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, shallowRef, useId } from 'vue'
 import { isFileAccepted } from '~/utils/fileUpload'
-import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
+import { errorTextClass, helperTextClass, labelClass, touchTargetClass } from '~/utils/uiFieldStyles'
 
 /**
  * Зона завантаження: drag&drop + клік + клавіатура. ВАЖЛИВО: сам upload
@@ -165,6 +165,19 @@ function onDrop(event: DragEvent) {
   onFiles(event.dataTransfer?.files ?? null)
 }
 
+/*
+ * Після читання інпут спорожняємо. Браузер шле `change` лише коли вибір
+ * ВІДРІЗНЯЄТЬСЯ від попереднього, тож без цього той самий файл удруге —
+ * повтор після невдалого upload чи повторне додавання в `multiple` — не
+ * давав жодної події. onFiles уже скопіював FileList у масив, тож скидання
+ * нічого не забирає.
+ */
+function onInputChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  onFiles(input.files)
+  input.value = ''
+}
+
 function openDialog() {
   if (props.disabled) return
   inputEl.value?.click()
@@ -221,7 +234,10 @@ defineExpose({
       <button
         type="button"
         :aria-label="`Видалити файл ${selectedFile.name}`"
-        class="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        :class="[
+          'relative flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          touchTargetClass,
+        ]"
         @click="removeFile"
       >
         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -297,7 +313,7 @@ defineExpose({
       :accept="accept"
       :multiple="multiple"
       :disabled="disabled"
-      @change="onFiles(($event.target as HTMLInputElement).files)"
+      @change="onInputChange"
     />
 
     <p v-if="hasError" :id="errorId" :class="errorTextClass" role="alert">{{ errorText }}</p>

@@ -75,21 +75,44 @@ const TONE: Record<DeltaGood, Record<'up' | 'down' | 'flat', string>> = {
 
 const deltaTone = computed(() => TONE[props.deltaGood][direction.value])
 
+/*
+ * Модуль зміни — через Intl з українською локаллю, а не сирим числом JS.
+ * `${12.4}` давало «+12.4 %» з крапкою, а українською десятковий знак —
+ * кома: «+12,4 %». Два знаки після коми — межа: 12.456 не має тягнути
+ * плаваючий хвіст 12.456000000000001 з арифметики споживача.
+ */
+const DELTA_FORMAT = new Intl.NumberFormat('uk-UA', { maximumFractionDigits: 2 })
+const magnitude = computed(() => (hasDelta.value ? DELTA_FORMAT.format(Math.abs(props.delta!)) : ''))
+
 const deltaText = computed(() => {
   if (!hasDelta.value) return ''
   const sign = props.delta! > 0 ? '+' : props.delta! < 0 ? '−' : ''
-  const magnitude = Math.abs(props.delta!)
-  return props.deltaFormat === 'percent' ? `${sign}${magnitude} %` : `${sign}${magnitude}`
+  return props.deltaFormat === 'percent' ? `${sign}${magnitude.value} %` : `${sign}${magnitude.value}`
 })
 
+// «на 1 відсоток / 2 відсотки / 5 відсотків / 12,4 відсотка»: категорії
+// множини Intl збігаються з відмінками після «на». Завжди «відсотків»
+// звучало б як «на 12,4 відсотків» — помилка, яку чує кожен носій.
+// Ті самі два знаки, що й у DELTA_FORMAT: 12.001 друкується як «12», тож і
+// слово мусить узгоджуватися з «12», а не з дробом.
+const PLURAL = new Intl.PluralRules('uk-UA', { maximumFractionDigits: 2 })
+const PERCENT_WORD: Partial<Record<Intl.LDMLPluralRule, string>> = {
+  one: 'відсоток',
+  few: 'відсотки',
+  many: 'відсотків',
+  other: 'відсотка',
+}
+
 // Стрілка — символ, і скрінрідер зачитав би її як «трикутник вгору».
-// Тому вона aria-hidden, а поруч стоїть словесний еквівалент.
+// Тому вона aria-hidden, а поруч стоїть словесний еквівалент — з тим самим
+// числом, що й на екрані.
 const deltaLabel = computed(() => {
   if (!hasDelta.value) return ''
-  const word = direction.value === 'up' ? 'зростання' : direction.value === 'down' ? 'падіння' : 'без змін'
   if (direction.value === 'flat') return 'без змін'
-  const magnitude = Math.abs(props.delta!)
-  return props.deltaFormat === 'percent' ? `${word} на ${magnitude} відсотків` : `${word} на ${magnitude}`
+  const word = direction.value === 'up' ? 'зростання' : 'падіння'
+  if (props.deltaFormat !== 'percent') return `${word} на ${magnitude.value}`
+  const unit = PERCENT_WORD[PLURAL.select(Math.abs(props.delta!))] ?? 'відсотків'
+  return `${word} на ${magnitude.value} ${unit}`
 })
 
 /**
@@ -110,7 +133,9 @@ const rootClass = computed(() => [
 </script>
 
 <template>
-  <component :is="rootTag" :to="to || undefined" :class="rootClass">
+  <!-- aria-busy: скелетони нижче aria-hidden (див. UiSkeleton), і без нього
+       скрінрідер зачитував підпис метрики без значення — ніби його немає. -->
+  <component :is="rootTag" :to="to || undefined" :class="rootClass" :aria-busy="loading || undefined">
     <div class="flex items-start justify-between gap-3">
       <p class="text-sm font-medium text-muted">{{ label }}</p>
       <span v-if="$slots.icon" class="shrink-0 text-muted" aria-hidden="true">

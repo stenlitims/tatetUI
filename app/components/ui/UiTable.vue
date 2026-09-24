@@ -1,4 +1,11 @@
-<script setup lang="ts" generic="T extends Record<string, unknown>">
+<!--
+  `Record<string, any>`, а не `Record<string, unknown>`: під `unknown`
+  жоден `interface` рядка не проходив обмеження («Index signature for type
+  'string' is missing») — типи з API-клієнтів доводилося переписувати на
+  `interface X extends Record<string, unknown>`. Під `any` interface
+  сумісний, а доступ `item[key]` лишається без приведень.
+-->
+<script setup lang="ts" generic="T extends Record<string, any>">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
 import UiCheckbox from './UiCheckbox.vue'
 import UiSkeleton from './UiSkeleton.vue'
@@ -51,6 +58,14 @@ export interface TableHeader {
   title?: string
   /** Напрям ПЕРШОГО кліку по сортуванню. Типово `asc`. */
   defaultSortDir?: 'asc' | 'desc'
+  /**
+   * Значення, за яким сортувати рядок, замість `item[value]`. Потрібне,
+   * коли в комірці не те, що порівнюється: вкладене поле
+   * (`item.author.name`), код статусу з власним порядком, рядкова дата
+   * «24.09.2026», яку рядкове порівняння ставить за днем, а не роком.
+   * Серверне сортування (`serverSort`) його не викликає.
+   */
+  sortValue?: (item: Record<string, any>) => unknown
   /** Колонку не можна приховати. */
   required?: boolean
   /** Заборонити ресайз. Типово можна все, крім `flex`. */
@@ -224,6 +239,21 @@ const SELECTION_COLUMN_WIDTH = 44
  */
 const ROW_SEPARATOR =
   "after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-line after:content-['']"
+
+/*
+ * Фокус клікабельного рядка малюється на КОМІРКАХ. ring на самому <tr> не
+ * було видно ніколи: комірки позиційовані (`relative` під роздільник і
+ * sticky), тож малюються поверх тіні рядка разом зі своїм непрозорим
+ * тлом. Виміряно в Chromium: сфокусований рядок відрізнявся від сусідів
+ * лише тлом наведення, 1.1:1. Перша й остання комірки додають бічні
+ * краї; одна комірка на рядок отримує рамку цілком (дві псевдокласи —
+ * вища специфічність, тож порядок у CSS не вирішує).
+ */
+const ROW_FOCUS_RING =
+  '[&:focus-visible>td]:shadow-[inset_0_2px_0_var(--ring),inset_0_-2px_0_var(--ring)] ' +
+  '[&:focus-visible>td:first-child]:shadow-[inset_2px_2px_0_var(--ring),inset_0_-2px_0_var(--ring)] ' +
+  '[&:focus-visible>td:last-child]:shadow-[inset_-2px_2px_0_var(--ring),inset_0_-2px_0_var(--ring)] ' +
+  '[&:focus-visible>td:first-child:last-child]:shadow-[inset_0_0_0_2px_var(--ring)]'
 
 // Літерали, а не інтерполяція: інакше JIT Tailwind цих класів не побачить.
 const CLAMP_CLASSES = {
@@ -678,8 +708,17 @@ const sortedItems = computed(() => {
   const sort = internalSort.value
   if (!sort || props.serverSort) return props.items
   const direction = sort.dir === 'asc' ? 1 : -1
-  // Копія: сортування на місці мутувало б масив, переданий ззовні.
-  return [...props.items].sort((a, b) => compareValues(a[sort.by], b[sort.by], direction))
+  // sortValue — з props.headers, а не з localHeaders: функція живе у
+  // споживача, а локальна копія колонок — це лише розкладка.
+  const read = props.headers.find((header) => header.value === sort.by)?.sortValue
+    ?? ((item: T) => item[sort.by])
+  // Значення читаються ОДИН раз на рядок, а не на кожне порівняння:
+  // sortValue споживача може бути недешевим, а sort викликає компаратор
+  // n·log n разів. Копія — бо сортування на місці мутувало б масив ззовні.
+  return props.items
+    .map((item) => ({ item, key: read(item) }))
+    .sort((a, b) => compareValues(a.key, b.key, direction))
+    .map((entry) => entry.item)
 })
 
 function toggleSort(header: TableHeader) {
@@ -707,16 +746,61 @@ function ariaSort(header: TableHeader): 'ascending' | 'descending' | 'none' | un
 /*  Рядки                                                           */
 /* ---------------------------------------------------------------- */
 
-function onRowActivate(item: T) {
-  if (props.rowClickable) emit('rowClick', item)
+/*
+ * Контрол усередині рядка має власну дію. Без цієї перевірки кнопка
+ * «Видалити» чи посилання в `cell-*` спершу «відкривали» рядок, а з
+ * клавіатури не працювали зовсім: Enter спливав до рядка, і його
+ * preventDefault скасовував активацію самої кнопки.
+ */
+const NESTED_CONTROL =
+  'a[href],button,input,select,textarea,label,summary,[role="button"],[role="link"],[role="checkbox"],[role="switch"],[tabindex]:not([tabindex="-1"])'
+
+function fromNestedControl(event: Event): boolean {
+  const target = event.target as Element | null
+  const row = event.currentTarget as Element | null
+  if (!target || !row || target === row) return false
+  const control = target.closest(NESTED_CONTROL)
+  return !!control && control !== row && row.contains(control)
+}
+
+/*
+ * Виділений мишею текст — це копіювання, а не клік. Відколи вибір рядків
+ * більше не вимикає виділення тексту, інакше спроба скопіювати номер
+ * замовлення з клікабельного рядка відкривала б його картку.
+ */
+function selectingTextIn(row: Element | null): boolean {
+  if (!row || typeof window === 'undefined') return false
+  const selection = window.getSelection?.()
+  if (!selection || selection.isCollapsed || selection.rangeCount === 0) return false
+  return row.contains(selection.anchorNode) || row.contains(selection.focusNode)
+}
+
+function onRowActivate(event: MouseEvent, item: T) {
+  if (!props.rowClickable || fromNestedControl(event)) return
+  if (selectingTextIn(event.currentTarget as Element | null)) return
+  emit('rowClick', item)
 }
 
 function onRowKeydown(event: KeyboardEvent, item: T) {
   if (!props.rowClickable) return
+  // Лише клавіші, натиснуті НА самому рядку: Enter на вкладеній кнопці
+  // належить їй.
+  if (event.target !== event.currentTarget) return
   if (event.key !== 'Enter' && event.key !== ' ') return
   // Space без preventDefault прокручує сторінку замість активації рядка.
   event.preventDefault()
   emit('rowClick', item)
+}
+
+/*
+ * Shift+клік по прапорцю розширює і виділення ТЕКСТУ від попереднього
+ * кліку — через пів таблиці. Раніше від цього рятував select-none на
+ * всьому компоненті, і в таблиці з вибором не можна було скопіювати
+ * жодного значення. Тепер виділення гаситься лише на цьому жесті:
+ * preventDefault на mousedown не скасовує ні click, ні зміну прапорця.
+ */
+function onSelectionMousedown(event: MouseEvent) {
+  if (event.shiftKey) event.preventDefault()
 }
 
 const showSkeleton = computed(() => props.loading && props.items.length === 0)
@@ -729,7 +813,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
     обіймає вміст і стискається лише коли не вміщається. З `flex-1`
     таблиця на три рядки розтягувалась би на весь екран порожнім тлом.
   -->
-  <div :class="[{ 'select-none': !!resizing || selectable }, fill ? 'flex min-h-0 flex-col' : '']">
+  <!--
+    select-none — лише на час ресайзу. Раніше він стояв і на всій таблиці з
+    `selectable`, і з неї не можна було скопіювати жодного значення; від
+    виділення тексту Shift+кліком тепер береже onSelectionMousedown.
+  -->
+  <div :class="[{ 'select-none': !!resizing }, fill ? 'flex min-h-0 flex-col' : '']">
     <!--
       Панель ЗОВНІ контейнера з overflow-auto: усередині нього вона з'їхала б
       горизонтально разом із таблицею і зникла б з очей рівно тоді, коли
@@ -966,6 +1055,14 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
             </tr>
 
             <template v-else>
+              <!--
+                Клікабельний рядок лишається рядком: role="button" на <tr>
+                стирав семантику таблиці (комірки більше не пов'язані із
+                заголовками) і робив прапорець та кнопки в комірках
+                вкладеними в кнопку — для скрінрідера їх не існувало.
+                Фокусований рядок скрінрідер зачитує вмістом, Enter/Space
+                і клік у режимі читання активують його так само.
+              -->
               <tr
                 v-for="item in sortedItems"
                 :key="String(item[keyRow])"
@@ -980,15 +1077,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   selectable && selectedSet.has(item[keyRow] as string | number)
                     ? 'bg-primary-50'
                     : 'bg-card hover:bg-hover',
-                  rowClickable
-                    ? 'cursor-pointer focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-ring'
-                    : '',
+                  rowClickable ? `cursor-pointer focus:outline-none ${ROW_FOCUS_RING}` : '',
                   rowClass?.(item),
                 ]"
-                :role="rowClickable ? 'button' : undefined"
                 :tabindex="rowClickable ? 0 : undefined"
                 :aria-selected="selectable ? selectedSet.has(item[keyRow] as string | number) : undefined"
-                @click="onRowActivate(item)"
+                @click="onRowActivate($event, item)"
                 @keydown="onRowKeydown($event, item)"
               >
                 <!--
@@ -1007,6 +1101,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   @click.stop
                   @keydown.stop
                   @pointerdown="pendingShift = $event.shiftKey"
+                  @mousedown="onSelectionMousedown"
                 >
                   <UiCheckbox
                     :model-value="selectedSet.has(item[keyRow] as string | number)"
@@ -1089,13 +1184,43 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       />
     </div>
 
-    <!-- Мобільні картки з ТИХ САМИХ слотів cell-* -->
-    <div v-if="mobileCards" class="space-y-2 md:hidden">
-      <p v-if="showEmpty" class="rounded-card border border-line px-4 py-10 text-center text-sm text-muted">
-        {{ emptyText }}
-      </p>
+    <!--
+      Мобільні картки з ТИХ САМИХ слотів cell-* — і з тими самими станами.
+      Без них телефон при першому завантаженні показував порожнечу
+      (скелетон жив у схованій таблиці), при повторному — не показував
+      нічого (оверлей теж hidden до md), а слот #empty підмінявся голим
+      emptyText.
+
+      flex-col з gap, а не space-y: оверлей нижче — такий самий нащадок, і
+      space-y дав би останній картці нижній відступ щоразу, коли оверлей
+      з'являється, — список підстрибував би на кожному оновленні.
+    -->
+    <div v-if="mobileCards" class="relative flex flex-col gap-2 md:hidden" :aria-busy="loading || undefined">
+      <template v-if="showSkeleton">
+        <div
+          v-for="row in skeletonRows"
+          :key="`msk-${row}`"
+          class="space-y-1.5 rounded-card border border-line bg-card p-3"
+          aria-hidden="true"
+        >
+          <!-- h-5 — висота рядка text-sm у картці: скелетон повторює
+               геометрію пар «назва — значення», а не малює довільні смуги. -->
+          <div v-for="header in visibleHeaders" :key="header.value" class="flex h-5 items-center justify-between gap-3">
+            <UiSkeleton class="h-3 w-16" />
+            <UiSkeleton class="h-3" :style="{ width: `${25 + ((row * 17 + header.value.length * 13) % 30)}%` }" />
+          </div>
+        </div>
+      </template>
+
+      <div v-else-if="showEmpty" class="rounded-card border border-line bg-card">
+        <slot name="empty">
+          <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
+        </slot>
+      </div>
+
+      <template v-else>
       <div
-        v-for="item in showEmpty ? [] : sortedItems"
+        v-for="item in sortedItems"
         :key="`m-${String(item[keyRow])}`"
         class="flex items-start gap-3 rounded-card border border-line bg-card p-3"
         :class="[
@@ -1108,7 +1233,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
           нього: інтерактивний контрол усередині ролі кнопки недосяжний для
           скрінрідера в режимі читання.
         -->
-        <div v-if="selectable" class="pt-0.5" @pointerdown="pendingShift = $event.shiftKey">
+        <div
+          v-if="selectable"
+          class="pt-0.5"
+          @pointerdown="pendingShift = $event.shiftKey"
+          @mousedown="onSelectionMousedown"
+        >
           <UiCheckbox
             :model-value="selectedSet.has(item[keyRow] as string | number)"
             :disabled="!canSelect(item)"
@@ -1124,7 +1254,7 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
           :class="rowClickable ? 'cursor-pointer' : ''"
           :role="rowClickable ? 'button' : undefined"
           :tabindex="rowClickable ? 0 : undefined"
-          @click="onRowActivate(item)"
+          @click="onRowActivate($event, item)"
           @keydown="onRowKeydown($event, item)"
         >
         <slot name="mobile-card" :item="item">
@@ -1154,6 +1284,27 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
           </dl>
         </slot>
         </div>
+      </div>
+      </template>
+
+      <!--
+        Той самий оверлей оновлення, що над таблицею. Пігулка sticky: список
+        карток на телефоні буває на кілька екранів, і напис угорі оверлею
+        їхав би за край рівно тоді, коли користувач прогорнув униз.
+        Запасне значення 0px — для проєкту без токена висоти шапки.
+      -->
+      <div
+        v-if="loading && items.length > 0"
+        class="absolute inset-0 flex items-start justify-center rounded-card bg-card/60 pt-6 backdrop-blur-[1px]"
+        aria-hidden="true"
+      >
+        <span class="sticky top-[calc(var(--header-height,0px)+0.75rem)] inline-flex items-center gap-2 rounded-full border border-line bg-card px-3 py-1 text-xs text-muted shadow-card">
+          <svg class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle class="opacity-30" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+          </svg>
+          Оновлення…
+        </span>
       </div>
     </div>
   </div>

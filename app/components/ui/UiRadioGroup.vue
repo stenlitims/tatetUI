@@ -52,6 +52,14 @@ const errorId = `${generatedId}-error`
 const hintId = `${generatedId}-hint`
 const inputs = shallowRef<(HTMLInputElement | null)[]>([])
 
+/*
+ * Радіо без name — це окрема група з ОДНІЄЇ кнопки. З `required` кожна
+ * необрана кнопка лишалася «незаповненою», тож форма з
+ * `<UiRadioGroup required>` без name не проходила нативну перевірку
+ * ніколи, хоч би що обрав користувач. Згенероване ім'я збирає їх у групу.
+ */
+const groupName = computed(() => props.name || `${generatedId}-radio`)
+
 onBeforeUpdate(() => {
   inputs.value = []
 })
@@ -103,7 +111,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
       <label
         v-for="(option, index) in options"
         :key="option.value"
-        class="relative flex min-h-11 items-start gap-2.5 rounded-control border bg-card px-3 py-2.5 transition-[border-color,background-color,box-shadow]"
+        class="relative flex min-h-12 items-start gap-2.5 rounded-control border bg-card px-3 py-2.5 transition-[border-color,background-color,box-shadow] md:min-h-11"
         :class="[
           option.value === modelValue
             ? 'border-accent-solid bg-primary-50 ring-[3px] ring-ring/10'
@@ -118,7 +126,7 @@ function onKeydown(event: KeyboardEvent, index: number) {
         <input
           :ref="(el) => (inputs[index] = el as HTMLInputElement)"
           type="radio"
-          :name="name"
+          :name="groupName"
           :value="option.value"
           :checked="option.value === modelValue"
           :disabled="disabled || option.disabled"

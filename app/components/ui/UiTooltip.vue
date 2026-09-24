@@ -8,6 +8,7 @@ import {
   useId,
   watch,
 } from 'vue'
+import { useFloatingLayer } from '~/composables/useOverlayStack'
 import { computeTooltipPosition } from '~/utils/tooltip'
 import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 
@@ -17,11 +18,17 @@ const props = withDefaults(
     content?: string
     /** Звідки з'являється підказка відносно тригера. */
     placement?: 'top' | 'bottom' | 'left' | 'right'
-    /** Затримка показу, мс. */
+    /** Затримка показу при наведенні, мс. Фокус із клавіатури показує одразу. */
     delay?: number
+    /**
+     * Скільки чекати, перш ніж сховати підказку, коли курсор пішов із
+     * тригера, мс. Цього вистачає, щоб перевести курсор на саму підказку й
+     * дочитати її.
+     */
+    closeDelay?: number
     disabled?: boolean
   }>(),
-  { content: undefined, placement: 'top', delay: 200, disabled: false },
+  { content: undefined, placement: 'top', delay: 200, closeDelay: 100, disabled: false },
 )
 
 defineSlots<{
@@ -50,21 +57,132 @@ const tooltipId = `${useId()}-tooltip`
 const describedBy = ref<string | undefined>(undefined)
 const teleportReady = shallowRef(false)
 
-let timer: ReturnType<typeof setTimeout> | undefined
+let showTimer: ReturnType<typeof setTimeout> | undefined
+let hideTimer: ReturnType<typeof setTimeout> | undefined
+let overTrigger = false
+let overTooltip = false
+/** Фокус із клавіатури всередині тригера: поки він там, підказка не ховається. */
+let keyboardFocus = false
+
+/*
+ * Пасивний шар: Escape спершу ховає підказку і далі не йде — раніше той
+ * самий натиск закривав ще й модалку під нею разом із формою. Водночас
+ * `isTopmost` оверлея під підказкою не змінюється: стрілки в галереї
+ * гортають, поки над кнопкою висить підказка.
+ */
+const layer = useFloatingLayer({
+  elements: () => [wrapperEl.value, tooltipEl.value],
+  onEscape: () => hide(),
+  onPointerDownOutside: () => hide(),
+  passive: true,
+})
+
+function clearTimers() {
+  if (showTimer) clearTimeout(showTimer)
+  if (hideTimer) clearTimeout(hideTimer)
+  showTimer = undefined
+  hideTimer = undefined
+}
 
 function show() {
-  if (props.disabled || visible.value || timer) return
-  timer = setTimeout(() => {
+  clearTimers()
+  if (props.disabled) return
+  if (!visible.value) {
     visible.value = true
-    void nextTick(updatePosition)
-  }, props.delay)
+    layer.activate()
+  }
+  // describedBy — у тому ж такті, що й показ: скрінрідер читає опис одразу
+  // після події фокуса, і атрибут, що з'явився пізніше, вже не оголосить.
+  describedBy.value = tooltipId
+  void nextTick(updatePosition)
 }
 
 function hide() {
-  if (timer) clearTimeout(timer)
-  timer = undefined
-  visible.value = false
+  clearTimers()
+  overTooltip = false
+  keyboardFocus = false
   describedBy.value = undefined
+  if (!visible.value) return
+  visible.value = false
+  layer.deactivate()
+}
+
+function onTriggerEnter() {
+  overTrigger = true
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = undefined
+  }
+  if (props.disabled || visible.value || showTimer) return
+  showTimer = setTimeout(show, props.delay)
+}
+
+function onTriggerLeave() {
+  overTrigger = false
+  scheduleHide()
+}
+
+/**
+ * Не ховаємо одразу: між тригером і підказкою є зазор, і курсор, що йде на
+ * неї, на мить не над жодним із них. Без паузи підказку неможливо навести,
+ * а WCAG 1.4.13 вимагає, щоб її можна було навести й дочитати.
+ */
+function scheduleHide() {
+  if (showTimer) {
+    clearTimeout(showTimer)
+    showTimer = undefined
+  }
+  if (!visible.value || keyboardFocus || hideTimer) return
+  hideTimer = setTimeout(() => {
+    hideTimer = undefined
+    if (!overTrigger && !overTooltip && !keyboardFocus) hide()
+  }, props.closeDelay)
+}
+
+function onTooltipEnter() {
+  overTooltip = true
+  if (hideTimer) {
+    clearTimeout(hideTimer)
+    hideTimer = undefined
+  }
+}
+
+function onTooltipLeave() {
+  overTooltip = false
+  scheduleHide()
+}
+
+/**
+ * Фокус із клавіатури показує підказку ОДРАЗУ, без затримки наведення:
+ * інакше скрінрідер встигав оголосити кнопку раніше, ніж з'являвся її опис.
+ * Фокус від кліку мишею (не :focus-visible) нічого не показує — підказка
+ * вистрибувала б на кожне натискання.
+ */
+function onFocusIn(event: FocusEvent) {
+  if (props.disabled) return
+  const target = event.target
+  if (!(target instanceof Element)) return
+  let fromKeyboard = true
+  try {
+    fromKeyboard = target.matches(':focus-visible')
+  } catch {
+    // Браузер без :focus-visible — показуємо, як і раніше, на будь-який фокус.
+  }
+  if (!fromKeyboard) return
+  keyboardFocus = true
+  show()
+}
+
+function onFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget
+  if (next instanceof Node && wrapperEl.value?.contains(next)) return
+  keyboardFocus = false
+  if (!overTrigger && !overTooltip) hide()
+}
+
+/** Натискання ховає підказку: людина вже діє, підказка лише заступає результат. */
+function onPointerDown() {
+  hide()
 }
 
 function updatePosition() {
@@ -94,14 +212,9 @@ function onScrollOrResize() {
   if (visible.value) updatePosition()
 }
 
-function onKeyDown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && visible.value) hide()
-}
-
-// Панель у body — слухаємо документ, а не корінь.
+// Панель у body — слухаємо вікно, а не корінь.
 onMounted(() => {
   teleportReady.value = true
-  document.addEventListener('keydown', onKeyDown, true)
   window.addEventListener('scroll', onScrollOrResize, { passive: true, capture: true })
   window.addEventListener('resize', onScrollOrResize, { passive: true })
 })
@@ -116,7 +229,6 @@ watch(
 onBeforeUnmount(() => {
   hide()
   if (typeof document !== 'undefined') {
-    document.removeEventListener('keydown', onKeyDown, true)
     window.removeEventListener('scroll', onScrollOrResize, true)
     window.removeEventListener('resize', onScrollOrResize)
   }
@@ -124,12 +236,7 @@ onBeforeUnmount(() => {
 
 // Перерахунок, коли панель нарешті має реальні габарити.
 watch(tooltipEl, (el) => {
-  if (el) {
-    void nextTick(() => {
-      updatePosition()
-      describedBy.value = tooltipId
-    })
-  }
+  if (el) void nextTick(updatePosition)
 })
 </script>
 
@@ -137,10 +244,11 @@ watch(tooltipEl, (el) => {
   <span
     ref="wrapperEl"
     class="inline-flex"
-    @mouseenter="show"
-    @mouseleave="hide"
-    @focusin="show"
-    @focusout="hide"
+    @mouseenter="onTriggerEnter"
+    @mouseleave="onTriggerLeave"
+    @focusin="onFocusIn"
+    @focusout="onFocusOut"
+    @pointerdown="onPointerDown"
   >
     <slot :described-by="describedBy" />
 
@@ -148,10 +256,10 @@ watch(tooltipEl, (el) => {
       <!-- Підказка «виростає» з боку тригера: origin залежить від placement,
            інакше масштабування від центру виглядає як спалах на місці. -->
       <Transition
-        enter-active-class="transition duration-150 ease-out"
+        enter-active-class="transition duration-(--duration-base) ease-out"
         enter-from-class="scale-95 opacity-0"
         enter-to-class="scale-100 opacity-100"
-        leave-active-class="transition duration-100 ease-in"
+        leave-active-class="transition duration-(--duration-fast) ease-in"
         leave-from-class="scale-100 opacity-100"
         leave-to-class="scale-95 opacity-0"
       >
@@ -160,9 +268,11 @@ watch(tooltipEl, (el) => {
           :id="tooltipId"
           ref="tooltipEl"
           role="tooltip"
-          class="pointer-events-none fixed max-w-64 rounded-control bg-ink px-2.5 py-1.5 text-xs leading-snug text-main shadow-overlay"
+          class="fixed max-w-64 rounded-control bg-ink px-2.5 py-1.5 text-xs leading-snug text-main shadow-overlay"
           :class="ORIGIN[placement]"
           :style="style"
+          @mouseenter="onTooltipEnter"
+          @mouseleave="onTooltipLeave"
         >
           <slot name="content">{{ content }}</slot>
         </div>

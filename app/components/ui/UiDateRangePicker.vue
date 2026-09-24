@@ -1,22 +1,29 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, useSlots, watch } from 'vue'
 import UiCalendar from '~/components/ui/UiCalendar.vue'
 import {
   compareDay,
   defaultDateRangePresets,
   isSameDay,
   startOfDay,
+  toDateKey,
   type DateRangePreset,
 } from '~/utils/calendar'
 import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
+  clearButtonClass,
   dropdownTransitionProps,
   errorTextClass,
   fieldClass,
   helperTextClass,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на типовий тригер (з власним
+// тригером зі слота їм немає куди йти, тож вони лишаються на корені).
+defineOptions({ inheritAttrs: false })
 
 export interface DateRange {
   /** Початок періоду включно. */
@@ -68,6 +75,7 @@ const props = withDefaults(
     disabled?: boolean
     required?: boolean
     id?: string
+    /** Ім'я поля форми. Значення — локальні дати `YYYY-MM-DD/YYYY-MM-DD`. */
     name?: string
   }>(),
   {
@@ -100,6 +108,12 @@ defineSlots<{
   footer?: (props: { close: () => void }) => unknown
 }>()
 
+const attrs = useAttrs()
+const slots = useSlots()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+const rootBindings = computed(() => (slots.trigger ? { ...attrs } : fieldAttrs.value.root))
+const triggerBindings = computed(() => (slots.trigger ? {} : fieldAttrs.value.control))
+
 const generatedId = useId()
 const fieldId = computed(() => props.id || `${generatedId}-range`)
 const panelId = `${generatedId}-panel`
@@ -112,6 +126,7 @@ const isOpen = ref(false)
 const rootEl = ref<HTMLElement | null>(null)
 const triggerEl = ref<HTMLButtonElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
+const calendarEl = ref<InstanceType<typeof UiCalendar> | null>(null)
 
 const todayDate = computed(() => startOfDay(props.today ?? new Date()))
 
@@ -162,6 +177,15 @@ const triggerText = computed(() => {
   return `${format.format(range.start)} – ${format.format(range.end)}`
 })
 
+/*
+ * Значення для форми — календарні дні за локальним часом. toISOString()
+ * переводив локальну опівніч в UTC, і в Києві 24.09 йшло на сервер як
+ * `2026-09-23T21:00:00.000Z`, тобто вчорашнім днем.
+ */
+const formValue = computed(() =>
+  props.modelValue ? `${toDateKey(props.modelValue.start)}/${toDateKey(props.modelValue.end)}` : '',
+)
+
 /* ------------------------------------------------------------------ */
 /*  Пресети                                                           */
 /* ------------------------------------------------------------------ */
@@ -211,6 +235,8 @@ function onCalendarChange(value: Date | [Date, Date] | null) {
 
 function clear() {
   emit('update:modelValue', null)
+  // Хрестик зникає разом зі значенням — без цього фокус падав на <body>.
+  focusTrigger()
 }
 
 /* ------------------------------------------------------------------ */
@@ -236,22 +262,44 @@ function updatePosition() {
   }
 }
 
+// Власний тригер зі слота не має ref — беремо перший фокусований у корені.
+function focusTrigger() {
+  const target =
+    triggerEl.value ??
+    rootEl.value?.querySelector<HTMLElement>('button, [href], input:not([type="hidden"]), [tabindex]:not([tabindex="-1"])')
+  target?.focus()
+}
+
 function open() {
-  if (props.disabled) return
+  if (props.disabled || isOpen.value) return
   isOpen.value = true
   emit('open')
 }
 
-function close() {
+/**
+ * `returnFocus` — повернути фокус на тригер, якщо він був у панелі, яка
+ * зараз зникне (інакше він падав на <body>). Клік поза панеллю і вихід
+ * фокуса деінде фокус НЕ перехоплюють: користувач уже пішов туди, куди хотів.
+ */
+function close(returnFocus = true) {
   if (!isOpen.value) return
+  const focusWasInside = !!panelEl.value?.contains(document.activeElement)
   isOpen.value = false
   emit('close')
+  if (returnFocus && focusWasInside) focusTrigger()
 }
 
 function toggle() {
-  isOpen.value ? close() : open()
+  if (isOpen.value) close()
+  else open()
 }
 
+/*
+ * Панель відкрилася — фокус переходить у календар. Без цього клавіатура
+ * до панелі не діставалася зовсім: панель телепортована в кінець <body>,
+ * тож Tab із тригера вів до наступного поля форми, а focusout закривав
+ * панель. preventScroll — бо в першу мить панель ще не спозиціонована.
+ */
 watch(isOpen, async (value) => {
   if (!value) {
     window.removeEventListener('scroll', updatePosition, true)
@@ -260,6 +308,7 @@ watch(isOpen, async (value) => {
   }
   await nextTick()
   updatePosition()
+  calendarEl.value?.focus({ preventScroll: true })
   window.addEventListener('scroll', updatePosition, true)
   window.addEventListener('resize', updatePosition)
 })
@@ -267,40 +316,62 @@ watch(isOpen, async (value) => {
 /*
  * Панель немодальна — тієї самої родини, що UiPopover і UiMenu. Пастки
  * фокуса тут навмисно немає: вона зламала б Tab до наступного поля форми.
- * Закриття — по виході фокуса за межі тригера й панелі.
+ * Закриття — по виході фокуса за межі тригера й панелі. Слухач стоїть і на
+ * корені, і на панелі: телепортована панель у DOM лежить поза коренем, і
+ * focusout із неї до кореня не спливає.
  */
 function onFocusOut(event: FocusEvent) {
   const next = event.relatedTarget as Node | null
   if (!next) return
   if (rootEl.value?.contains(next) || panelEl.value?.contains(next)) return
-  close()
+  close(false)
 }
 
 function onDocumentPointerDown(event: PointerEvent) {
   const target = event.target as Node
   if (rootEl.value?.contains(target) || panelEl.value?.contains(target)) return
+  close(false)
+}
+
+/*
+ * Escape — на самому компоненті, не на document. Слухач на document не міг
+ * зупинити слухача UiModal на тому ж document, тож усередині модалки один
+ * Escape закривав і панель, і модалку.
+ */
+function onEscape(event: KeyboardEvent) {
+  if (event.key !== 'Escape' || !isOpen.value) return
+  event.stopPropagation()
   close()
 }
 
-function onDocumentKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape' && isOpen.value) {
-    close()
-    triggerEl.value?.focus()
-  }
+/*
+ * Tab на краях панелі повертає фокус на тригер. Панель лежить у кінці
+ * <body>: Tab з її останнього елемента виводив фокус за межі сторінки.
+ * Вперед — без preventDefault: браузер продовжує Tab уже від тригера, тобто
+ * до наступного поля форми.
+ */
+function onPanelKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') return onEscape(event)
+  if (event.key !== 'Tab' || !panelEl.value) return
+  const tabbables = [
+    ...panelEl.value.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]'),
+  ].filter((element) => element.tabIndex >= 0 && !(element as HTMLButtonElement).disabled)
+  const active = document.activeElement
+  if (event.shiftKey ? active !== tabbables[0] : active !== tabbables.at(-1)) return
+  if (event.shiftKey) event.preventDefault()
+  close()
 }
 
 const teleportReady = ref(false)
 onMounted(() => {
   teleportReady.value = true
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
-  document.addEventListener('keydown', onDocumentKeydown)
 })
 
 onBeforeUnmount(() => {
   wideQuery?.removeEventListener('change', syncWide)
   if (typeof document === 'undefined') return
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
-  document.removeEventListener('keydown', onDocumentKeydown)
   window.removeEventListener('scroll', updatePosition, true)
   window.removeEventListener('resize', updatePosition)
 })
@@ -327,7 +398,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl" @focusout="onFocusOut">
+  <div ref="rootEl" v-bind="rootBindings" @focusout="onFocusOut" @keydown="onEscape">
     <label v-if="label" :for="fieldId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
@@ -335,6 +406,7 @@ defineExpose({
 
     <slot name="trigger" :open="isOpen" :toggle="toggle" :text="triggerText" :clear="clear">
       <div class="relative">
+        <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
         <button
           :id="fieldId"
           ref="triggerEl"
@@ -346,6 +418,7 @@ defineExpose({
           :aria-invalid="hasError || undefined"
           :aria-describedby="describedBy"
           :class="triggerClasses"
+          v-bind="triggerBindings"
           @click="toggle"
         >
           <svg class="h-4 w-4 shrink-0 text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -358,7 +431,7 @@ defineExpose({
         <button
           v-if="clearable && modelValue && !disabled"
           type="button"
-          class="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          :class="['absolute right-1.5 top-1/2 -translate-y-1/2', clearButtonClass]"
           aria-label="Очистити період"
           @click="clear"
         >
@@ -369,7 +442,7 @@ defineExpose({
       </div>
     </slot>
 
-    <input v-if="name" type="hidden" :name="name" :value="modelValue ? `${modelValue.start.toISOString()}/${modelValue.end.toISOString()}` : ''">
+    <input v-if="name" type="hidden" :name="name" :value="formValue">
 
     <Teleport v-if="teleportReady" to="body">
       <Transition v-bind="dropdownTransitionProps">
@@ -381,6 +454,8 @@ defineExpose({
           :aria-label="label || 'Вибір періоду'"
           class="fixed rounded-overlay border border-line bg-dropdown p-3 shadow-overlay"
           :style="panelStyle"
+          @keydown="onPanelKeydown"
+          @focusout="onFocusOut"
         >
           <div class="flex flex-col gap-3 md:flex-row">
             <!--
@@ -406,6 +481,7 @@ defineExpose({
             </div>
 
             <UiCalendar
+              ref="calendarEl"
               mode="range"
               :model-value="calendarValue"
               :months="monthsShown"

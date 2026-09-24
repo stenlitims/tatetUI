@@ -26,11 +26,13 @@ export default defineNuxtConfig({
     /**
      * Внутрішні файли редактора в таблицях API не потрібні: сторінка описує
      * UiRichTextEditor, а RteToolbar чи RteIconBtn — його приватна кухня.
+     * Так само екрани вітрини головної (components/home) — не бібліотека,
+     * і таблиць API в них немає.
      *
      * Без цього vue-component-meta будує окрему TS-програму на КОЖЕН із
      * десятка SFC, і кожна тягне типи @tiptap — найдорожча частина збірки.
      */
-    exclude: [/[\\/]ui[\\/]rich-text-editor[\\/]/, /[\\/]ui[\\/]table[\\/]/],
+    exclude: [/[\\/]ui[\\/]rich-text-editor[\\/]/, /[\\/]ui[\\/]table[\\/]/, /[\\/]components[\\/]home[\\/]/],
     // `type` вимкнено свідомо: це повний тип компонента, у таблиці API він
     // не потрібен, а в JSON виходить на порядок більшим за все інше разом.
     metaFields: { type: false, props: true, slots: true, events: true, exposed: true },

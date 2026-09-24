@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, useId, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
 import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
   dropdownEmptyClass,
   dropdownPanelClass,
   dropdownTransitionProps,
   errorTextClass,
+  fieldShellClass,
+  fieldTextSizes,
   helperTextClass,
   itemClass,
   itemHighlighted,
   labelClass,
+  splitFieldAttrs,
+  touchTargetClass,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на поле вводу міток.
+defineOptions({ inheritAttrs: false })
 
 const props = withDefaults(
   defineProps<{
@@ -22,7 +29,10 @@ const props = withDefaults(
      * чистий вільний ввід.
      */
     suggestions?: string[]
-    /** Максимальна кількість міток. Досягнувши межі, поле блокує ввід. */
+    /**
+     * Максимальна кількість міток. Досягнувши межі, поле стає лише для
+     * читання: нове не додається, але Backspace і далі прибирає мітки.
+     */
     max?: number
     /** Максимальна довжина однієї мітки. */
     maxLength?: number
@@ -40,7 +50,7 @@ const props = withDefaults(
     normalize?: (raw: string) => string
     /** Додавати недописану мітку при втраті фокуса. */
     addOnBlur?: boolean
-    /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
+    /** Висота поля й розмір міток. На мобільному кожен розмір вищий за десктопний. */
     size?: FieldSize
     /** Текст помилки. Стан помилки вмикає САМА наявність тексту. */
     error?: string
@@ -77,6 +87,9 @@ defineSlots<{
   /** Показується, коли під запит немає підказок. */
   empty?: () => unknown
 }>()
+
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
 
 const generatedId = useId()
 const inputId = computed(() => props.id || `${generatedId}-tags`)
@@ -162,9 +175,17 @@ function commit(rawList: string[]) {
   }
 
   if (rejectedMax) emit('reject', rawList.at(-1) ?? '', 'max')
-  if (added) {
-    emit('update:modelValue', next)
-    announcement.value = added === 1 ? `Додано ${next.at(-1)}` : `Додано міток: ${added}`
+  if (added) emit('update:modelValue', next)
+
+  /*
+   * Межу теж озвучуємо: на ній поле стає readonly, і без пояснення
+   * скрінрідер-користувач чує лише, що набір раптом перестав працювати.
+   */
+  if (added || rejectedMax) {
+    const parts: string[] = []
+    if (added) parts.push(added === 1 ? `Додано ${next.at(-1)}` : `Додано міток: ${added}`)
+    if (typeof props.max === 'number' && next.length >= props.max) parts.push(`досягнуто межі в ${props.max}`)
+    announcement.value = parts.join(', ')
   }
   return added
 }
@@ -315,14 +336,32 @@ onBeforeUnmount(() => {
   }
 })
 
+/*
+ * Teleport вмикається лише після монтування. Перевірка
+ * `typeof document` прямо в setup справджується вже під час гідратації: клієнт
+ * малював Teleport там, де сервер лишив коментар, і Vue сипав «Hydration
+ * node mismatch», зсуваючи сусідні вузли.
+ */
 const teleportReady = ref(false)
-if (typeof document !== 'undefined') teleportReady.value = true
+onMounted(() => {
+  teleportReady.value = true
+})
+
+/*
+ * Розміри складеного поля: мінімальна висота обгортки — як у fieldClass
+ * (45px на телефоні, md: — десктопні), шрифт інпута — 16px на телефоні
+ * (інакше iOS зумує), мітки — дрібніші за текст поля.
+ */
+const TAG_FIELD_SIZES: Record<FieldSize, { shell: string; input: string; chip: string }> = {
+  sm: { shell: 'min-h-12 gap-1 px-1.5 py-1 md:min-h-8', input: `py-0.5 ${fieldTextSizes.sm}`, chip: 'px-1.5 py-0.5 text-xs' },
+  md: { shell: 'min-h-12 gap-1.5 px-2 py-1.5 md:min-h-9', input: `py-1 ${fieldTextSizes.md}`, chip: 'px-2 py-1 text-xs' },
+  lg: { shell: 'min-h-13 gap-1.5 px-2.5 py-2 md:min-h-10', input: `py-1 ${fieldTextSizes.lg}`, chip: 'px-2.5 py-1 text-sm' },
+}
 
 const fieldWrapperClass = computed(() => [
-  'flex min-h-12 w-full flex-wrap items-center gap-1.5 rounded-control border bg-input px-2 py-1.5 transition-colors md:min-h-9',
-  hasError.value ? 'border-danger' : 'border-line focus-within:border-accent-solid',
-  'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-1 focus-within:ring-offset-ring-offset',
-  props.disabled ? 'cursor-not-allowed opacity-50' : '',
+  'flex flex-wrap items-center',
+  TAG_FIELD_SIZES[props.size].shell,
+  fieldShellClass({ error: hasError.value, disabled: props.disabled }),
 ])
 
 defineExpose({
@@ -336,7 +375,7 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl">
+  <div ref="rootEl" v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
@@ -353,15 +392,21 @@ defineExpose({
         <li v-for="(tag, index) in modelValue" :key="`${tag}-${index}`" class="contents">
           <slot name="tag" :tag="tag" :index="index" :remove="() => removeAt(index)">
             <span
-              class="inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs font-medium transition-colors"
-              :class="armedForRemoval && index === modelValue.length - 1
-                ? 'border-danger-line bg-danger-bg text-danger'
-                : 'border-line bg-subtle text-ink'"
+              class="inline-flex items-center gap-1 rounded-full border font-medium transition-colors"
+              :class="[
+                TAG_FIELD_SIZES[size].chip,
+                armedForRemoval && index === modelValue.length - 1
+                  ? 'border-danger-line bg-danger-bg text-danger'
+                  : 'border-line bg-subtle text-ink',
+              ]"
             >
               {{ tag }}
               <button
                 type="button"
-                class="-mr-1 flex h-5 w-5 items-center justify-center rounded-full text-muted transition-colors hover:bg-danger-bg hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="[
+                  'relative -mr-1 flex h-5 w-5 items-center justify-center rounded-full text-muted transition-colors hover:bg-danger-bg hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  touchTargetClass,
+                ]"
                 :aria-label="`Видалити ${tag}`"
                 :disabled="disabled"
                 @click.stop="removeAt(index)"
@@ -375,22 +420,31 @@ defineExpose({
         </li>
       </ul>
 
+      <!--
+        На межі max поле стає readonly, а не disabled: disabled викидав фокус
+        просто з-під пальців (і клавіатура втрачала місце), а Backspace для
+        видалення мітки переставав працювати. v-bind останнім — атрибут
+        споживача перемагає, як у звичайному fallthrough.
+      -->
       <input
         :id="inputId"
         ref="inputEl"
         type="text"
         role="combobox"
         :value="query"
-        :name="name"
         :placeholder="modelValue.length ? '' : placeholder"
-        :disabled="disabled || isFull"
+        :disabled="disabled"
+        :readonly="isFull"
         :aria-expanded="showPanel"
         :aria-controls="showPanel ? listboxId : undefined"
         aria-autocomplete="list"
         :aria-activedescendant="showPanel && filteredSuggestions.length ? `${listboxId}-${highlighted}` : undefined"
+        :aria-required="required || undefined"
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
-        class="min-w-24 flex-1 bg-transparent py-1 text-sm text-ink outline-none placeholder:text-muted focus-visible:ring-0"
+        class="min-w-24 flex-1 bg-transparent text-ink outline-none placeholder:text-muted focus-visible:ring-0"
+        :class="TAG_FIELD_SIZES[size].input"
+        v-bind="fieldAttrs.control"
         @input="onInput"
         @paste="onPaste"
         @keydown="onKeydown"
@@ -398,6 +452,18 @@ defineExpose({
         @blur="onBlur"
       >
     </div>
+
+    <!-- Форма отримує МІТКИ, по інпуту на кожну — як у UiMultiSelect. Раніше
+         name стояв на полі вводу, і сабміт віддавав недописаний текст. -->
+    <template v-if="name">
+      <input
+        v-for="(tag, index) in modelValue"
+        :key="`${tag}-${index}`"
+        type="hidden"
+        :name="name"
+        :value="tag"
+      >
+    </template>
 
     <Teleport v-if="teleportReady" to="body">
       <Transition v-bind="dropdownTransitionProps">

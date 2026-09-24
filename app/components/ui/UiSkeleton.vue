@@ -25,8 +25,14 @@ const roundings: Record<NonNullable<typeof props.rounded>, string> = {
   full: 'rounded-full',
 }
 
+/*
+ * Тло — `line`, а не `neutral-bg`. У темній темі neutral-bg (#1c2026) на
+ * картці (#181b20) давав 1.06:1: скелетон просто зникав, і завантаження
+ * виглядало як порожня картка. `line` — той самий сірий, що й межі, тож
+ * форма помітна в обох темах, але не кричить.
+ */
 const classes = computed(() => [
-  'relative overflow-hidden bg-neutral-bg',
+  'relative overflow-hidden bg-line',
   roundings[props.rounded],
   props.class ?? 'h-4 w-full',
 ])

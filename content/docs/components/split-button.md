@@ -6,6 +6,8 @@ dependsOn:
   - app/components/ui/UiButton.vue
   - app/components/ui/UiMenu.vue
   - app/utils/overlayPosition.ts
+  - app/composables/useOverlayStack.ts
+  - app/composables/useFocusTrap.ts
 emitDescriptions:
   click: Натиснуто головну кнопку.
   select: Обрано пункт із меню альтернатив. Приходить сам пункт, а не лише його id.
@@ -70,5 +72,6 @@ order: 60
 Каретка не має власного тексту, тож її ім'я приходить із `menuLabel`, а
 символ `▼` прихований через `aria-hidden`.
 
-ArrowDown на головній кнопці відкриває меню. Далі працює клавіатура
-`UiMenu`: стрілки по пунктах, Escape закриває й повертає фокус на тригер.
+ArrowDown на головній кнопці відкриває меню, Enter чи Space на каретці —
+теж, одразу з фокусом на першому пункті. Далі працює клавіатура `UiMenu`:
+стрілки й typeahead по пунктах, Escape закриває й повертає фокус на тригер.

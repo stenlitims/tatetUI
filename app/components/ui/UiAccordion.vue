@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUpdate, ref, useId, watch } from 'vue'
+import type { ComponentPublicInstance } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 
 export interface AccordionItem {
   id: string
@@ -25,8 +26,14 @@ const props = withDefaults(
      * Для FAQ і майстрів налаштувань, де секції взаємовиключні.
      */
     single?: boolean
+    /**
+     * Рівень заголовків секцій. Має продовжувати структуру сторінки:
+     * акордеон під `h2` — це `3`, у модалці з заголовком `h2` — теж `3`,
+     * у секції з `h3` — `4`. Інакше скрінрідер будує хибний зміст.
+     */
+    headingLevel?: 2 | 3 | 4 | 5 | 6
   }>(),
-  { modelValue: undefined, defaultOpen: () => [], showToggle: true, single: false },
+  { modelValue: undefined, defaultOpen: () => [], showToggle: true, single: false, headingLevel: 3 },
 )
 
 const emit = defineEmits<{
@@ -48,39 +55,62 @@ defineSlots<{
 const generatedId = useId()
 const baseId = `${generatedId}-acc`
 
-const headerButtonEls = ref<(HTMLElement | null)[]>([])
+/*
+ * Елементи — у мапах за id, а не в масиві за індексом: масив template-ref
+ * після видалення секції з середини отримував null на місці сусіда, і
+ * стрілка туди мовчки не переводила фокус.
+ */
+const headerEls = new Map<string, HTMLElement>()
+const panelEls = new Map<string, HTMLElement>()
 
-// Template-refs у v-for накопичуються між рендерами: без скидання масив
-// тримав би хибні елементи після зміни набору секцій (той самий патерн,
-// що в UiTabs і UiSelect).
-onBeforeUpdate(() => {
-  headerButtonEls.value = []
-})
+function setElement(map: Map<string, HTMLElement>, id: string, value: Element | ComponentPublicInstance | null) {
+  if (value instanceof HTMLElement) map.set(id, value)
+  else map.delete(id)
+}
 
 /*
  * Некерований режим: modelValue не задано → стан живе тут. Керований:
- * кожен тоггл емітовиться, стан приходить згори.
+ * стан приходить ЛИШЕ згори. Раніше тоггл писав внутрішній стан і в
+ * керованому режимі — батько, що відхилив зміну, бачив відкриту секцію,
+ * якої немає в його modelValue.
  */
 const internalOpen = ref<string[]>([...(props.modelValue ?? props.defaultOpen)])
+const openIds = computed(() => props.modelValue ?? internalOpen.value)
 
 watch(
   () => props.modelValue,
   (value) => {
+    // Якщо v-model згодом приберуть, некерований стан продовжить з останнього.
     if (value != null) internalOpen.value = [...value]
   },
 )
 
-const isOpen = (id: string) => internalOpen.value.includes(id)
+const isOpen = (id: string) => openIds.value.includes(id)
+
+/*
+ * Секцію, у якій стоїть фокус, закрили згори (v-model, single-режим з
+ * коду) — повертаємо фокус на її заголовок ДО того, як inert прибере
+ * панель: інакше фокус падав у <body> і клавіатурний користувач
+ * починав обхід сторінки спочатку. Той самий захист, що в UiExpand.
+ */
+watch(openIds, (next, previous) => {
+  if (typeof document === 'undefined') return
+  for (const id of previous) {
+    if (next.includes(id)) continue
+    if (panelEls.get(id)?.contains(document.activeElement)) headerEls.get(id)?.focus()
+  }
+})
 
 function toggle(item: AccordionItem) {
   if (item.disabled) return
   const open = !isOpen(item.id)
-  internalOpen.value = open
+  const next = open
     ? props.single
       ? [item.id]
-      : [...internalOpen.value, item.id]
-    : internalOpen.value.filter((id) => id !== item.id)
-  emit('update:modelValue', [...internalOpen.value])
+      : [...openIds.value, item.id]
+    : openIds.value.filter((id) => id !== item.id)
+  if (props.modelValue === undefined) internalOpen.value = next
+  emit('update:modelValue', [...next])
   if (open) emit('open', item.id)
   else emit('close', item.id)
 }
@@ -99,7 +129,8 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
 
   const go = (target: number) => {
     event.preventDefault()
-    void nextTick(() => headerButtonEls.value[enabled[target]?.index ?? 0]?.focus())
+    const id = enabled[target]?.item.id
+    if (id) void nextTick(() => headerEls.get(id)?.focus())
   }
 
   if (event.key === 'ArrowDown') {
@@ -117,22 +148,26 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
 <template>
   <div class="divide-y divide-line rounded-card border border-line bg-card">
     <div v-for="(item, index) in items" :key="item.id">
-      <h3 class="m-0">
+      <component :is="`h${headingLevel}`" class="m-0">
+        <!-- pointer-coarse:min-h-[44px] — як у UiExpand: py-3 з text-sm дає
+             лише 41px, нижче мінімальної цілі для пальця. -->
         <button
           :id="`${baseId}-${item.id}-button`"
-          :ref="(el) => (headerButtonEls[index] = el as HTMLElement)"
+          :ref="(el) => setElement(headerEls, item.id, el)"
           :aria-expanded="isOpen(item.id)"
           :aria-controls="`${baseId}-${item.id}-panel`"
           :disabled="item.disabled"
-          class="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+          class="group flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 pointer-coarse:min-h-[44px]"
           :class="item.disabled ? 'text-muted' : 'text-ink hover:bg-hover'"
           @click="toggle(item)"
           @keydown="onHeaderKeydown($event, index)"
         >
           <slot name="label" :item="item" :open="isOpen(item.id)">{{ item.label }}</slot>
+          <!-- Шеврон обертається рівно стільки, скільки розкривається панель:
+               з типовими 180 мс він «приїжджав» раніше за вміст. -->
           <svg
             v-if="showToggle"
-            class="h-4 w-4 shrink-0 text-muted transition-[transform,color] ease-emphasized group-hover:text-ink"
+            class="h-4 w-4 shrink-0 text-muted transition-[transform,color] duration-(--duration-slow) ease-emphasized group-hover:text-ink"
             :class="isOpen(item.id) ? 'rotate-180 text-accent' : ''"
             viewBox="0 0 24 24"
             fill="none"
@@ -141,12 +176,13 @@ function onHeaderKeydown(event: KeyboardEvent, index: number) {
             <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
           </svg>
         </button>
-      </h3>
+      </component>
       <!-- Анімація висоти через grid-рядки 0fr→1fr: без JS-вимірювань
            і без жорсткої max-height; глобальний reduced-motion вимикач
            зупиняє transition сам. -->
       <div
         :id="`${baseId}-${item.id}-panel`"
+        :ref="(el) => setElement(panelEls, item.id, el)"
         role="region"
         :aria-labelledby="`${baseId}-${item.id}-button`"
         :aria-hidden="!isOpen(item.id)"

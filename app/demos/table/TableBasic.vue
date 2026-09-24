@@ -3,7 +3,8 @@ import { ref } from 'vue'
 import UiChip from '~/components/ui/UiChip.vue'
 import UiTable, { type TableHeader, type TableSort } from '~/components/ui/UiTable.vue'
 
-interface Page extends Record<string, unknown> {
+// Звичайний interface — таблиця приймає його без `extends Record<…>`.
+interface Page {
   id: number
   title: string
   views: number
@@ -33,8 +34,10 @@ const sort = ref<TableSort | null>({ by: 'views', dir: 'desc' })
       <template #cell-views="{ item }">
         {{ (item.views as number).toLocaleString('uk') }}
       </template>
+      <!-- Без label: видимий текст уже і є назвою. label замінив би його для
+           скрінрідера — і той почув би сирий код «published». -->
       <template #cell-status="{ item }">
-        <UiChip :tone="item.status === 'published' ? 'success' : 'neutral'" dot :label="String(item.status)">
+        <UiChip :tone="item.status === 'published' ? 'success' : 'neutral'" dot>
           {{ item.status === 'published' ? 'опубліковано' : 'чернетка' }}
         </UiChip>
       </template>

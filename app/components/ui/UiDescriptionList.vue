@@ -62,7 +62,15 @@ const VALUE: Record<Size, string> = { sm: 'text-sm', md: 'text-sm' }
 
 const isEmpty = computed(() => props.items.length === 0)
 
+/*
+ * `min-w-0` на парі й на значенні, `break-words` на значенні — не
+ * косметика. URL, IBAN, email чи ідентифікатор — одне неподільне слово:
+ * у inline-розкладці воно виштовхувало `<dd>` за межу картки, а у двох
+ * колонках налазило на сусідню пару (виміряно в Chromium). Той самий
+ * захист, що в мобільній картці UiTable.
+ */
 const itemClass = (item: DescriptionItem) => [
+  'min-w-0',
   props.layout === 'inline' ? 'flex items-baseline justify-between gap-4' : '',
   props.divided ? 'border-b border-line pb-3 last:border-0 last:pb-0' : '',
   item.wide && props.columns === 2 ? 'md:col-span-2' : '',
@@ -80,7 +88,7 @@ const itemClass = (item: DescriptionItem) => [
     <div v-for="item in items" :key="item.key" :class="itemClass(item)">
       <dt class="font-medium text-muted" :class="TERM[size]">{{ item.term }}</dt>
       <dd
-        class="text-ink"
+        class="min-w-0 break-words text-ink"
         :class="[VALUE[size], layout === 'inline' ? 'text-right' : 'mt-1']"
       >
         <slot :name="`value-${item.key}`" :item="item">

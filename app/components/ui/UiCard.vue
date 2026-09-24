@@ -25,6 +25,19 @@ const paddings = {
   sm: 'p-3',
   md: 'p-4 sm:p-5',
 } as const
+
+/*
+ * Бічні поля шапки й підвалу — з того самого `padding`, що й тіло. Раніше
+ * вони завжди були px-4/sm:px-5, і з `padding="sm"` заголовок стояв на
+ * 4–7.5px правіше за текст тіла під ним. `none` лишає звичайні поля: тіло
+ * без відступу — це таблиця чи список зі своїми, і вони рівняються саме
+ * на px-4/sm:px-5.
+ */
+const edgePaddings = {
+  none: 'px-4 py-3 sm:px-5',
+  sm: 'px-3 py-2.5',
+  md: 'px-4 py-3 sm:px-5',
+} as const
 </script>
 
 <template>
@@ -33,13 +46,13 @@ const paddings = {
     class="rounded-card border border-line bg-card shadow-card"
     :class="hoverable ? 'transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-line-strong hover:shadow-raised active:translate-y-0 active:shadow-card' : ''"
   >
-    <div v-if="$slots.header" class="border-b border-line px-4 py-3 sm:px-5">
+    <div v-if="$slots.header" class="border-b border-line" :class="edgePaddings[padding]">
       <slot name="header" />
     </div>
     <div :class="paddings[padding]">
       <slot />
     </div>
-    <div v-if="$slots.footer" class="border-t border-line px-4 py-3 sm:px-5">
+    <div v-if="$slots.footer" class="border-t border-line" :class="edgePaddings[padding]">
       <slot name="footer" />
     </div>
   </component>

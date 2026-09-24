@@ -14,15 +14,29 @@ export const COLUMN_MIN_WIDTH = 40
 export const COLUMN_MAX_WIDTH = 800
 export const COLUMN_DEFAULT_WIDTH = 120
 
+/*
+ * Date зводиться до мітки часу ДО будь-яких порівнянь. Без цього дата
+ * падала в гілку рядків, і `toString()` сортував за назвою дня тижня:
+ * «Fri…» < «Mon…» < «Thu…» — хронологія виходила випадковою. Невалідна
+ * дата і NaN — порожні: компаратор, що повертає NaN, ламає sort цілком.
+ */
+function sortable(value: unknown): unknown {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime()
+  if (typeof value === 'number' && Number.isNaN(value)) return null
+  return value
+}
+
 /**
  * Порівняння значень комірок.
  *
  * Наївні `<` і `>` ставлять «Розділ 10» перед «Розділ 9», а кирилицю
  * сортують за кодами символів. Порожні значення завжди в кінці,
  * незалежно від напрямку: рядок без даних не має витісняти заповнені з
- * початку.
+ * початку. Дати порівнюються хронологічно.
  */
-export function compareValues(a: unknown, b: unknown, direction: 1 | -1): number {
+export function compareValues(rawA: unknown, rawB: unknown, direction: 1 | -1): number {
+  const a = sortable(rawA)
+  const b = sortable(rawB)
   const aEmpty = a === null || a === undefined || a === ''
   const bEmpty = b === null || b === undefined || b === ''
   if (aEmpty && bEmpty) return 0

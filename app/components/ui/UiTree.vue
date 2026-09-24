@@ -114,10 +114,47 @@ onBeforeUpdate(() => {
   rowEls.value = []
 })
 
-watch(flatRows, (rows) => {
-  if (rows.some((row) => row.node.id === activeId.value)) return
-  activeId.value = rows[0]?.node.id ?? null
+/** Батько кожного вузла по ВСЬОМУ дереву, а не лише по видимих рядках. */
+const parentOf = computed(() => {
+  const map = new Map<string, string | null>()
+  const walk = (nodes: TreeNode[], parent: string | null) => {
+    for (const node of nodes) {
+      map.set(node.id, parent)
+      if (node.children?.length) walk(node.children, node.id)
+    }
+  }
+  walk(props.items, null)
+  return map
 })
+
+/*
+ * Рядок, що тримає tabindex=0. Активний вузол буває невидимим: v-model
+ * вказує на дитину згорнутої гілки, або гілку згорнули ззовні. Раніше
+ * тоді жоден рядок не мав tabindex=0, і Tab проскакував дерево повністю —
+ * з клавіатури в нього не можна було потрапити. Замісник — найближчий
+ * видимий предок (там, де вузол і шукатимуть), інакше перший рядок.
+ */
+const tabbableId = computed(() => {
+  const visible = new Set(flatRows.value.map((row) => row.node.id))
+  let id = activeId.value
+  while (id != null) {
+    if (visible.has(id)) return id
+    id = parentOf.value.get(id) ?? null
+  }
+  return flatRows.value[0]?.node.id ?? null
+})
+
+/*
+ * Вибір, змінений ззовні, переносить і точку входу з клавіатури: за APG
+ * Tab у дерево з вибраним вузлом веде саме до нього, а не туди, де
+ * колись стояв курсор.
+ */
+watch(
+  () => props.modelValue,
+  (id) => {
+    if (id != null) activeId.value = id
+  },
+)
 
 function focusRow(index: number) {
   const row = flatRows.value[index]
@@ -191,7 +228,7 @@ function onRowActivate(row: FlatRow) {
       :key="row.node.id"
       :ref="(el) => (rowEls[index] = el as HTMLElement)"
       role="treeitem"
-      :tabindex="row.node.id === activeId ? 0 : -1"
+      :tabindex="row.node.id === tabbableId ? 0 : -1"
       :aria-level="row.depth + 1"
       :aria-expanded="row.hasChildren ? row.expanded : undefined"
       :aria-selected="selectable ? row.selected : undefined"
@@ -205,24 +242,32 @@ function onRowActivate(row: FlatRow) {
       @click="onRowClick(row)"
       @keydown="onRowKeydown($event, row, index)"
     >
-      <!-- Тоггл-кнопка: окремий клік не провокує вибір рядка. -->
+      <!--
+        Тоггл: окремий клік не провокує вибір рядка. Обгортка — на всю
+        висоту рядка з невидимою зоною 45px завширшки на дотику: сам шеврон
+        19×19, а з `expandOnClick: false` він єдиний спосіб розгорнути гілку
+        пальцем. Зона не виходить за висоту рядка — інакше зони сусідніх
+        шевронів перекривались би, і палець розгортав би чужу гілку.
+      -->
       <span
         v-if="row.hasChildren"
-        class="flex h-5 w-5 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink"
+        class="group/toggle relative flex w-5 shrink-0 items-center justify-center self-stretch pointer-coarse:after:absolute pointer-coarse:after:inset-y-0 pointer-coarse:after:left-1/2 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:content-['']"
         aria-hidden="true"
         @click.stop="toggle(row.node.id)"
       >
-        <slot name="toggle" :expanded="row.expanded" :has-children="row.hasChildren">
-          <svg
-            class="h-3.5 w-3.5 transition-transform"
-            :class="row.expanded ? 'rotate-90' : ''"
-            viewBox="0 0 24 24"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-        </slot>
+        <span class="flex h-5 w-5 items-center justify-center rounded-control text-muted transition-colors group-hover/toggle:bg-hover group-hover/toggle:text-ink">
+          <slot name="toggle" :expanded="row.expanded" :has-children="row.hasChildren">
+            <svg
+              class="h-3.5 w-3.5 transition-transform"
+              :class="row.expanded ? 'rotate-90' : ''"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+          </slot>
+        </span>
       </span>
       <span v-else class="w-5 shrink-0" aria-hidden="true" />
 

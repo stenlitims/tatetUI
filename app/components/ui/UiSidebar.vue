@@ -21,8 +21,9 @@ const props = withDefaults(
     /**
      * Ключ localStorage, під яким стан згортання живе між сесіями.
      * Читається в onMounted — як у UiResizablePanels, щоб не розійшлися
-     * server і client рендери. Недоступне сховище (private mode) мовчки
-     * пропускає персистентність.
+     * server і client рендери, — і записується при кожній зміні
+     * `collapsed`: і з вбудованої кнопки, і з коду застосунку. Недоступне
+     * сховище (private mode) мовчки пропускає персистентність.
      */
     storageKey?: string
     /** З якого боку екрана панель. */
@@ -95,11 +96,12 @@ const layer = useOverlayLayer(props.sidebarId)
 const isOverlayMode = computed(() => isMobile.value)
 let mobileQuery: MediaQueryList | null = null
 
-// Тривалість задана явно, бо Transition керує ДІТЬМА (backdrop + панель) —
-// Vue не може вивести її з кореневого елемента. І — як в UiModal/UiDrawer:
-// з reduce-рухом панель не висить у DOM повні 200 мс після візуального
-// зникнення.
-const transitionDuration = computed(() => (prefersReducedMotion.value ? 0 : 200))
+/*
+ * Відновлення стану згортання — без анімації ширини. Сховище читається
+ * вже після гідрації, і серверна розгорнута панель інакше на кожному
+ * завантаженні на очах «з'їжджала» в згорнуту, штовхаючи контент.
+ */
+const restoring = shallowRef(false)
 
 // Блюр фону вимикається разом із анімаціями: той самий принцип, що й
 // у UiModal/UiDrawer — reduce-рух вимикає і «дорогі» шари ефектів.
@@ -137,9 +139,7 @@ function close() {
 
 function toggleCollapsed() {
   if (!props.collapsible) return
-  const next = !props.collapsed
-  emit('update:collapsed', next)
-  persistCollapsedRef(next)
+  emit('update:collapsed', !props.collapsed)
 }
 
 /* ---------------------------------------------------------------- */
@@ -150,11 +150,18 @@ function toggleCollapsed() {
  * Сховище — утиліта `~/utils/uiSidebar` (правило дому: логіка поза
  * компонентом, щоб покривати тестами без рендеру). Тут лише зв'язка:
  * прочитати при монтуванні, записати при кожній зміні.
+ *
+ * Пишемо з watch на сам prop, а не з кнопки. Раніше зберігав лише
+ * вбудований перемикач: згортання з коду застосунку (Ctrl+B, кнопка в
+ * шапці) у сховище не потрапляло, і наступне завантаження повертало
+ * старий стан поверх вибору користувача.
  */
-function persistCollapsedRef(value: boolean) {
-  if (!props.storageKey) return
-  persistCollapsed(props.storageKey, value)
-}
+watch(
+  () => props.collapsed,
+  (value) => {
+    if (props.storageKey) persistCollapsed(props.storageKey, value)
+  },
+)
 
 function onKeydown(event: KeyboardEvent) {
   if (event.key !== 'Escape') return
@@ -200,7 +207,14 @@ onMounted(() => {
   // ключа немає або сховище недоступне: стан лишається як задав споживач.
   if (props.storageKey) {
     const saved = readStoredCollapsed(props.storageKey)
-    if (saved !== null && saved !== props.collapsed) emit('update:collapsed', saved)
+    if (saved !== null && saved !== props.collapsed) {
+      restoring.value = true
+      emit('update:collapsed', saved)
+      // Перший кадр малює нову ширину без transition, другий повертає анімацію.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        restoring.value = false
+      }))
+    }
   }
 
   // Escape на document, а не на панелі: фокус під час drag чи після кліку
@@ -222,11 +236,12 @@ defineExpose({ close, toggleCollapsed })
 </script>
 
 <template>
+  <!-- Тривалість Transition виводить сам із токенів на backdrop — це його
+       єдиний елемент. Явні 200 мс розходилися б із --duration-* токенами. -->
   <Transition
-    :duration="transitionDuration"
-    enter-active-class="transition-opacity duration-200"
+    enter-active-class="transition-opacity duration-(--duration-slow) ease-out"
     enter-from-class="opacity-0"
-    leave-active-class="transition-opacity duration-150"
+    leave-active-class="transition-opacity duration-(--duration-base) ease-in"
     leave-to-class="opacity-0"
     @after-leave="layer.settle()"
   >
@@ -251,8 +266,13 @@ defineExpose({ close, toggleCollapsed })
     :data-ui-overlay="isMobile && modelValue ? '' : undefined"
     tabindex="-1"
     :style="[panelStyle, isOverlayMode ? { zIndex: layer.zIndex.value } : {}]"
-    class="fixed inset-y-0 flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-card text-ink shadow-overlay transition-[width,transform] duration-200 md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
-    :class="[sideClasses, mobileTransform, { 'md:w-[var(--ui-sidebar-collapsed-width)]': collapsed }]"
+    class="fixed inset-y-0 flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-card text-ink shadow-overlay md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
+    :class="[
+      sideClasses,
+      mobileTransform,
+      { 'md:w-[var(--ui-sidebar-collapsed-width)]': collapsed },
+      restoring ? '' : 'transition-[width,transform] duration-(--duration-slow) ease-emphasized',
+    ]"
   >
     <div class="flex min-h-14 items-center gap-2 border-b border-line px-3">
       <div class="min-w-0 flex-1">

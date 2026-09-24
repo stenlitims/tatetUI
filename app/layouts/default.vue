@@ -3,6 +3,17 @@ import DocsFooter from '~/components/docs/DocsFooter.vue'
 import DocsLogo from '~/components/docs/DocsLogo.vue'
 import DocsSkipLink from '~/components/docs/DocsSkipLink.vue'
 import DocsThemeToggle from '~/components/docs/DocsThemeToggle.vue'
+
+/*
+ * На телефоні лишається одне посилання — «Документація»: чотири пункти в
+ * шапці 56px заввишки переносилися б у другий рядок або злипалися.
+ */
+const links = [
+  { title: 'Приклади', to: '/#examples', mobile: false },
+  { title: 'Компоненти', to: '/docs/components/button', mobile: false },
+  { title: 'Roadmap', to: '/docs/roadmap', mobile: false },
+  { title: 'Документація', to: '/docs', mobile: true },
+]
 </script>
 
 <template>
@@ -25,15 +36,19 @@ import DocsThemeToggle from '~/components/docs/DocsThemeToggle.vue'
         <DocsLogo />
       </NuxtLink>
 
-      <div class="ml-auto flex items-center gap-2">
+      <nav aria-label="Основна навігація" class="ml-auto flex items-center gap-1 sm:ml-6 sm:mr-auto">
         <NuxtLink
-          to="/docs"
+          v-for="link in links"
+          :key="link.to"
+          :to="link.to"
           class="rounded-control px-2.5 py-1.5 text-sm text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          :class="link.mobile ? '' : 'hidden sm:inline-flex'"
         >
-          Документація
+          {{ link.title }}
         </NuxtLink>
-        <DocsThemeToggle />
-      </div>
+      </nav>
+
+      <DocsThemeToggle />
     </header>
 
     <slot />

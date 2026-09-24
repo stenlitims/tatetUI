@@ -14,7 +14,7 @@ import {
 import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
-import { useReducedMotion } from '~/composables/useReducedMotion'
+import { readDurationToken, useReducedMotion } from '~/composables/useReducedMotion'
 
 defineOptions({ inheritAttrs: false })
 
@@ -52,6 +52,14 @@ const props = withDefaults(
     initialFocus?: string
     /** Свайп вниз закриває нижній drawer. Вимикається, якщо заважає. */
     swipeToClose?: boolean
+    /**
+     * Доступне ім'я панелі, коли слот `header` не є заголовком.
+     *
+     * Без нього aria-labelledby вказує на контейнер слота, і якщо там
+     * лежить поле вводу — ім'я панелі обчислюється з його ЗНАЧЕННЯ, як це
+     * було з пошуком у UiModal.
+     */
+    ariaLabel?: string
   }>(),
   {
     modelValue: false,
@@ -162,13 +170,34 @@ const sizeClass = computed(() =>
   isHorizontal.value ? HORIZONTAL_SIZES[props.size] : VERTICAL_SIZES[props.size],
 )
 
-const layer = useOverlayLayer()
+/*
+ * Запасне ім'я — за краєм. «Бічна панель» для нижнього sheet'а вводила
+ * скрінрідер в оману щодо того, де шукати панель на екрані.
+ */
+const FALLBACK_LABEL: Record<NonNullable<typeof props.position>, string> = {
+  left: 'Бічна панель',
+  right: 'Бічна панель',
+  top: 'Верхня панель',
+  bottom: 'Нижня панель',
+}
+
+// Escape — через спільний стек: підказка чи меню в панелі отримують його
+// першими, і один натиск не закриває разом із ними форму в drawer'і.
+const layer = useOverlayLayer(undefined, {
+  onEscape: () => {
+    if (props.modelValue && !props.persistent && props.closable) requestClose('escape')
+  },
+})
 const scrollLock = useScrollLock()
 const focusTrap = useFocusTrap(() => panelEl.value)
 const prefersReducedMotion = useReducedMotion()
 
+// Числа — з тих самих токенів, що й CSS нижче: перевизначений
+// --duration-slow інакше обрізав би анімацію.
 const transitionDuration = computed(() =>
-  prefersReducedMotion.value ? 0 : { enter: 350, leave: 280 },
+  prefersReducedMotion.value
+    ? 0
+    : { enter: readDurationToken('--duration-slow', 260), leave: readDurationToken('--duration-base', 180) },
 )
 
 function closeDrawer() {
@@ -215,7 +244,7 @@ const panelStyle = computed(() => {
   if (!isDragging.value && dragOffset.value === 0) return undefined
   return {
     transform: `translateY(${dragOffset.value}px)`,
-    transition: isDragging.value ? 'none' : 'transform 200ms ease-out',
+    transition: isDragging.value ? 'none' : 'transform var(--duration-base) var(--ease-out)',
   }
 })
 
@@ -250,6 +279,12 @@ function onDragEnd(event: PointerEvent) {
     // стрибнула б назад на місце й лише потім поїхала закриватися.
     dragOffset.value = panelHeight
     requestClose('swipe')
+    // Батько може відмовити в закритті (керований v-model з питанням
+    // «Відкинути незбережені зміни?»). Тоді панель лишалася зсунутою за
+    // край: невидима, але з фоном, блоком прокрутки й інертною сторінкою.
+    void nextTick(() => {
+      if (props.modelValue) dragOffset.value = 0
+    })
     return
   }
   dragOffset.value = 0
@@ -304,22 +339,12 @@ watch(
   },
 )
 
-function onKeyDown(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
-  if (!props.modelValue || !layer.isTopmost.value) return
-  if (props.persistent || !props.closable) return
-  event.stopPropagation()
-  requestClose('escape')
-}
-
 onMounted(() => {
   teleportReady.value = true
-  document.addEventListener('keydown', onKeyDown)
   if (props.modelValue) void handleOpen()
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeyDown)
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
@@ -359,8 +384,8 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           tabindex="-1"
-          :aria-labelledby="hasAccessibleHeader ? titleId : undefined"
-          :aria-label="hasAccessibleHeader ? undefined : 'Бічна панель'"
+          :aria-labelledby="!ariaLabel && hasAccessibleHeader ? titleId : undefined"
+          :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : FALLBACK_LABEL[position])"
         >
           <!-- Ручка свайпу. touch-none обов'язковий: без нього браузер
                забирає вертикальний жест собі як прокрутку сторінки. -->
@@ -448,10 +473,15 @@ onBeforeUnmount(() => {
  * opacity-фейд усього блоку.
  *
  * Тривалість задана явно через :duration, бо transition-и висять на дітях.
+ * Поява — --duration-slow, вихід — --duration-base: ті самі ролі, що в
+ * tokens.css, UiModal і transitionDuration у скрипті.
  */
-.ui-drawer-enter-active .ui-drawer-backdrop,
+.ui-drawer-enter-active .ui-drawer-backdrop {
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
 .ui-drawer-leave-active .ui-drawer-backdrop {
-  transition: opacity 300ms ease-out;
+  transition: opacity var(--duration-base) var(--ease-in);
 }
 
 .ui-drawer-enter-from .ui-drawer-backdrop,
@@ -460,11 +490,11 @@ onBeforeUnmount(() => {
 }
 
 .ui-drawer-enter-active .ui-drawer-panel {
-  transition: transform 350ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--duration-slow) var(--ease-emphasized);
 }
 
 .ui-drawer-leave-active .ui-drawer-panel {
-  transition: transform 280ms cubic-bezier(0.32, 0.72, 0, 1);
+  transition: transform var(--duration-base) var(--ease-emphasized);
 }
 
 .ui-drawer--left.ui-drawer-enter-from .ui-drawer-panel,

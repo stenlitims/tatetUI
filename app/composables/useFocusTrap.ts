@@ -11,9 +11,13 @@
  *   - помічає решту прямих дітей <body> як inert + aria-hidden, щоб фон не
  *     ловив фокус і не читався скрінрідером.
  *
- * Вкладеність працює LIFO: коли поверх drawer'а відкривається modal, її пастка
- * помічає inert'ом і корінь drawer'а теж (він тепер справді фон), а при
- * закритті відновлює рівно те, що змінила сама.
+ * Вкладеність працює з лічильником на кожен елемент фону: коли поверх
+ * drawer'а відкривається modal, її пастка помічає inert'ом і корінь drawer'а
+ * теж, а атрибути повертаються лише тоді, коли елемент відпустила ОСТАННЯ
+ * пастка, що його тримала. Раніше кожна пастка відновлювала власний знімок
+ * атрибутів, і закриття не в порядку LIFO (обидва оверлеї одним кліком,
+ * навігація, drawer із модалкою в слоті) лишало корінь застосунку з
+ * inert + aria-hidden назавжди: сторінка переставала реагувати на все.
  *
  * Важливий нюанс — телепортовані випадайки. UiSelect і UiMenu рендерять список
  * прямо в <body>, тобто ФОРМАЛЬНО поза панеллю. Тому «фон» визначається не як
@@ -30,15 +34,19 @@ import { getCurrentScope, onScopeDispose } from 'vue'
  */
 const isClient = typeof document !== 'undefined'
 
-interface HiddenElement {
-  element: HTMLElement;
-  inert: string | null;
-  ariaHidden: string | null;
-}
-
 interface TrapEntry {
   getContainer: () => HTMLElement | null | undefined;
-  hidden: HiddenElement[];
+  /** Елементи фону, які ця пастка тримає прихованими. */
+  hidden: HTMLElement[];
+  /** Куди повернути фокус після закриття. */
+  restoreFocus: HTMLElement | null;
+}
+
+/** Хто скільки разів приховав елемент фону і що в нього було до того. */
+interface HiddenState {
+  count: number;
+  inert: string | null;
+  ariaHidden: string | null;
 }
 
 const FOCUSABLE_SELECTOR = [
@@ -57,6 +65,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(",");
 
 const trapStack: TrapEntry[] = [];
+const hiddenStates = new Map<HTMLElement, HiddenState>();
 let listenersAttached = false;
 
 const isVisible = (element: HTMLElement): boolean =>
@@ -68,11 +77,43 @@ const getFocusable = (container: HTMLElement): HTMLElement[] =>
     (element) => !element.hasAttribute("inert") && isVisible(element)
   );
 
+/** Чи дійде до елемента Tab: не під inert, видимий, без tabindex="-1". */
+const isTabbable = (element: HTMLElement): boolean =>
+  element.tabIndex >= 0 && !element.closest("[inert]") && isVisible(element);
+
+/** Елементи контейнера в порядку, у якому їх обходить Tab. */
+export const getTabbable = (container: ParentNode): HTMLElement[] =>
+  Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(isTabbable);
+
+/**
+ * Фокус на елемент, до якого дійшов би Tab ПІСЛЯ `reference`.
+ *
+ * Потрібно телепортованим панелям (UiPopover, UiMenu, UiHoverCard): у DOM
+ * вони стоять у кінці <body>, і нативний Tab з їхнього останнього пункту
+ * виводив би фокус за межі сторінки замість елемента, що йде за тригером.
+ * `skip` — піддерева, які не рахуються (сама панель).
+ */
+export function focusNextAfter(
+  reference: Element,
+  skip: Array<Element | null | undefined> = []
+): boolean {
+  if (!isClient) return false;
+  for (const element of Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))) {
+    if (reference.contains(element)) continue;
+    if (!(reference.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+    if (skip.some((node) => node?.contains(element))) continue;
+    if (!isTabbable(element)) continue;
+    element.focus();
+    return true;
+  }
+  return false;
+}
+
 const topEntry = (): TrapEntry | undefined => trapStack[trapStack.length - 1];
 
 /** Чи належить вузол до фону, який ми самі позначили inert. */
 const isInHiddenBackground = (entry: TrapEntry, node: Node | null): boolean =>
-  !!node && entry.hidden.some(({ element }) => element.contains(node));
+  !!node && entry.hidden.some((element) => element.contains(node));
 
 const onKeyDown = (event: KeyboardEvent): void => {
   if (event.key !== "Tab") return;
@@ -158,23 +199,37 @@ const hideBackground = (entry: TrapEntry, container: HTMLElement): void => {
     if (child.hasAttribute("data-overlay-ignore")) continue;
     if (child.tagName === "SCRIPT" || child.tagName === "STYLE") continue;
 
-    entry.hidden.push({
-      element: child,
-      inert: child.getAttribute("inert"),
-      ariaHidden: child.getAttribute("aria-hidden"),
-    });
-    child.setAttribute("inert", "");
-    child.setAttribute("aria-hidden", "true");
+    const state = hiddenStates.get(child);
+    if (state) {
+      // Уже прихований іншою пасткою: запам'ятовуємо лише, що тримаємо його
+      // теж. Знімок атрибутів у ТОЇ пастки — це і є справжні вихідні значення.
+      state.count += 1;
+    } else {
+      hiddenStates.set(child, {
+        count: 1,
+        inert: child.getAttribute("inert"),
+        ariaHidden: child.getAttribute("aria-hidden"),
+      });
+      child.setAttribute("inert", "");
+      child.setAttribute("aria-hidden", "true");
+    }
+    entry.hidden.push(child);
   }
 };
 
 const restoreBackground = (entry: TrapEntry): void => {
-  for (const { element, inert, ariaHidden } of entry.hidden) {
-    if (inert === null) element.removeAttribute("inert");
-    else element.setAttribute("inert", inert);
+  for (const element of entry.hidden) {
+    const state = hiddenStates.get(element);
+    if (!state) continue;
+    state.count -= 1;
+    if (state.count > 0) continue;
 
-    if (ariaHidden === null) element.removeAttribute("aria-hidden");
-    else element.setAttribute("aria-hidden", ariaHidden);
+    hiddenStates.delete(element);
+    if (state.inert === null) element.removeAttribute("inert");
+    else element.setAttribute("inert", state.inert);
+
+    if (state.ariaHidden === null) element.removeAttribute("aria-hidden");
+    else element.setAttribute("aria-hidden", state.ariaHidden);
   }
   entry.hidden.length = 0;
 };
@@ -188,17 +243,18 @@ export const useFocusTrap = (
   getContainer: () => HTMLElement | null | undefined
 ) => {
   let entry: TrapEntry | null = null;
-  let previouslyFocused: HTMLElement | null = null;
 
   const activate = (options: FocusTrapActivateOptions = {}): void => {
     if (!isClient || entry) return;
     const container = getContainer();
     if (!container) return;
 
-    previouslyFocused =
-      document.activeElement instanceof HTMLElement ? document.activeElement : null;
-
-    entry = { getContainer, hidden: [] };
+    entry = {
+      getContainer,
+      hidden: [],
+      restoreFocus:
+        document.activeElement instanceof HTMLElement ? document.activeElement : null,
+    };
     trapStack.push(entry);
     attachListeners();
 
@@ -219,19 +275,35 @@ export const useFocusTrap = (
 
   const deactivate = (): void => {
     if (!isClient || !entry) return;
-
-    restoreBackground(entry);
-
-    const index = trapStack.indexOf(entry);
-    if (index > -1) trapStack.splice(index, 1);
+    const current = entry;
     entry = null;
 
+    restoreBackground(current);
+
+    const index = trapStack.indexOf(current);
+    const wasTop = index === trapStack.length - 1;
+    if (index > -1) trapStack.splice(index, 1);
     if (trapStack.length === 0) detachListeners();
 
-    if (previouslyFocused && document.contains(previouslyFocused)) {
-      previouslyFocused.focus({ preventScroll: true });
+    if (index > -1 && !wasTop) {
+      // Поверх ще відкрита інша пастка — повертати фокус зарано, він украв
+      // би його з видимого діалогу. Якщо її власна ціль повернення лежить у
+      // нашій панелі (яка зараз зникне), вона успадковує нашу: фокус має
+      // повернутися на кнопку, з якої відкрили весь ланцюжок, а не в <body>.
+      const above = trapStack[index];
+      const container = current.getContainer();
+      const orphaned =
+        !above?.restoreFocus ||
+        !above.restoreFocus.isConnected ||
+        !!container?.contains(above.restoreFocus);
+      if (above && orphaned) above.restoreFocus = current.restoreFocus;
+      return;
     }
-    previouslyFocused = null;
+
+    const target = current.restoreFocus;
+    if (target && document.contains(target)) {
+      target.focus({ preventScroll: true });
+    }
   };
 
   if (getCurrentScope()) onScopeDispose(deactivate);

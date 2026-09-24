@@ -99,7 +99,12 @@ const trackClass = computed(() => [
 ])
 
 const segmentClass = (option: ToggleOption) => [
-  'inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[calc(var(--radius-control)_-_0.125rem)] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+  // relative — якір для невидимої зони дотику нижче. Без нього ::after
+  // позиціювався від найближчого позиціонованого предка (картки, sticky-
+  // шапки, модалки): зони всіх сегментів злипались у його центрі, і тап по
+  // чужій кнопці там обирав ОСТАННІЙ варіант, а самі сегменти лишались
+  // дрібними.
+  'relative inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-[calc(var(--radius-control)_-_0.125rem)] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
   // На мобільному сегменти лишаються компактними (sm 8 / md 9), зону дотику
   // 45×45 кожному дає pointer-coarse:after: — той самий патерн, що в
   // UiButton. Раніше md здувався до h-11, і сегментний перемикач вище за

@@ -117,10 +117,12 @@ describe('UiToaster — список і доступність', () => {
         Number((el as HTMLElement).dataset.toastId),
       ),
     ).toEqual([info, error])
-    expect(card(info).getAttribute('role')).toBe('status')
-    expect(card(info).getAttribute('aria-live')).toBe('polite')
-    expect(card(error).getAttribute('role')).toBe('alert')
-    expect(card(error).getAttribute('aria-live')).toBe('assertive')
+    // Картка — не live-регіон: регіон, вставлений разом із текстом,
+    // оголошується ненадійно. Текст іде в постійні регіони контейнера.
+    expect(card(info).hasAttribute('aria-live')).toBe(false)
+    expect(card(error).hasAttribute('aria-live')).toBe(false)
+    expect(region().querySelector('[aria-live="polite"]')?.textContent).toContain('Інформація. Перше')
+    expect(region().querySelector('[aria-live="assertive"]')?.textContent).toContain('Друге')
     expect(region().hasAttribute('data-overlay-ignore')).toBe(true)
     expect(card(info).querySelector('button')?.getAttribute('aria-label')).toBe(
       'Закрити сповіщення',

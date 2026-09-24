@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import UiAvatar from '~/components/ui/UiAvatar.vue'
+import UiAvatar, { initialsFontSize } from '~/components/ui/UiAvatar.vue'
 
 export interface AvatarGroupItem {
   /** Стабільний ключ для `:key`. */
@@ -29,8 +29,10 @@ const props = withDefaults(
     label: string
     /** Наскільки аватари налазять один на одного. */
     overlap?: 'none' | 'tight' | 'normal'
+    /** Форма кожного аватара і плитки «+N». Проксується в `UiAvatar`. */
+    shape?: 'circle' | 'square'
   }>(),
-  { max: 5, size: 32, overlap: 'normal' },
+  { max: 5, size: 32, overlap: 'normal', shape: 'circle' },
 )
 
 type Overlap = NonNullable<typeof props.overlap>
@@ -61,6 +63,10 @@ const overflowLabel = computed(() => {
 })
 
 const ringStyle = { boxShadow: '0 0 0 2px var(--bg-card)' }
+
+// Кільце-box-shadow повторює форму аватара: квадратний аватар у круглому
+// кільці виглядав би обведеним чужим контуром.
+const shapeClass = computed(() => (props.shape === 'square' ? 'rounded-card' : 'rounded-full'))
 </script>
 
 <template>
@@ -81,7 +87,8 @@ const ringStyle = { boxShadow: '0 0 0 2px var(--bg-card)' }
           :src="item.src"
           :name="item.name"
           :size="size"
-          class="rounded-full"
+          :shape="shape"
+          :class="shapeClass"
           :style="ringStyle"
         />
       </slot>
@@ -89,9 +96,12 @@ const ringStyle = { boxShadow: '0 0 0 2px var(--bg-card)' }
 
     <li v-if="hidden.length" class="relative" :style="{ zIndex: 0 }">
       <slot name="overflow" :count="hidden.length" :items="hidden">
+        <!-- Кегль — та сама формула, що в ініціалах UiAvatar: інакше «+3»
+             поруч із ними виходив удвічі більшим. -->
         <span
-          class="inline-flex items-center justify-center rounded-full bg-neutral-bg font-medium text-neutral"
-          :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px`, ...ringStyle }"
+          class="inline-flex items-center justify-center bg-neutral-bg font-medium text-neutral"
+          :class="shapeClass"
+          :style="{ width: `${size}px`, height: `${size}px`, fontSize: `${initialsFontSize(size)}px`, ...ringStyle }"
           role="img"
           :aria-label="overflowLabel"
         >

@@ -7,10 +7,12 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useAttrs,
   useId,
   watch,
 } from 'vue'
 import {
+  clearButtonClass,
   dropdownEmptyClass,
   dropdownPanelClass,
   dropdownSearchInputClass,
@@ -22,10 +24,14 @@ import {
   itemClass,
   itemHighlighted,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
 import { orderSelection } from '~/utils/multiSelect'
 import { getOverlayChildZIndex } from '~/utils/overlayPosition'
+
+// class/style — на обгортку, решта атрибутів (aria-label, data-*) — на тригер.
+defineOptions({ inheritAttrs: false })
 
 export interface MultiSelectOption {
   value: string | number
@@ -48,6 +54,12 @@ const props = withDefaults(
     size?: FieldSize
     disabled?: boolean
     /**
+     * Потрібен хоча б один вибір: зірочка, `aria-required` і нативна
+     * перевірка форми — через невидимий проксі-інпут, бо `type="hidden"` у
+     * валідації форми участі не бере.
+     */
+    required?: boolean
+    /**
      * Поле пошуку всередині панелі. Для списків ≤5 пунктів не показується
      * навіть із `true` — пошук там лише заважає.
      */
@@ -66,6 +78,7 @@ const props = withDefaults(
     placeholder: 'Оберіть',
     size: 'md',
     disabled: false,
+    required: false,
     searchable: true,
     maxDisplay: 3,
   },
@@ -83,6 +96,9 @@ defineSlots<{
     selected: boolean
   }) => unknown
 }>()
+
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
 
 const generatedId = useId()
 const triggerId = computed(() => props.id ?? `${generatedId}-multiselect`)
@@ -320,6 +336,10 @@ function onTriggerKeydown(event: KeyboardEvent) {
   } else if (event.key === 'Escape' && isOpen.value) {
     event.stopPropagation()
     close()
+  } else if (event.key === 'Tab') {
+    // Як в UiSelect: фокус іде до наступного поля — панель не лишається
+    // висіти над ним.
+    close()
   }
 }
 
@@ -372,6 +392,40 @@ function onSearchKeydown(event: KeyboardEvent) {
   }
 }
 
+/*
+ * Tab на краях панелі повертає фокус на тригер.
+ *
+ * Панель телепортована в кінець <body>: Tab з її останньої кнопки йшов за
+ * межі сторінки, а Shift+Tab із пошуку — до того, що стоїть у DOM перед
+ * панеллю, лишаючи її відкритою. Вперед — без preventDefault: браузер
+ * продовжує Tab уже від тригера, тобто до наступного поля форми.
+ */
+function onPanelKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return
+  const tabbables = [
+    ...(dropdownEl.value?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])') ?? []),
+  ]
+  const active = document.activeElement
+  if (event.shiftKey ? active !== tabbables[0] : active !== tabbables.at(-1)) return
+  if (event.shiftKey) event.preventDefault()
+  close()
+  triggerEl.value?.focus()
+}
+
+/*
+ * Фокус пішов за межі тригера й панелі — панель закривається, як і на
+ * кліку поза нею. relatedTarget === null (клік у неклікабельне місце)
+ * лишаємо onDocumentPointerDown: інакше клік по пункту, який фокуса не
+ * бере, закривав би панель раніше за сам вибір.
+ */
+function onFocusOut(event: FocusEvent) {
+  if (!isOpen.value) return
+  const next = event.relatedTarget as Node | null
+  if (!next) return
+  if (rootEl.value?.contains(next) || dropdownEl.value?.contains(next)) return
+  close()
+}
+
 /* ---------------------------------------------------------------- */
 /*  Клік поза межами (панель — у body, тож перевіряємо і корінь, і панель) */
 /* ---------------------------------------------------------------- */
@@ -407,10 +461,14 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl">
-    <label v-if="label" :for="triggerId" :class="labelClass">{{ label }}</label>
+  <div ref="rootEl" v-bind="fieldAttrs.root" @focusout="onFocusOut">
+    <label v-if="label" :for="triggerId" :class="labelClass">
+      {{ label }}
+      <span v-if="required" class="text-danger" aria-hidden="true">*</span>
+    </label>
 
     <div class="relative">
+      <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
       <button
         :id="triggerId"
         ref="triggerEl"
@@ -424,8 +482,10 @@ defineExpose({
         :aria-activedescendant="
           isOpen && !showSearch && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
         "
+        :aria-required="required || undefined"
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
+        v-bind="fieldAttrs.control"
         @click="toggle"
         @keydown="onTriggerKeydown"
       >
@@ -452,6 +512,19 @@ defineExpose({
           <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
       </span>
+
+      <!-- Нативна перевірка `required`. type="hidden" у валідації не бере
+           участі, тож обов'язковість несе невидимий інпут під тригером: там
+           же браузер і покаже свою підказку. Фокус від неї — одразу тригеру. -->
+      <input
+        v-if="required && !internalValue.length"
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-px w-full opacity-0"
+        tabindex="-1"
+        aria-hidden="true"
+        required
+        value=""
+        @focus="triggerEl?.focus()"
+      />
     </div>
 
     <Teleport to="body" :disabled="!teleportReady">
@@ -461,6 +534,8 @@ defineExpose({
           ref="dropdownEl"
           :class="dropdownPanelClass"
           :style="panelStyle"
+          @keydown="onPanelKeydown"
+          @focusout="onFocusOut"
         >
           <div v-if="showSearch" class="border-b border-line p-1.5">
             <input
@@ -484,7 +559,7 @@ defineExpose({
               <button
                 type="button"
                 aria-label="Вибрати все"
-                class="rounded-control p-1 text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="['relative', clearButtonClass]"
                 @click="selectAll"
               >
                 <svg :class="iconClass(size)" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -500,7 +575,7 @@ defineExpose({
               <button
                 type="button"
                 aria-label="Зняти все"
-                class="rounded-control p-1 text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                :class="['relative', clearButtonClass]"
                 @click="clearAll"
               >
                 <svg :class="iconClass(size)" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -533,6 +608,8 @@ defineExpose({
               Нічого не знайдено
             </li>
             <template v-else>
+              <!-- mousedown.prevent: клік по пункту не забирає фокус із
+                   тригера чи пошуку — інакше рвалася б клавіатурна сесія. -->
               <li
                 v-for="(option, index) in filteredOptions"
                 :id="optionId(index)"
@@ -546,6 +623,7 @@ defineExpose({
                   index === highlightedIndex ? itemHighlighted : '',
                   option.disabled ? 'pointer-events-none opacity-50' : '',
                 ]"
+                @mousedown.prevent
                 @click="!option.disabled && toggleOption(option)"
                 @mouseenter="!option.disabled && (highlightedIndex = index)"
               >

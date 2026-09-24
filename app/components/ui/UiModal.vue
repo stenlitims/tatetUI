@@ -14,7 +14,7 @@ import {
 import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
-import { useReducedMotion } from '~/composables/useReducedMotion'
+import { readDurationToken, useReducedMotion } from '~/composables/useReducedMotion'
 
 defineOptions({ inheritAttrs: false })
 
@@ -62,11 +62,25 @@ const props = withDefaults(
      * пошуку оголошувався як «Діалог: тек» на слові «текст».
      */
     ariaLabel?: string
+    /**
+     * Роль панелі. `alertdialog` — для підтверджень, що переривають роботу
+     * і чекають відповіді (UiConfirmDialog): скрінрідер оголошує їх як
+     * попередження, а не як звичайне вікно.
+     */
+    role?: 'dialog' | 'alertdialog'
+    /**
+     * id елемента з поясненням, що саме відбувається. Потрапляє в
+     * `aria-describedby` панелі: коли фокус одразу стрибає на кнопку,
+     * без цього скрінрідер оголошує лише заголовок і кнопку, пропускаючи
+     * сам текст повідомлення.
+     */
+    ariaDescribedby?: string
   }>(),
   {
     modelValue: false,
     title: '',
     size: 'lg',
+    role: 'dialog',
     panelClass: '',
     closable: true,
     closeOnBackdrop: true,
@@ -123,16 +137,28 @@ const contentPaddingClass = computed(() => {
   return slots.footer ? 'p-4 sm:p-5' : 'p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5'
 })
 
-const layer = useOverlayLayer(props.modalId)
+/*
+ * Escape — через спільний стек, а не власний слухач на document: так
+ * підказка чи меню, відкриті всередині вікна, отримують його першими, і
+ * один натиск не закриває і їх, і вікно з незбереженою формою.
+ */
+const layer = useOverlayLayer(props.modalId, {
+  onEscape: () => {
+    if (props.modelValue && !props.persistent && props.closable) requestClose('escape')
+  },
+})
 const scrollLock = useScrollLock()
 const focusTrap = useFocusTrap(() => panelEl.value)
 const prefersReducedMotion = useReducedMotion()
 
 // Тривалість задана явно, бо transition-и висять на ДІТЯХ — Vue не може
 // вивести її з кореневого елемента. Без useReducedMotion панель чекала б
-// повні 200 мс у DOM навіть із вимкненими анімаціями.
+// повні 200 мс у DOM навіть із вимкненими анімаціями. Числа — з токенів,
+// що й CSS нижче: інакше перевизначений --duration-slow обрізав би вихід.
 const transitionDuration = computed(() =>
-  prefersReducedMotion.value ? 0 : { enter: 260, leave: 200 },
+  prefersReducedMotion.value
+    ? 0
+    : { enter: readDurationToken('--duration-slow', 260), leave: readDurationToken('--duration-base', 180) },
 )
 
 function closeModal() {
@@ -191,23 +217,12 @@ watch(
   },
 )
 
-function onKeyDown(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return
-  // isTopmost — щоб Escape закривав ЛИШЕ верхній оверлей, а не всі відкриті.
-  if (!props.modelValue || !layer.isTopmost.value) return
-  if (props.persistent || !props.closable) return
-  event.stopPropagation()
-  requestClose('escape')
-}
-
 onMounted(() => {
   teleportReady.value = true
-  document.addEventListener('keydown', onKeyDown)
   if (props.modelValue) void handleOpen()
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('keydown', onKeyDown)
   // Компонент могли знищити відкритим (навігація) — handleClose знімає і
   // лок прокрутки, і пастку фокуса, і шар зі стеку.
   handleClose()
@@ -235,11 +250,12 @@ onBeforeUnmount(() => {
           ref="panelEl"
           class="ui-modal-panel relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-overlay border border-line bg-card shadow-overlay outline-none sm:max-h-[85dvh] sm:rounded-overlay"
           :class="[SIZE_CLASSES[size], panelClass]"
-          role="dialog"
+          :role="role"
           aria-modal="true"
           tabindex="-1"
           :aria-labelledby="!ariaLabel && hasAccessibleHeader ? titleId : undefined"
           :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : 'Діалогове вікно')"
+          :aria-describedby="ariaDescribedby"
         >
           <div
             v-if="hasHeader"
@@ -315,9 +331,14 @@ onBeforeUnmount(() => {
  * висять на ДІТЯХ — з кореневого елемента Vue вивести її не може.
  */
 
-.ui-modal-enter-active .ui-modal-backdrop,
+/* Появу веде --duration-slow, вихід коротший — --duration-base: ті самі
+   ролі, що в tokens.css і в transitionDuration у скрипті. */
+.ui-modal-enter-active .ui-modal-backdrop {
+  transition: opacity var(--duration-slow) var(--ease-out);
+}
+
 .ui-modal-leave-active .ui-modal-backdrop {
-  transition: opacity 200ms ease;
+  transition: opacity var(--duration-base) var(--ease-in);
 }
 
 .ui-modal-enter-from .ui-modal-backdrop,
@@ -327,14 +348,14 @@ onBeforeUnmount(() => {
 
 .ui-modal-enter-active .ui-modal-panel {
   transition:
-    opacity 260ms ease,
-    transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity var(--duration-slow) var(--ease-out),
+    transform var(--duration-slow) var(--ease-emphasized);
 }
 
 .ui-modal-leave-active .ui-modal-panel {
   transition:
-    opacity 200ms ease,
-    transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+    opacity var(--duration-base) var(--ease-in),
+    transform var(--duration-base) var(--ease-emphasized);
 }
 
 /* Мобільні: панель — bottom sheet, тож виїжджає знизу. */

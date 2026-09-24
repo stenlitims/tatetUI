@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, useAttrs, useId } from 'vue'
 import {
   errorTextClass,
   fieldClass,
   helperTextClass,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта (step, aria-label, data-*) — на нативне поле.
+defineOptions({ inheritAttrs: false })
 
 /**
  * Нативний date/datetime-local/time у стилі полів бібліотеки. Власний
@@ -63,6 +67,9 @@ const emit = defineEmits<{
 
 defineSlots<Record<string, never>>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+
 const generatedId = useId()
 const inputId = computed(() => props.id ?? `${generatedId}-date`)
 const errorId = `${generatedId}-error`
@@ -79,12 +86,13 @@ const describedBy = computed(() => {
 </script>
 
 <template>
-  <div>
+  <div v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
     </label>
 
+    <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
     <input
       :id="inputId"
       :type="type"
@@ -99,6 +107,7 @@ const describedBy = computed(() => {
       :class="fieldClass(size, { error: hasError, disabled })"
       :aria-invalid="hasError || undefined"
       :aria-describedby="describedBy"
+      v-bind="fieldAttrs.control"
       @input="emit('update:modelValue', ($event.target as HTMLInputElement).value || null)"
       @focus="emit('focus', $event)"
       @blur="emit('blur', $event)"

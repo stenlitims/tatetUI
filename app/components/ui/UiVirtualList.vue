@@ -1,5 +1,10 @@
-<script setup lang="ts" generic="T extends Record<string, unknown>">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+<!--
+  `Record<string, any>`, а не `Record<string, unknown>`: під `unknown`
+  жоден `interface` рядка не проходив обмеження («Index signature for type
+  'string' is missing»). Те саме рішення, що в UiTable.
+-->
+<script setup lang="ts" generic="T extends Record<string, any>">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useReducedMotion } from '~/composables/useReducedMotion'
 
 const props = withDefaults(
@@ -133,7 +138,23 @@ defineExpose({
   scrollToIndex,
 })
 
-onMounted(measure)
+/*
+ * Висоту вікна треба перечитувати щоразу, коли змінюється сам контейнер, а
+ * не лише вікно браузера. Раніше слухався тільки resize вікна, і новий
+ * `height`, перетягнутий UiResizablePanels, згорнутий сайдбар чи монтаж у
+ * схованій вкладці (висота 0 → шість рядків) лишали низ списку порожнім,
+ * доки користувач не прокрутить. ResizeObserver ловить усе це; resize
+ * вікна лишається запасним шляхом для середовищ без нього.
+ */
+let resizeObserver: ResizeObserver | null = null
+
+onMounted(() => {
+  measure()
+  if (typeof ResizeObserver !== 'undefined' && scrollEl.value) {
+    resizeObserver = new ResizeObserver(() => measure())
+    resizeObserver.observe(scrollEl.value)
+  }
+})
 
 // Клієнтська висота відома лише в браузері; саме з неї рахується діапазон.
 if (typeof document !== 'undefined') {
@@ -141,10 +162,19 @@ if (typeof document !== 'undefined') {
 }
 
 onBeforeUnmount(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (typeof document !== 'undefined') {
     window.removeEventListener('resize', measure)
   }
 })
+
+// Новий `height` — нова висота вікна вже на наступному кадрі, без
+// очікування на колбек спостерігача.
+watch(
+  () => props.height,
+  () => void nextTick(measure),
+)
 
 // Зміна набору рядків чи висоти рядка зсовує діапазон — перечитуємо
 // позицію. Якщо стара позиція скролу виходить за новий полотно (набір

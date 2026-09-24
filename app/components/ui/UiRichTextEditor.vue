@@ -198,9 +198,12 @@ defineExpose({
 </script>
 
 <template>
+  <!-- border-line — в обох станах. Коли він був лише в гілці «увімкнено»,
+       вимкнений редактор отримував межу кольору currentColor (типовий
+       колір межі в Tailwind v4), тобто темнішу, ніж у активного. -->
   <div
-    class="overflow-hidden rounded-card border bg-card transition-colors"
-    :class="disabled ? 'opacity-50' : 'border-line focus-within:border-accent-solid'"
+    class="overflow-hidden rounded-card border border-line bg-card transition-colors"
+    :class="disabled ? 'opacity-50' : 'focus-within:border-accent-solid'"
   >
     <slot name="toolbar" :editor="editor" :editable="isEditable">
       <RteToolbar :editor="editor" :tick="uiTick" :mode="mode" :disabled="!isEditable" />

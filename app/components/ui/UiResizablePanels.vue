@@ -95,9 +95,13 @@ const rootClass = computed(() => isHorizontal.value ? 'flex-row' : 'flex-col')
 // `separatorSizeClass`, не `separatorClass`: prop із тим самим ім'ям має
 // потрапити в шаблон без тіні — у контексті рендера setup-зв'язування
 // перебивають props з однаковою назвою.
+//
+// Видимий роздільник — 11px: пальцем у нього не влучити, і на телефоні
+// панелі фактично не розсувались. На coarse-вказівнику ціль розширює
+// невидима смуга 45px уздовж роздільника (якір — relative на ньому).
 const separatorSizeClass = computed(() => isHorizontal.value
-  ? 'w-3 cursor-col-resize before:h-full before:w-px'
-  : 'h-3 cursor-row-resize before:h-px before:w-full')
+  ? "w-3 cursor-col-resize before:h-full before:w-px pointer-coarse:after:absolute pointer-coarse:after:inset-y-0 pointer-coarse:after:left-1/2 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:content-['']"
+  : "h-3 cursor-row-resize before:h-px before:w-full pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']")
 const startStyle = computed(() => ({ flexBasis: `${value.value}%` }))
 
 function commit(nextValue: number, final = false) {

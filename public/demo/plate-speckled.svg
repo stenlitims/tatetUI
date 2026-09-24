@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d9d2c9"/>
+      <stop offset="1" stop-color="#c4b9ac"/>
+    </linearGradient>
+    <radialGradient id="plate" cx="0.45" cy="0.4" r="0.6">
+      <stop offset="0" stop-color="#fbf8f3"/>
+      <stop offset="0.8" stop-color="#e9e1d6"/>
+      <stop offset="1" stop-color="#cdbfae"/>
+    </radialGradient>
+    <radialGradient id="well" cx="0.5" cy="0.45" r="0.55">
+      <stop offset="0" stop-color="#f6f1ea"/>
+      <stop offset="1" stop-color="#ddd2c4"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)"/>
+  <ellipse cx="612" cy="470" rx="330" ry="330" fill="#8c7b66" opacity="0.28"/>
+  <circle cx="600" cy="450" r="330" fill="url(#plate)"/>
+  <circle cx="600" cy="450" r="330" fill="none" stroke="#6e4b2f" stroke-width="10"/>
+  <circle cx="600" cy="450" r="220" fill="url(#well)"/>
+  <circle cx="600" cy="450" r="220" fill="none" stroke="#d8ccbc" stroke-width="4"/>
+  <g fill="#6e5a45" opacity="0.55">
+    <circle cx="470" cy="300" r="3"/><circle cx="700" cy="330" r="2.5"/><circle cx="560" cy="560" r="3"/>
+    <circle cx="760" cy="520" r="2"/><circle cx="420" cy="480" r="2.5"/><circle cx="650" cy="640" r="3"/>
+    <circle cx="520" cy="220" r="2"/><circle cx="820" cy="410" r="3"/><circle cx="380" cy="600" r="2"/>
+    <circle cx="610" cy="400" r="2"/><circle cx="690" cy="470" r="2.5"/><circle cx="540" cy="470" r="2"/>
+  </g>
+</svg>

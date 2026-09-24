@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
-import { useToast, type ToastType } from '~/composables/useToast'
+import { useToast, type Toast, type ToastType } from '~/composables/useToast'
 
 /** Глобальний контейнер. Монтується один раз; керування — через useToast(). */
 defineSlots<Record<string, never>>()
@@ -14,6 +14,7 @@ const TONES: Record<ToastType, string> = {
   error: 'text-danger',
   warning: 'text-warning',
   info: 'text-info',
+  loading: 'text-neutral',
 }
 
 // Причини незалежні: вихід курсора не відновлює таймер, якщо всередині
@@ -23,6 +24,85 @@ const interactions = new Set<Interaction>()
 const pointers = new Set<number>()
 const touches = new Set<number>()
 let returnFocus: HTMLElement | null = null
+
+/*
+ * Оголошення — в ОКРЕМИХ live-регіонах, що існують із моменту монтування.
+ * Раніше live-регіоном була сама картка (role="status"), вставлена в DOM
+ * разом із текстом, а регіон, що з'явився одночасно зі змістом,
+ * скрінрідери оголошують ненадійно: NVDA у Chrome мовчав. Зміну в регіоні,
+ * який уже був у DOM, читають усі.
+ *
+ * Кілька останніх записів, а не один: два тости в одному такті інакше
+ * перезаписали б один одного, і перший ніхто б не почув.
+ */
+interface Announcement {
+  key: number
+  toastId: number
+  text: string
+}
+const politeLog = shallowRef<Announcement[]>([])
+const assertiveLog = shallowRef<Announcement[]>([])
+const announced = new Map<number, string>()
+let announceKey = 0
+
+function announce(toast: Toast) {
+  const text = [toast.title, toast.message].filter(Boolean).join('. ')
+  const signature = `${toast.type}|${text}`
+  if (announced.get(toast.id) === signature) return
+  announced.set(toast.id, signature)
+  const log = toast.type === 'error' ? assertiveLog : politeLog
+  log.value = [...log.value.slice(-4), { key: ++announceKey, toastId: toast.id, text }]
+}
+
+// Закритий тост не має лишатися текстом у регіоні: у режимі читання
+// скрінрідер знайшов би там повідомлення, якого на екрані вже немає.
+function pruneAnnouncements(ids: Set<number>) {
+  for (const id of announced.keys()) if (!ids.has(id)) announced.delete(id)
+  const keep = (entry: Announcement) => ids.has(entry.toastId)
+  if (!politeLog.value.every(keep)) politeLog.value = politeLog.value.filter(keep)
+  if (!assertiveLog.value.every(keep)) assertiveLog.value = assertiveLog.value.filter(keep)
+}
+
+/*
+ * F8 — як у Radix: область сповіщень стоїть у кінці <body>, і без гарячої
+ * клавіші кнопка «Скасувати» в тості була досяжна лише мишею. Під
+ * відкритою модалкою це безпечно: область має data-overlay-ignore, пастка
+ * фокуса її не чіпає, а F8 чи Escape повертають фокус туди, звідки прийшли.
+ */
+function isInRegion(node: Element | null) {
+  return !!node && !!region.value?.contains(node)
+}
+
+function leaveRegion() {
+  const target = returnFocus
+  if (target?.isConnected && !target.closest('[inert]')) target.focus({ preventScroll: true })
+  else if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+}
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key !== 'F8' || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+  if (!region.value || !toasts.value.length) return
+  event.preventDefault()
+  if (isInRegion(document.activeElement)) {
+    leaveRegion()
+    return
+  }
+  returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  // tabindex — лише на час переходу з F8. Постійний зробив би фокусованою
+  // всю область: клік по тексту тосту фокусував би її, і черга стояла б на
+  // паузі, доки людина не клацне деінде.
+  region.value.tabIndex = -1
+  region.value.focus({ preventScroll: true })
+}
+
+function onRegionKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Escape') return
+  // Escape тут — «вийти зі сповіщень», а не «закрити модалку під ними»:
+  // зупиняємо, поки подія не дійшла до спільного слухача оверлеїв.
+  event.preventDefault()
+  event.stopPropagation()
+  leaveRegion()
+}
 
 function setInteraction(reason: Interaction, active: boolean) {
   const wasPaused = interactions.size > 0
@@ -44,11 +124,12 @@ function onPointerLeave(event: PointerEvent) {
 
 function onFocusIn(event: FocusEvent) {
   const previous = event.relatedTarget
-  if (previous instanceof HTMLElement && !region.value?.contains(previous)) returnFocus = previous
+  if (previous instanceof HTMLElement && !isInRegion(previous)) returnFocus = previous
   setInteraction('focus', true)
 }
 
 function onFocusOut(event: FocusEvent) {
+  if (event.target === region.value) region.value?.removeAttribute('tabindex')
   if (event.relatedTarget instanceof Node && region.value?.contains(event.relatedTarget)) return
   setInteraction('focus', false)
 }
@@ -242,8 +323,29 @@ watch(
   },
 )
 
+/*
+ * Новий або змінений тост (toast.update, toast.promise) — оголосити. Оновлений
+ * тост отримує новий таймер; під курсором чи фокусом він має стати на паузу,
+ * як і решта черги.
+ */
+watch(
+  () => toasts.value.map((toast) => `${toast.id}|${toast.type}|${toast.title ?? ''}|${toast.message}`),
+  () => {
+    pruneAnnouncements(new Set(toasts.value.map((toast) => toast.id)))
+    for (const toast of toasts.value) {
+      announce(toast)
+      if (interactions.size) pause(toast.id)
+    }
+  },
+)
+
 onMounted(() => {
   teleportReady.value = true
+  document.addEventListener('keydown', onDocumentKeydown)
+  // Тости, показані ще до монтування, — оголосити вже в змонтований регіон.
+  void nextTick(() => {
+    for (const toast of toasts.value) announce(toast)
+  })
   window.addEventListener('pointermove', onPointerMove, { passive: true })
   window.addEventListener('pointerup', onPointerEnd)
   window.addEventListener('pointercancel', onPointerEnd)
@@ -252,6 +354,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onDocumentKeydown)
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerEnd)
   window.removeEventListener('pointercancel', onPointerEnd)
@@ -262,6 +365,7 @@ onBeforeUnmount(() => {
   interactions.clear()
   exits.clear()
   leaving.clear()
+  announced.clear()
 })
 </script>
 
@@ -274,6 +378,8 @@ onBeforeUnmount(() => {
       class="ui-toaster"
       role="region"
       aria-label="Сповіщення"
+      aria-keyshortcuts="F8"
+      @keydown="onRegionKeydown"
       @pointerenter="onPointerEnter"
       @pointerleave="onPointerLeave"
       @pointerdown.capture="onInteractionStart"
@@ -281,6 +387,14 @@ onBeforeUnmount(() => {
       @focusin="onFocusIn"
       @focusout="onFocusOut"
     >
+      <!-- Live-регіони існують до першого тосту — див. коментар до announce(). -->
+      <div class="sr-only" aria-live="polite" aria-atomic="false" aria-relevant="additions">
+        <p v-for="entry in politeLog" :key="entry.key">{{ entry.text }}</p>
+      </div>
+      <div class="sr-only" aria-live="assertive" aria-atomic="false" aria-relevant="additions">
+        <p v-for="entry in assertiveLog" :key="entry.key">{{ entry.text }}</p>
+      </div>
+
       <div
         v-if="toasts.length >= 3"
         class="ui-toaster-toolbar rounded-overlay border border-line bg-card shadow-raised"
@@ -315,6 +429,7 @@ onBeforeUnmount(() => {
         <TransitionGroup
           name="ui-toast"
           tag="div"
+          role="list"
           class="ui-toaster-list"
           @before-leave="beforeLeave"
           @after-leave="afterLeave"
@@ -323,6 +438,7 @@ onBeforeUnmount(() => {
             v-for="toast in toasts"
             :key="toast.id"
             :data-toast-id="toast.id"
+            role="listitem"
             class="ui-toast-item"
           >
             <div
@@ -332,9 +448,7 @@ onBeforeUnmount(() => {
                 { 'is-dragging': drag?.id === toast.id && drag.axis === 'x' },
               ]"
               :style="dragStyle(toast.id)"
-              :role="toast.type === 'error' ? 'alert' : 'status'"
-              :aria-live="toast.type === 'error' ? 'assertive' : 'polite'"
-              aria-atomic="true"
+              :aria-busy="toast.type === 'loading' || undefined"
               @pointerdown="onPointerDown(toast.id, $event)"
               @lostpointercapture="onLostPointerCapture"
             >
@@ -363,6 +477,12 @@ onBeforeUnmount(() => {
                     <circle cx="12" cy="12" r="9" />
                     <path d="m9 9 6 6m0-6-6 6" />
                   </template>
+                  <!-- Обертання гасить глобальний reduced-motion; нерухома дуга
+                       все одно читається як «триває». -->
+                  <g v-else-if="toast.type === 'loading'" class="ui-toast-spinner">
+                    <circle cx="12" cy="12" r="9" opacity="0.25" />
+                    <path d="M21 12a9 9 0 0 0-9-9" />
+                  </g>
                   <template v-else>
                     <circle cx="12" cy="12" r="9" />
                     <path d="M12 11v5m0-8h.01" />
@@ -429,6 +549,11 @@ onBeforeUnmount(() => {
   max-height: 50vh;
   max-height: 50dvh;
   pointer-events: none;
+}
+
+.ui-toaster:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .ui-toaster-toolbar {
@@ -568,6 +693,17 @@ onBeforeUnmount(() => {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+.ui-toast-spinner {
+  transform-origin: 12px 12px;
+  animation: ui-toast-spin 0.9s linear infinite;
+}
+
+@keyframes ui-toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .is-dragging {
   user-select: none;
   transition: none;

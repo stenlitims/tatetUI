@@ -58,10 +58,24 @@ const SPACING: Record<Orientation, Record<Spacing, string>> = {
   vertical: { none: '', sm: 'mx-2', md: 'mx-4' },
 }
 
-const POSITION: Record<NonNullable<typeof props.labelPosition>, string> = {
-  start: 'justify-start',
-  center: 'justify-center',
-  end: 'justify-end',
+/*
+ * Позицію підпису задає ДОВЖИНА ліній, а не justify-*. Раніше обидві лінії
+ * були flex-1 і забирали весь вільний простір порівну, тож justify-start
+ * і justify-end не мали чого розподіляти: підпис стояв по центру за
+ * будь-якого labelPosition (виміряно в Chromium — той самий x для start і
+ * end). Тепер лінія з боку позиції — короткий фіксований відрізок.
+ *
+ * Вертикальний підписаний роздільник — колонка: лінії згори й знизу, текст
+ * посередині. Раніше він малював горизонтальні лінії з
+ * aria-orientation="vertical" — «або» між двома формами поруч лягав
+ * смужкою впоперек.
+ */
+function lineClass(side: 'leading' | 'trailing'): string {
+  const short =
+    (side === 'leading' && props.labelPosition === 'start') ||
+    (side === 'trailing' && props.labelPosition === 'end')
+  if (props.orientation === 'vertical') return short ? 'h-3 w-px shrink-0' : 'min-h-3 w-px flex-1'
+  return short ? 'h-px w-4 shrink-0' : 'h-px flex-1'
 }
 
 // defineSlots дає лише типи, тож наявність слота в рантаймі читається
@@ -80,16 +94,19 @@ const isSemantic = computed(() => hasLabel.value || !props.decorative)
     :aria-orientation="isSemantic ? orientation : undefined"
     :aria-label="isSemantic ? label : undefined"
     :aria-hidden="isSemantic ? undefined : 'true'"
-    class="flex items-center gap-3"
-    :class="[SPACING[orientation][spacing], POSITION[labelPosition]]"
+    class="flex items-center"
+    :class="[
+      SPACING[orientation][spacing],
+      orientation === 'vertical' ? 'shrink-0 flex-col gap-2 self-stretch' : 'gap-3',
+    ]"
   >
-    <span class="h-px flex-1 bg-line" />
+    <span class="bg-line" :class="lineClass('leading')" />
     <!-- Текст прихований від скрінрідера: ім'я роль separator бере з
          aria-label, а не з вмісту, і без aria-hidden воно прозвучало б двічі. -->
     <span class="shrink-0 text-xs font-medium uppercase tracking-wide text-muted" aria-hidden="true">
       <slot>{{ label }}</slot>
     </span>
-    <span class="h-px flex-1 bg-line" />
+    <span class="bg-line" :class="lineClass('trailing')" />
   </div>
 
   <div

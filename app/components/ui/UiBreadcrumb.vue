@@ -1,4 +1,13 @@
 <script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+/*
+ * Компонент, а НЕ глобальний тег <NuxtLink>. Поза Nuxt глобального
+ * NuxtLink немає, і Vue рендерив літеральний <nuxtlink> — мертве посилання.
+ * Імпорт з #components той самий, що в UiButton: у Vite-проєкті аліас
+ * вказує на власну обгортку над RouterLink.
+ */
+import { NuxtLink } from '#components'
+
 export interface BreadcrumbItem {
   label: string
   /** Маршрут. Останній пункт і пункти без `to` рендеряться текстом. */
@@ -21,12 +30,43 @@ defineSlots<{
   /** Розділювач між пунктами. */
   separator?: () => unknown
 }>()
+
+const navEl = ref<HTMLElement | null>(null)
+let resizeObserver: ResizeObserver | null = null
+
+/*
+ * Довгий ланцюжок скролиться по X, і прокрутка стартує з нуля — тобто з
+ * КОРЕНЯ. На телефоні поточна сторінка (найважливіший пункт) опинялась за
+ * правим краєм під прихованим скролбаром. Тримаємо видимим кінець: при
+ * монтуванні, зміні пунктів і зміні ширини.
+ */
+function revealCurrent() {
+  const nav = navEl.value
+  if (!nav || nav.scrollWidth <= nav.clientWidth) return
+  // У RTL «кінець» — ліворуч, і scrollLeft там від'ємний.
+  const rtl = getComputedStyle(nav).direction === 'rtl'
+  nav.scrollLeft = rtl ? -nav.scrollWidth : nav.scrollWidth
+}
+
+onMounted(() => {
+  revealCurrent()
+  if (typeof ResizeObserver !== 'undefined' && navEl.value) {
+    resizeObserver = new ResizeObserver(() => revealCurrent())
+    resizeObserver.observe(navEl.value)
+    // І список: довантажений шрифт розширює пункти, не змінюючи ширини nav.
+    if (navEl.value.firstElementChild) resizeObserver.observe(navEl.value.firstElementChild)
+  }
+})
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
+
+watch(() => props.items, () => void nextTick(revealCurrent), { deep: true })
 </script>
 
 <template>
   <!-- Горизонтальний скрол замість переносу: довгий ланцюжок не зламає
        висоту шапки, а останній — найважливіший — пункт лишається видно. -->
-  <nav :aria-label="ariaLabel" class="scrollbar-none overflow-x-auto whitespace-nowrap">
+  <nav ref="navEl" :aria-label="ariaLabel" class="scrollbar-none overflow-x-auto whitespace-nowrap">
     <ol class="flex min-w-max items-center gap-1.5 text-sm">
       <template v-for="(item, index) in items" :key="index">
         <li v-if="index > 0" class="flex text-muted" aria-hidden="true">

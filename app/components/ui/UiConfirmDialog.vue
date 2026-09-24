@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useId } from 'vue'
 import { useConfirm } from '~/composables/useConfirm'
 import UiButton from './UiButton.vue'
 import UiInput from './UiInput.vue'
@@ -29,6 +29,15 @@ const open = computed({
   },
 })
 
+/*
+ * Підтвердження й alert — `alertdialog`, а текст повідомлення прив'язаний
+ * через aria-describedby. Фокус одразу стає на кнопку, тож без цього
+ * скрінрідер оголошував «Підтвердіть дію, діалог — Скасувати, кнопка» і
+ * мовчав про те, ЩО саме видаляється. Prompt — звичайний dialog: це
+ * запит даних, а не попередження, і в поля є власна мітка.
+ */
+const messageId = `${useId()}-message`
+
 const canAccept = computed(() => {
   const input = options.value.input
   if (!input?.required) return true
@@ -50,15 +59,18 @@ const canAccept = computed(() => {
  * безпечна — фокус стоїть на підтвердженні, щоб не тиснути Tab.
  */
 const initialFocus = computed(() => {
-  if (options.value.input) return '[data-confirm-input] input'
+  // Обидва варіанти: UiInput може віддавати атрибути на сам <input> або
+  // лишати їх на обгортці — діалог не має залежати від цієї деталі.
+  if (options.value.input) return 'input[data-confirm-input], [data-confirm-input] input'
   if (options.value.danger && !options.value.hideCancel) return '[data-confirm-cancel]'
   return '[data-confirm-accept]'
 })
 
 function onKeydown(event: KeyboardEvent) {
   // Enter у полі введення підтверджує — інакше єдиний спосіб завершити
-  // prompt це тягнутися мишкою до кнопки.
-  if (event.key === 'Enter' && canAccept.value) _accept()
+  // prompt це тягнутися мишкою до кнопки. Enter, що завершує набір через
+  // IME, — ще не відповідь.
+  if (event.key === 'Enter' && !event.isComposing && canAccept.value) _accept()
 }
 </script>
 
@@ -70,8 +82,10 @@ function onKeydown(event: KeyboardEvent) {
     :close-on-backdrop="!options.input"
     :closable="!options.input?.required"
     :initial-focus="initialFocus"
+    :role="options.input ? 'dialog' : 'alertdialog'"
+    :aria-describedby="options.message ? messageId : undefined"
   >
-    <p v-if="options.message" class="text-muted">{{ options.message }}</p>
+    <p v-if="options.message" :id="messageId" class="text-muted">{{ options.message }}</p>
 
     <UiInput
       v-if="options.input"

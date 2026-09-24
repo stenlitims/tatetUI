@@ -7,24 +7,29 @@ import {
   onMounted,
   ref,
   shallowRef,
+  useAttrs,
   useId,
   watch,
 } from 'vue'
 import { getOverlayChildZIndex } from '~/utils/overlayPosition'
 import {
+  clearButtonClass,
   dropdownEmptyClass,
   dropdownPanelClass,
   dropdownTransitionProps,
   errorTextClass,
   fieldClass,
   helperTextClass,
-  iconClass,
   itemClass,
   itemHighlighted,
   itemSelected,
   labelClass,
+  splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+
+// class/style — на обгортку, решта атрибутів — на поле-комбобокс.
+defineOptions({ inheritAttrs: false })
 
 export interface ComboboxOption {
   value: string | number
@@ -46,6 +51,12 @@ const props = withDefaults(
      * сервера у відповідь на подію `search`.
      */
     options: ComboboxOption[]
+    /**
+     * Підпис поточного значення, поки його немає серед `options` — форма
+     * редагування до першого пошуку. Далі назву обраного компонент пам'ятає
+     * сам, навіть коли наступний пошук її вже не повертає.
+     */
+    selectedLabel?: string
     label?: string
     placeholder?: string
     /** Висота поля. На мобільному кожен розмір вищий за десктопний. */
@@ -59,7 +70,10 @@ const props = withDefaults(
     /** Підказка під полем. Ховається, коли показано помилку. */
     hint?: string
     name?: string
-    /** Не емітити `search`, доки запит коротший. 0 — емітити все. */
+    /**
+     * Не емітити `search`, доки запит коротший. 0 — емітити все. Короткий
+     * запит лише ховає панель — набраний текст лишається в полі.
+     */
     minChars?: number
     /** Дозволяє скинути вибір хрестиком. */
     clearable?: boolean
@@ -87,6 +101,9 @@ defineSlots<{
   option?: (props: { option: ComboboxOption; highlighted: boolean; selected: boolean }) => unknown
 }>()
 
+const attrs = useAttrs()
+const fieldAttrs = computed(() => splitFieldAttrs(attrs))
+
 const generatedId = useId()
 const inputId = computed(() => props.id ?? `${generatedId}-combobox`)
 const listboxId = `${generatedId}-listbox`
@@ -101,10 +118,16 @@ const optionEls = ref<(HTMLElement | null)[]>([])
 
 const isOpen = ref(false)
 const query = ref('')
+// Користувач править текст і ще не обрав: поки так, синхронізація з
+// modelValue не має права переписати його запит.
+const isTyping = ref(false)
 const highlightedIndex = ref(-1)
 const teleportReady = shallowRef(false)
 
 const hasError = computed(() => !!props.error)
+const hasValue = computed(
+  () => props.modelValue !== null && props.modelValue !== undefined && props.modelValue !== '',
+)
 
 const describedBy = computed(() => {
   if (hasError.value) return errorId
@@ -112,8 +135,34 @@ const describedBy = computed(() => {
   return undefined
 })
 
-const selectedOption = computed(
-  () => props.options.find((option) => option.value === props.modelValue) ?? null,
+/*
+ * Останній відомий пункт для поточного значення.
+ *
+ * `options` тут — результати ПОТОЧНОГО пошуку, а не довідник. Поки назва
+ * бралася лише з них, новий пошук без обраного пункту (набрав «Льв», коли
+ * обрано «Київ») стирав поле на Esc, Tab чи кліку поза ним: значення
+ * лишалося 'kyiv', а поле показувало плейсхолдер і ховало хрестик.
+ */
+const rememberedOption = shallowRef<ComboboxOption | null>(null)
+
+const selectedOption = computed<ComboboxOption | null>(() => {
+  if (!hasValue.value) return null
+  return (
+    props.options.find((option) => option.value === props.modelValue) ??
+    (rememberedOption.value?.value === props.modelValue ? rememberedOption.value : null)
+  )
+})
+
+watch(
+  selectedOption,
+  (option) => {
+    if (option) rememberedOption.value = option
+  },
+  { immediate: true },
+)
+
+const selectedText = computed(
+  () => selectedOption.value?.label ?? (hasValue.value ? (props.selectedLabel ?? '') : ''),
 )
 
 /* ---------------------------------------------------------------- */
@@ -176,19 +225,32 @@ async function open() {
   scrollHighlightedIntoView()
 }
 
-function close() {
+/** Ховає панель, НЕ чіпаючи набраний текст. */
+function hidePanel() {
   if (!isOpen.value) return
   isOpen.value = false
   highlightedIndex.value = -1
   detachReposition()
+}
+
+/** Закриття як скасування правки: текст повертається до назви обраного. */
+function close() {
+  hidePanel()
+  isTyping.value = false
   syncQueryToSelection()
 }
 
 function syncQueryToSelection() {
-  query.value = selectedOption.value?.label ?? ''
+  query.value = selectedText.value
 }
 
-watch(() => props.modelValue, syncQueryToSelection, { immediate: true })
+watch(
+  [() => props.modelValue, selectedText],
+  () => {
+    if (!isTyping.value) syncQueryToSelection()
+  },
+  { immediate: true },
+)
 
 watch(
   () => props.options,
@@ -203,6 +265,8 @@ watch(
 
 function selectOption(option: ComboboxOption) {
   if (option.disabled) return
+  // ДО emit: споживач нерідко чистить options одразу після вибору.
+  rememberedOption.value = option
   emit('update:modelValue', option.value)
   close()
   inputEl.value?.focus()
@@ -210,21 +274,44 @@ function selectOption(option: ComboboxOption) {
 
 function clear() {
   emit('update:modelValue', null)
+  rememberedOption.value = null
+  isTyping.value = false
   query.value = ''
   inputEl.value?.focus()
 }
 
 function onInput(event: Event) {
   query.value = (event.target as HTMLInputElement).value
+  isTyping.value = true
   highlightedIndex.value = firstEnabledIndex(props.options)
-  if (query.value.length >= props.minChars) emit('search', query.value)
-  // Панель відкривається на ввід лише коли запит достатньо довгий;
-  // короткий запит лишає поле чистим для подальшого набору.
+  /*
+   * Запит коротший за minChars лише ХОВАЄ панель. Поки тут стояв close(),
+   * він ще й повертав текст до назви обраного — і перша ж літера після
+   * кліку в поле (клік відкриває панель) стиралася просто під пальцем.
+   */
   if (query.value.length < props.minChars) {
-    close()
+    hidePanel()
     return
   }
+  emit('search', query.value)
   if (!isOpen.value) void open()
+}
+
+/*
+ * Клік у поле лише відкриває панель. Перемикач тут закривав відкриту
+ * панель на кліку, яким користувач лише переставляв каретку, — разом із
+ * набраним запитом. Мишею закривають шевроном або кліком поза полем.
+ */
+function onFieldPointerDown() {
+  if (!isOpen.value) void open()
+}
+
+// mousedown.prevent у шаблоні: фокус лишається в полі, а не падає на <body>.
+function onChevronMouseDown() {
+  if (props.disabled) return
+  if (isOpen.value) return close()
+  inputEl.value?.focus()
+  void open()
 }
 
 /* ---------------------------------------------------------------- */
@@ -275,7 +362,9 @@ function onKeydown(event: KeyboardEvent) {
       return
     }
     case 'Escape':
-      if (!isOpen.value) return
+      // Панель могла сховатися через minChars, а недописаний текст лишився:
+      // Escape скасовує і його.
+      if (!isOpen.value && !isTyping.value) return
       // stopPropagation: той самий Escape не закриє модалку навколо.
       event.stopPropagation()
       close()
@@ -300,7 +389,9 @@ function onKeydown(event: KeyboardEvent) {
 /* ---------------------------------------------------------------- */
 
 function onDocumentPointerDown(event: PointerEvent) {
-  if (!isOpen.value) return
+  // isTyping — і тоді, коли панель схована через minChars: недописаний
+  // запит без вибору не має лишатися в полі після кліку деінде.
+  if (!isOpen.value && !isTyping.value) return
   const target = event.target as Node
   if (rootEl.value?.contains(target)) return
   if (dropdownEl.value?.contains(target)) return
@@ -330,13 +421,14 @@ defineExpose({
 </script>
 
 <template>
-  <div ref="rootEl">
+  <div ref="rootEl" v-bind="fieldAttrs.root">
     <label v-if="label" :for="inputId" :class="labelClass">
       {{ label }}
       <span v-if="required" class="text-danger" aria-hidden="true">*</span>
     </label>
 
     <div class="relative">
+      <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
       <input
         :id="inputId"
         ref="inputEl"
@@ -347,7 +439,7 @@ defineExpose({
         :class="fieldClass(size, {
           error: hasError,
           disabled,
-          padRight: clearable && selectedOption ? 'pr-14' : 'pr-9',
+          padRight: clearable && hasValue ? 'pr-14' : 'pr-9',
           extra: 'cursor-default',
         })"
         role="combobox"
@@ -358,15 +450,16 @@ defineExpose({
         :aria-invalid="hasError || undefined"
         :aria-describedby="describedBy"
         autocomplete="off"
+        v-bind="fieldAttrs.control"
         @input="onInput"
         @keydown="onKeydown"
-        @pointerdown="isOpen ? close() : open()"
+        @pointerdown="onFieldPointerDown"
       />
 
       <button
-        v-if="clearable && selectedOption && !disabled"
+        v-if="clearable && hasValue && !disabled"
         type="button"
-        class="absolute top-1/2 right-8 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        :class="['absolute top-1/2 right-8 -translate-y-1/2', clearButtonClass]"
         @click="clear"
       >
         <span class="sr-only">Очистити вибір</span>
@@ -381,7 +474,14 @@ defineExpose({
           <path d="M21 12a9 9 0 1 1-6.2-10.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
       </span>
-      <span v-else class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-muted">
+      <!-- Шеврон — перемикач мишею: клік у саме поле лише відкриває. -->
+      <span
+        v-else
+        class="absolute inset-y-0 right-0 flex items-center pr-3 text-muted"
+        :class="disabled ? 'pointer-events-none' : 'cursor-pointer'"
+        aria-hidden="true"
+        @mousedown.prevent="onChevronMouseDown"
+      >
         <svg
           class="h-4 w-4 transition-transform"
           :class="isOpen ? 'rotate-180' : ''"

@@ -1,35 +1,23 @@
 <script setup lang="ts">
-import HomeComponentGallery from '~/components/home/HomeComponentGallery.vue'
-import HomeDataWorkflow from '~/components/home/HomeDataWorkflow.vue'
-import HomeHeroDemo from '~/components/home/HomeHeroDemo.vue'
-import UiButton from '~/components/ui/UiButton.vue'
+import HomeCatalog from '~/components/home/HomeCatalog.vue'
+import HomeHero from '~/components/home/HomeHero.vue'
+import HomePrinciples from '~/components/home/HomePrinciples.vue'
+import HomeShowcase from '~/components/home/HomeShowcase.vue'
+import HomeSteps from '~/components/home/HomeSteps.vue'
 
 useSeo({
   title: 'Бібліотека UI-компонентів для Vue 3 і Nuxt',
   description:
-    'Канонічна бібліотека UI-компонентів для Nuxt — копіюй код, перевіряй живі сценарії та адаптуй під продукт.',
+    'Бібліотека UI-компонентів для Vue і Nuxt, яку копіюють, а не встановлюють: живі приклади реальних екранів, API з коду й документація, що пояснює кожне рішення.',
 })
 </script>
 
 <template>
   <main id="content">
-    <HomeHeroDemo />
-    <HomeDataWorkflow />
-    <HomeComponentGallery />
-
-    <section class="mx-auto max-w-6xl px-4 pb-24">
-      <div class="flex flex-col items-start justify-between gap-6 rounded-overlay border border-line bg-card p-8 shadow-overlay sm:flex-row sm:items-center">
-        <div>
-          <h2 class="text-2xl font-semibold tracking-tight text-ink">Почни з одного компонента</h2>
-          <p class="mt-2 max-w-md text-muted">
-            Відкрий API, скопіюй компонент разом із його локальними залежностями та адаптуй під свій проєкт.
-          </p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-          <UiButton to="/docs/components/button" size="lg">Відкрити Button</UiButton>
-          <UiButton to="/docs/roadmap" variant="outline" size="lg">Що далі</UiButton>
-        </div>
-      </div>
-    </section>
+    <HomeHero />
+    <HomeShowcase />
+    <HomeCatalog />
+    <HomePrinciples />
+    <HomeSteps />
   </main>
 </template>

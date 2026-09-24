@@ -83,6 +83,9 @@
   --color-neutral-bg: var(--neutral-bg);
   --color-neutral-line: var(--neutral-line);
 
+  /* Рейтинг: fill-rating / text-rating */
+  --color-rating: var(--rating);
+
   /* Радіуси: rounded-control / rounded-card / rounded-overlay */
   --radius-control: var(--radius-control);
   --radius-card: var(--radius-card);

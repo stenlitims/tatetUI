@@ -21,6 +21,17 @@ function showAction() {
   })
 }
 
+// Імітація запиту: та сама картка проходить «Зберігаю…» → «Збережено»,
+// без зникнення і появи нової.
+function showPromise() {
+  const request = new Promise<string>((resolve) => setTimeout(() => resolve('Чернетка'), 1800))
+  void toast.promise(request, {
+    loading: 'Зберігаю зміни…',
+    success: (name) => `«${name}» збережено`,
+    error: 'Не вдалося зберегти',
+  })
+}
+
 function showQueue() {
   const types: ToastType[] = ['success', 'info', 'warning', 'error']
   const messages = [
@@ -90,11 +101,13 @@ function showQueue() {
           "
           >Довгий текст</UiButton
         >
+        <UiButton size="sm" variant="outline" @click="showPromise">Проміс</UiButton>
         <UiButton size="sm" variant="outline" @click="showQueue">Показати 8 сповіщень</UiButton>
       </div>
       <p class="mt-3 text-xs leading-relaxed text-muted">
         Змахніть картку вбік, щоб закрити. Від трьох повідомлень з’явиться «Очистити всі».
-        Наведення, фокус і дотик призупиняють автозакриття.
+        Наведення, фокус і дотик призупиняють автозакриття. F8 переводить фокус до сповіщень,
+        F8 чи Escape — назад.
       </p>
     </div>
   </div>

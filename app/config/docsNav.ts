@@ -4,6 +4,12 @@ export interface NavLink {
   title: string
   to: string
   status?: NavStatus
+  /**
+   * Позначка «нове» в сайдбарі й каталозі головної — для компонентів
+   * останнього циклу. Знімайте з наступним циклом: позначка, що висить
+   * вічно, перестає щось означати.
+   */
+  fresh?: boolean
 }
 
 export interface NavGroup {
@@ -43,12 +49,15 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Button', to: '/docs/components/button' },
       { title: 'Chip', to: '/docs/components/chip' },
+      { title: 'ButtonGroup', to: '/docs/components/button-group', fresh: true },
       { title: 'SplitButton', to: '/docs/components/split-button' },
+      { title: 'ActionBar', to: '/docs/components/action-bar', fresh: true },
     ],
   },
   {
     title: 'Форми',
     items: [
+      { title: 'FormField', to: '/docs/components/form-field', fresh: true },
       { title: 'Checkbox', to: '/docs/components/checkbox' },
       { title: 'RadioGroup', to: '/docs/components/radio-group' },
       { title: 'Input', to: '/docs/components/input' },
@@ -65,6 +74,7 @@ export const docsNav: NavGroup[] = [
       { title: 'InlineEdit', to: '/docs/components/inline-edit' },
       { title: 'NumberInput', to: '/docs/components/number-input' },
       { title: 'TagInput', to: '/docs/components/tag-input' },
+      { title: 'Rating', to: '/docs/components/rating', fresh: true },
     ],
   },
   {
@@ -75,6 +85,7 @@ export const docsNav: NavGroup[] = [
       { title: 'HoverCard', to: '/docs/components/hover-card' },
       { title: 'Modal', to: '/docs/components/modal' },
       { title: 'Drawer', to: '/docs/components/drawer' },
+      { title: 'Lightbox', to: '/docs/components/lightbox', fresh: true },
       { title: 'ConfirmDialog', to: '/docs/components/confirm-dialog' },
       { title: 'Toast', to: '/docs/components/toast' },
     ],
@@ -88,6 +99,7 @@ export const docsNav: NavGroup[] = [
       { title: 'Avatar', to: '/docs/components/avatar' },
       { title: 'AvatarGroup', to: '/docs/components/avatar-group' },
       { title: 'StatCard', to: '/docs/components/stat-card' },
+      { title: 'Sparkline', to: '/docs/components/sparkline', fresh: true },
       { title: 'DescriptionList', to: '/docs/components/description-list' },
       { title: 'Timeline', to: '/docs/components/timeline' },
       { title: 'Tree', to: '/docs/components/tree' },
@@ -98,6 +110,7 @@ export const docsNav: NavGroup[] = [
   {
     title: 'Структура',
     items: [
+      { title: 'PageHeader', to: '/docs/components/page-header', fresh: true },
       { title: 'NavigationMenu', to: '/docs/components/navigation-menu' },
       { title: 'Sidebar', to: '/docs/components/sidebar' },
       { title: 'ScrollArea', to: '/docs/components/scroll-area' },
@@ -115,8 +128,10 @@ export const docsNav: NavGroup[] = [
     title: 'Стани',
     items: [
       { title: 'Skeleton', to: '/docs/components/skeleton' },
+      { title: 'Spinner', to: '/docs/components/spinner', fresh: true },
       { title: 'EmptyState', to: '/docs/components/empty-state' },
       { title: 'Progress', to: '/docs/components/progress' },
+      { title: 'ProgressRing', to: '/docs/components/progress-ring', fresh: true },
       { title: 'Alert', to: '/docs/components/alert' },
       { title: 'Tooltip', to: '/docs/components/tooltip' },
     ],
@@ -125,6 +140,7 @@ export const docsNav: NavGroup[] = [
     title: 'Дрібниці',
     items: [
       { title: 'Kbd', to: '/docs/components/kbd' },
+      { title: 'Indicator', to: '/docs/components/indicator', fresh: true },
       { title: 'Separator', to: '/docs/components/separator' },
       { title: 'CopyButton', to: '/docs/components/copy-button' },
       { title: 'ToggleGroup', to: '/docs/components/toggle-group' },
