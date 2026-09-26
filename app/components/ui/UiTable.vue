@@ -6,7 +6,7 @@
   сумісний, а доступ `item[key]` лишається без приведень.
 -->
 <script setup lang="ts" generic="T extends Record<string, any>">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, useSlots, watch } from 'vue'
 import UiCheckbox from './UiCheckbox.vue'
 import UiSkeleton from './UiSkeleton.vue'
 import TableColumnSettings from './table/ColumnSettings.vue'
@@ -736,6 +736,34 @@ function toggleSort(header: TableHeader) {
   emit('update:sort', next)
 }
 
+/*
+ * Сортування на мобільних картках. Шапка таблиці там схована разом із
+ * таблицею, тож без окремого контролу телефон просто втрачав сортування:
+ * порядок лишався тим, який встиг обрати десктоп. Нативний <select> —
+ * свідомо: на телефоні він відкриває системний вибір (колесо на iOS,
+ * аркуш на Android), зручніший за будь-яку власну випадайку.
+ */
+const mobileSortId = `${useId()}-mobile-sort`
+const mobileSortHeaders = computed(() =>
+  props.mobileCards ? visibleHeaders.value.filter((header) => header.sortable) : [],
+)
+
+function onMobileSortBy(event: Event) {
+  const by = (event.target as HTMLSelectElement).value
+  const header = mobileSortHeaders.value.find((item) => item.value === by)
+  const next: TableSort | null = header ? { by, dir: header.defaultSortDir ?? 'asc' } : null
+  internalSort.value = next
+  emit('update:sort', next)
+}
+
+function flipMobileSortDir() {
+  const current = internalSort.value
+  if (!current) return
+  const next: TableSort = { by: current.by, dir: current.dir === 'asc' ? 'desc' : 'asc' }
+  internalSort.value = next
+  emit('update:sort', next)
+}
+
 function ariaSort(header: TableHeader): 'ascending' | 'descending' | 'none' | undefined {
   if (!header.sortable) return undefined
   if (internalSort.value?.by !== header.value) return 'none'
@@ -863,8 +891,45 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       На мобільних картках колонок немає, але налаштування лишаються
       доцільними: видимість та порядок керують полями у картках.
     -->
-    <div v-if="showSettings" class="mb-2 flex items-center justify-end">
+    <div
+      v-if="showSettings || mobileSortHeaders.length"
+      class="mb-2 flex items-center gap-2"
+      :class="showSettings ? '' : 'md:hidden'"
+    >
+      <div v-if="mobileSortHeaders.length" class="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+        <label :for="mobileSortId" class="shrink-0 text-sm text-muted">Сортувати</label>
+        <select
+          :id="mobileSortId"
+          :value="internalSort?.by ?? ''"
+          class="h-12 min-w-0 flex-1 cursor-pointer rounded-control border border-line bg-input pl-2.5 pr-7 text-[16px] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          @change="onMobileSortBy"
+        >
+          <option value="">Як є</option>
+          <option v-for="header in mobileSortHeaders" :key="header.value" :value="header.value">
+            {{ header.text }}
+          </option>
+        </select>
+        <button
+          type="button"
+          class="flex h-12 w-12 shrink-0 items-center justify-center rounded-control border border-line bg-input text-muted transition-colors hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40"
+          :disabled="!internalSort"
+          :aria-label="internalSort?.dir === 'desc' ? 'За спаданням — змінити на зростання' : 'За зростанням — змінити на спадання'"
+          @click="flipMobileSortDir"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              :d="internalSort?.dir === 'desc' ? 'M12 5v14m0 0-6-6m6 6 6-6' : 'M12 19V5m0 0-6 6m6-6 6 6'"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
       <TableColumnSettings
+        v-if="showSettings"
+        class="ml-auto"
         :headers="localHeaders"
         :density="localDensity"
         :density-toggle="densityToggle"
@@ -968,17 +1033,20 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
                   <button
                     v-if="header.sortable"
                     type="button"
-                    class="group inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
                     @click="toggleSort(header)"
                   >
+                    <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
+                         підпис: праворуч у комірці живе ручка зміни ширини. -->
                     <span class="truncate">{{ header.text }}</span>
-                    <!-- Привид-шеврон: підказка, що колонка взагалі сортується. -->
+                    <!-- Привид-шеврон: підказка, що колонка взагалі сортується.
+                         На дотику наведення не буває — там привид видно завжди. -->
                     <svg
                       class="h-3 w-3 shrink-0 transition-opacity"
                       :class="
                         internalSort?.by === header.value
                           ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40'
+                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
                       "
                       viewBox="0 0 24 24"
                       fill="none"

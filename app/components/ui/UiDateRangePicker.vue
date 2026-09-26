@@ -9,7 +9,13 @@ import {
   toDateKey,
   type DateRangePreset,
 } from '~/utils/calendar'
-import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
+import {
+  getOverlayChildZIndex,
+  getVisibleViewport,
+  listenViewportChanges,
+  placeAnchoredPanel,
+  viewportMaxWidth,
+} from '~/utils/overlayPosition'
 import {
   clearButtonClass,
   dropdownTransitionProps,
@@ -18,6 +24,7 @@ import {
   helperTextClass,
   labelClass,
   splitFieldAttrs,
+  touchTargetClass,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
 
@@ -248,16 +255,20 @@ const panelStyle = ref<Record<string, string>>({})
 function updatePosition() {
   const anchor = triggerEl.value
   if (!anchor || typeof window === 'undefined') return
-  const rect = anchor.getBoundingClientRect()
-  const point = computeAnchoredPanelPosition(
-    rect,
-    { width: panelEl.value?.offsetWidth || 320, height: panelEl.value?.offsetHeight || 360 },
-    { width: window.innerWidth, height: window.innerHeight },
-    props.placement,
-  )
+  const viewport = getVisibleViewport()
+  const point = placeAnchoredPanel(anchor.getBoundingClientRect(), panelEl.value, viewport, props.placement, {
+    fallback: { width: 320, height: 360 },
+  })
   panelStyle.value = {
     top: `${Math.round(point.top)}px`,
     left: `${Math.round(point.left)}px`,
+    // Пресети на телефоні — горизонтальна смуга: її max-content (усі
+    // пресети в рядок) робив панель 690px завширшки на 375px екрані.
+    // Обмеження ширини перетворює смугу на прокручувану, як і задумано.
+    maxWidth: viewportMaxWidth(viewport),
+    // Над клавіатурою чи в ландшафті місця може не вистачити на місяць
+    // цілком — тоді панель прокручується, а не обрізається краєм.
+    ...(point.fits ? {} : { maxHeight: `${Math.floor(point.maxHeight)}px`, overflowY: 'auto' }),
     zIndex: String(getOverlayChildZIndex(anchor)),
   }
 }
@@ -300,17 +311,18 @@ function toggle() {
  * тож Tab із тригера вів до наступного поля форми, а focusout закривав
  * панель. preventScroll — бо в першу мить панель ще не спозиціонована.
  */
+let stopViewport: (() => void) | null = null
+
 watch(isOpen, async (value) => {
   if (!value) {
-    window.removeEventListener('scroll', updatePosition, true)
-    window.removeEventListener('resize', updatePosition)
+    stopViewport?.()
+    stopViewport = null
     return
   }
   await nextTick()
   updatePosition()
   calendarEl.value?.focus({ preventScroll: true })
-  window.addEventListener('scroll', updatePosition, true)
-  window.addEventListener('resize', updatePosition)
+  stopViewport ??= listenViewportChanges(updatePosition)
 })
 
 /*
@@ -372,8 +384,7 @@ onBeforeUnmount(() => {
   wideQuery?.removeEventListener('change', syncWide)
   if (typeof document === 'undefined') return
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
-  window.removeEventListener('scroll', updatePosition, true)
-  window.removeEventListener('resize', updatePosition)
+  stopViewport?.()
 })
 
 const triggerClasses = computed(() =>
@@ -461,17 +472,29 @@ defineExpose({
             <!--
               Нижче md пресети стають смугою НАД сіткою: колонка 160px поруч
               із місяцем 300px не влазить у 375px екрана.
+
+              На телефоні смуга — ряд пігулок із межею: голий текст у ряд не
+              читався як щось, що можна натиснути, а обрізаний краєм панелі
+              останній пресет — як поламаний. Смуга виходить під краї панелі
+              (-mx-3 px-3), тож обрізання читається як «далі є ще». py-1
+              дає місце невидимій зоні дотику: overflow-x-auto обрізає й
+              по вертикалі, і 45px зона h-10 пігулки інакше різалась би.
             -->
             <div
               v-if="availablePresets.length"
-              class="flex gap-1.5 overflow-x-auto pb-1 md:w-40 md:shrink-0 md:flex-col md:overflow-visible md:border-r md:border-line md:pb-0 md:pr-3"
+              class="scrollbar-none -mx-3 flex gap-1.5 overflow-x-auto overscroll-x-contain px-3 py-1 md:mx-0 md:w-40 md:shrink-0 md:flex-col md:overflow-visible md:border-r md:border-line md:py-0 md:pl-0 md:pr-3"
             >
               <button
                 v-for="preset in availablePresets"
                 :key="preset.label"
                 type="button"
-                class="shrink-0 whitespace-nowrap rounded-control px-3 py-2 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:w-full"
-                :class="isActivePreset(preset) ? 'bg-primary-50 font-medium text-accent' : 'text-ink hover:bg-hover'"
+                class="relative h-10 shrink-0 whitespace-nowrap rounded-full border px-3.5 text-left text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:h-auto md:w-full md:rounded-control md:border-0 md:px-3 md:py-2"
+                :class="[
+                  touchTargetClass,
+                  isActivePreset(preset)
+                    ? 'border-primary-200 bg-primary-50 font-medium text-accent'
+                    : 'border-line text-ink hover:bg-hover',
+                ]"
                 @click="applyPreset(preset)"
               >
                 <slot name="preset" :preset="preset" :active="isActivePreset(preset)">

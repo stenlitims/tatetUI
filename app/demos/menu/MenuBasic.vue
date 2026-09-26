@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import UiButton from '~/components/ui/UiButton.vue'
 import UiMenu from '~/components/ui/UiMenu.vue'
+import { menuItemClass } from '~/utils/uiFieldStyles'
 
 const last = ref('—')
 
@@ -27,7 +28,7 @@ const items = [
           :key="item.action"
           type="button"
           role="menuitem"
-          class="flex w-full items-center px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-hover focus:outline-none focus-visible:bg-hover md:py-2"
+          :class="[menuItemClass, 'text-ink']"
           @click="last = item.label; toggle()"
         >
           {{ item.label }}
@@ -36,7 +37,7 @@ const items = [
         <button
           type="button"
           role="menuitem"
-          class="flex w-full items-center px-3 py-2.5 text-left text-sm text-danger transition-colors hover:bg-danger-bg focus:outline-none focus-visible:bg-danger-bg md:py-2"
+          :class="[menuItemClass, 'text-danger']"
           @click="last = 'Видалити'; toggle()"
         >
           Видалити

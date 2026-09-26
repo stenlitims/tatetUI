@@ -52,7 +52,7 @@ const checks = [
         </p>
       </div>
 
-      <div class="mt-10 grid gap-4 md:grid-cols-6">
+      <div class="mt-10 grid grid-cols-1 gap-4 md:grid-cols-6">
         <!-- Копіювання -->
         <article class="rounded-overlay border border-line bg-card p-6 shadow-card md:col-span-4">
           <h3 class="text-lg font-semibold text-ink">Копіюй, не встановлюй</h3>

@@ -1343,14 +1343,14 @@ defineExpose({
             <div class="flex gap-1">
               <button
                 type="button"
-                class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="h-12 flex-1 rounded-control border border-line px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
                 @click="expandAll"
               >
                 Розгорнути всі
               </button>
               <button
                 type="button"
-                class="flex-1 rounded-control border border-line px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                class="h-12 flex-1 rounded-control border border-line px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
                 @click="collapseAll"
               >
                 Згорнути всі
@@ -1442,17 +1442,20 @@ defineExpose({
                   <button
                     v-if="header.sortable"
                     type="button"
-                    class="group inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
                     @click="toggleSort(header)"
                   >
+                    <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
+                         підпис: праворуч у комірці живе ручка зміни ширини. -->
                     <span class="truncate">{{ header.text }}</span>
-                    <!-- Привид-шеврон: підказка, що колонка сортується. -->
+                    <!-- Привид-шеврон: підказка, що колонка сортується.
+                         На дотику наведення не буває — там привид видно завжди. -->
                     <svg
                       class="h-3 w-3 shrink-0 transition-opacity"
                       :class="
                         internalSort?.by === header.value
                           ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40'
+                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
                       "
                       viewBox="0 0 24 24"
                       fill="none"

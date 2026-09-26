@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, shallowRef, useAttrs, useId, useSlots, watch } from 'vue'
-import { errorTextClass, helperTextClass, splitFieldAttrs } from '~/utils/uiFieldStyles'
+import { errorTextClass, helperTextClass, splitFieldAttrs, touchTargetClass } from '~/utils/uiFieldStyles'
 
 // class/style — на обгортку (ширина в таблиці, відступи), решта — на сам
 // <input>: aria-label на <div> прапорцю назви не дає.
@@ -102,7 +102,13 @@ defineExpose({ focus: () => inputEl.value?.focus() })
       class="flex min-w-0 w-full items-start gap-2.5"
       :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'"
     >
-      <span class="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
+      <!--
+        Невидима зона 45×45 навколо квадратика на дотику. Мітка й так
+        клікабельна, але в рядку таблиці мітки немає (лише sr-only), а
+        однорядкова мітка — 21px заввишки: пальцем у неї влучаєш через раз.
+        ::after лежить усередині <label>, тож дотик у зону перемикає прапорець.
+      -->
+      <span class="relative mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center" :class="touchTargetClass">
         <!-- v-bind останнім: атрибут споживача перемагає, як у звичайному fallthrough. -->
         <input
           :id="checkboxId"

@@ -66,7 +66,12 @@ watch(() => props.items, () => void nextTick(revealCurrent), { deep: true })
 <template>
   <!-- Горизонтальний скрол замість переносу: довгий ланцюжок не зламає
        висоту шапки, а останній — найважливіший — пункт лишається видно. -->
-  <nav ref="navEl" :aria-label="ariaLabel" class="scrollbar-none overflow-x-auto whitespace-nowrap">
+  <!--
+    py-3.5 -my-3.5: місце для невидимої зони дотику посилань. overflow-x-auto
+    обрізає й по вертикалі, тож 45px зона навколо 19px рядка без цього
+    різалася б по висоті рядка. Від'ємний margin повертає розкладку як була.
+  -->
+  <nav ref="navEl" :aria-label="ariaLabel" class="scrollbar-none -my-3.5 overflow-x-auto whitespace-nowrap py-3.5">
     <ol class="flex min-w-max items-center gap-1.5 text-sm">
       <template v-for="(item, index) in items" :key="index">
         <li v-if="index > 0" class="flex text-muted" aria-hidden="true">
@@ -81,7 +86,7 @@ watch(() => props.items, () => void nextTick(revealCurrent), { deep: true })
             <NuxtLink
               v-if="item.to && index !== items.length - 1"
               :to="item.to"
-              class="rounded-control text-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              class="relative rounded-control text-muted transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-[max(100%,3rem)] pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
             >
               {{ item.label }}
             </NuxtLink>

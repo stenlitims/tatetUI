@@ -6,7 +6,7 @@ const last = ref('—')
 </script>
 
 <template>
-  <div class="flex flex-col gap-6">
+  <div class="flex min-w-0 flex-col gap-6">
     <UiTabs
       aria-label="Вигляд"
       :tabs="[

@@ -34,7 +34,10 @@ const steps = [
       </div>
 
       <ol class="mt-10 grid gap-4 md:grid-cols-3">
-        <li v-for="(step, index) in steps" :key="step.title" class="relative flex flex-col rounded-overlay border border-line bg-card p-6 shadow-card">
+        <!-- min-w-0: рядок імпорту в картці — truncate, але елемент сітки
+             з типовим min-width: auto однаково розтягувався до повної довжини
+             рядка, і головна на телефоні прокручувалася вбік на ~90px. -->
+        <li v-for="(step, index) in steps" :key="step.title" class="relative flex min-w-0 flex-col rounded-overlay border border-line bg-card p-6 shadow-card">
           <span class="flex h-8 w-8 items-center justify-center rounded-full bg-accent-solid text-sm font-semibold text-accent-contrast" aria-hidden="true">
             {{ index + 1 }}
           </span>

@@ -42,6 +42,7 @@ export const docsNav: NavGroup[] = [
       { title: 'Токени', to: '/docs/foundations/tokens' },
       { title: 'Темна тема', to: '/docs/foundations/dark-mode' },
       { title: 'Контракт доступності', to: '/docs/foundations/a11y' },
+      { title: 'Мобільні пристрої', to: '/docs/foundations/mobile' },
     ],
   },
   {

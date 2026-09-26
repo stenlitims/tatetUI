@@ -109,9 +109,15 @@ const backdropBlurClass = computed(() =>
   prefersReducedMotion.value ? '' : 'backdrop-blur-sm',
 )
 
+/*
+ * Безпечні зони: панель прилягає до краю екрана на всю висоту, а на
+ * iPhone у ландшафті (де вона вже в десктопному режимі) цей край — під
+ * вирізом камери. env() — нуль там, де вирізу немає. Діє лише з
+ * `viewport-fit=cover` у meta viewport.
+ */
 const sideClasses = computed(() => props.side === 'left'
-  ? 'left-0 border-r md:border-r'
-  : 'right-0 border-l md:border-l')
+  ? 'left-0 border-r md:border-r pl-[env(safe-area-inset-left)]'
+  : 'right-0 border-l md:border-l pr-[env(safe-area-inset-right)]')
 const mobileTransform = computed(() => {
   if (props.modelValue) return 'translate-x-0'
   return props.side === 'left' ? '-translate-x-full md:translate-x-0' : 'translate-x-full md:translate-x-0'
@@ -266,7 +272,7 @@ defineExpose({ close, toggleCollapsed })
     :data-ui-overlay="isMobile && modelValue ? '' : undefined"
     tabindex="-1"
     :style="[panelStyle, isOverlayMode ? { zIndex: layer.zIndex.value } : {}]"
-    class="fixed inset-y-0 flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-card text-ink shadow-overlay md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
+    class="fixed inset-y-0 flex h-[100dvh] w-[var(--ui-sidebar-width)] flex-col border-line bg-card pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] text-ink shadow-overlay md:sticky md:top-0 md:z-auto md:h-screen md:shadow-none"
     :class="[
       sideClasses,
       mobileTransform,
@@ -320,7 +326,7 @@ defineExpose({ close, toggleCollapsed })
       </button>
     </div>
 
-    <div class="min-h-0 flex-1 overflow-y-auto p-2">
+    <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
       <slot :collapsed="collapsed" :close="close" />
     </div>
 

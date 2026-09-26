@@ -32,7 +32,7 @@ function loadEmpty() {
 
 <template>
   <div class="w-full space-y-3">
-    <div class="flex gap-2">
+    <div class="flex flex-wrap gap-2">
       <UiButton size="sm" @click="loadData">Завантажити дані</UiButton>
       <UiButton size="sm" variant="outline" @click="loadEmpty">Порожній результат</UiButton>
     </div>

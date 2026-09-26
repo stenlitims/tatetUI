@@ -197,12 +197,17 @@ const itemKey = (item: T, index: number) =>
 </script>
 
 <template>
+  <!--
+    w-full: рядки позиціоновані абсолютно й ширини списку не дають, тож у
+    flex-рядку батька список стискався до нуля — лишалася сама рамка.
+    overscroll-contain: докрутивши до краю, палець не тягне сторінку.
+  -->
   <div
     ref="scrollEl"
     role="list"
     tabindex="0"
     :aria-label="ariaLabel"
-    class="overflow-y-auto rounded-card border border-line bg-card"
+    class="w-full overflow-y-auto overscroll-contain rounded-card border border-line bg-card"
     :style="{ height }"
     @scroll.passive="onScroll"
   >

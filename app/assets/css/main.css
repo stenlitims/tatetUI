@@ -38,6 +38,12 @@
   }
 
   body {
+    /* viewport-fit=cover (nuxt.config) пускає сторінку під виріз камери —
+       інакше env(safe-area-inset-*) у компонентах завжди нуль. Хром сайту
+       тому тримає бічні зони сам: на iPhone у ландшафті шапка й текст
+       інакше ховалися б під вирізом. Фіксовані оверлеї рахують зони окремо. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
     background-color: var(--bg-main);
     color: var(--ink);
     font-family:

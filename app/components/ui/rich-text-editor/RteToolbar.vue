@@ -5,6 +5,7 @@ import UiDrawer from '../UiDrawer.vue'
 import RteIconBtn from './shared/RteIconBtn.vue'
 import RteIcon from './shared/RteIcon.vue'
 import { useRteLabels } from './labels'
+import { touchTargetClass } from '~/utils/uiFieldStyles'
 
 const props = defineProps<{
   editor: Editor | undefined
@@ -137,13 +138,26 @@ watch(
     <div class="flex items-center gap-1 md:hidden">
       <RteIconBtn icon="bold" :title="l.bold" :active="active.bold" @click="cmd(c => c.toggleBold().run())" />
       <RteIconBtn icon="italic" :title="l.italic" :active="active.italic" @click="cmd(c => c.toggleItalic().run())" />
-      <button type="button" class="ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" :title="l.more" :aria-label="l.more" @click="mobileOpen = true">
+      <button type="button" class="relative ml-auto inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-control text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden" :class="touchTargetClass" :title="l.more" :aria-label="l.more" @click="mobileOpen = true">
         <RteIcon name="more" />
       </button>
     </div>
 
+    <!--
+      Аркуш має ті самі можливості, що й десктопний ряд: рівень заголовка й
+      вирівнювання раніше були лише на десктопі, і на телефоні зробити
+      заголовок було неможливо взагалі. gap-2, а не gap-1: зони дотику
+      45×45 сусідніх кнопок інакше наповзали одна на одну на 11px.
+    -->
     <UiDrawer v-model="mobileOpen" position="bottom" size="auto" :title="l.more" close-on-backdrop>
-      <div class="flex flex-wrap gap-1">
+      <select v-model="headingLevel" class="mb-3 h-12 w-full rounded-control border border-line bg-input px-3 text-[16px] text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring" :aria-label="l.headingLevel">
+        <option value="0">{{ l.paragraph }}</option>
+        <option value="1">{{ l.heading }} 1</option>
+        <option value="2">{{ l.heading }} 2</option>
+        <option value="3">{{ l.heading }} 3</option>
+        <option value="4">{{ l.heading }} 4</option>
+      </select>
+      <div class="flex flex-wrap gap-2">
         <RteIconBtn icon="underline" :title="l.underline" :active="active.underline" @click="cmd(c => c.toggleUnderline().run())" />
         <RteIconBtn icon="strike" :title="l.strike" :active="active.strike" @click="cmd(c => c.toggleStrike().run())" />
         <RteIconBtn icon="code" :title="l.code" :active="active.code" @click="cmd(c => c.toggleCode().run())" />
@@ -152,6 +166,11 @@ watch(
         <RteIconBtn icon="blockquote" :title="l.blockquote" :active="active.blockquote" @click="cmd(c => c.toggleBlockquote().run())" />
         <RteIconBtn icon="codeBlock" :title="l.codeBlock" :active="active.codeBlock" @click="cmd(c => c.toggleCodeBlock().run())" />
         <RteIconBtn icon="horizontalRule" :title="l.horizontalRule" @click="cmd(c => c.setHorizontalRule().run())" />
+        <template v-if="mode === 'full'">
+          <RteIconBtn icon="alignLeft" :title="l.alignLeft" :active="active.alignLeft" @click="cmd(c => c.setTextAlign('left').run())" />
+          <RteIconBtn icon="alignCenter" :title="l.alignCenter" :active="active.alignCenter" @click="cmd(c => c.setTextAlign('center').run())" />
+          <RteIconBtn icon="alignRight" :title="l.alignRight" :active="active.alignRight" @click="cmd(c => c.setTextAlign('right').run())" />
+        </template>
         <RteIconBtn icon="clearFormatting" :title="l.clearFormatting" @click="cmd(c => c.unsetAllMarks().clearNodes().run())" />
         <RteIconBtn icon="undo" :title="l.undo" :disabled="!history.undo" @click="cmd(c => c.undo().run())" />
         <RteIconBtn icon="redo" :title="l.redo" :disabled="!history.redo" @click="cmd(c => c.redo().run())" />

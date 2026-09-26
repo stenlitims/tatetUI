@@ -125,8 +125,18 @@ export const helperTextClass = 'mt-1 text-sm text-muted'
 /*  Без цього селект усередині модалки був би перекритий її панеллю.  */
 /* ------------------------------------------------------------------ */
 
+/*
+ * Панель завжди телепортована в <body> і позиціонується `fixed` у
+ * координатах вікна — top, left, ширину й max-height ставить
+ * dropdownPanelStyle з utils/overlayPosition. Раніше тут був `absolute`:
+ * UiTagInput, що не перебивав position інлайном, на прокрученій сторінці
+ * відкривав підказки на висоту прокрутки ВИЩЕ поля, тобто за екраном.
+ *
+ * overscroll-contain: докрутивши список до кінця, палець інакше
+ * прокручував сторінку під ним — поле від'їжджало, а панель їхала слідом.
+ */
 export const dropdownPanelClass =
-  'absolute z-[1100] mt-1 w-full min-w-max max-h-80 overflow-y-auto scrollbar-thin rounded-control origin-top ' +
+  'fixed z-[1100] max-h-80 overflow-y-auto overscroll-contain scrollbar-thin rounded-control origin-top ' +
   'border border-line bg-dropdown shadow-overlay'
 
 export const dropdownEmptyClass = 'px-3 py-2 text-center text-sm text-muted'
@@ -166,13 +176,34 @@ export const clearButtonClass =
 /*  Пункти випадайки                                                  */
 /* ------------------------------------------------------------------ */
 
+/*
+ * На телефоні кожен пункт — 45px+ заввишки (py-3 + рядок 16px), незалежно
+ * від розміру поля. Пункти стоять впритул один до одного, тож невидима
+ * зона ::after тут не допоможе — вона накрила б сусідній пункт. Раніше
+ * `md` давав 37.5px, а `sm` — 30px: пальцем обирали сусідній рядок.
+ * Текст — той самий 16px, що й у полі над списком. `md:` повертає
+ * десктопну щільність.
+ */
 const itemSizes: Record<FieldSize, string> = {
-  sm: 'px-2 py-2 text-xs md:py-1.5',
-  md: 'px-3 py-2.5 text-sm md:py-2',
-  lg: 'px-3 py-3 text-base md:py-2.5',
+  sm: `px-2.5 py-3 md:px-2 md:py-1.5 ${fieldTextSizes.sm}`,
+  md: `px-3 py-3 md:py-2 ${fieldTextSizes.md}`,
+  lg: `px-3 py-3 md:py-2.5 ${fieldTextSizes.lg}`,
 }
 
 export const itemBase = 'cursor-pointer transition-colors text-ink'
+
+/*
+ * Пункт меню — UiMenu, UiContextMenu, UiSplitButton і пункти, які
+ * споживач пише в слот `content`. Та сама логіка висоти, що й у пункту
+ * випадайки: 45px на телефоні, щільно на десктопі. Колір тексту НЕ входить
+ * (`text-ink` чи `text-danger` додає місце використання): два класи кольору
+ * на одному елементі сперечалися б порядком у згенерованому CSS.
+ */
+export const menuItemClass =
+  'flex w-full items-center gap-2 px-3 py-3 text-left text-base transition-colors ' +
+  'hover:bg-hover active:bg-hover focus:outline-none focus-visible:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ' +
+  'disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 ' +
+  'md:py-2 md:text-sm'
 export const itemHover = 'hover:bg-hover'
 export const itemHighlighted = 'bg-primary-50 text-accent'
 export const itemSelected = 'font-medium'

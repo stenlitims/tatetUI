@@ -297,11 +297,16 @@ defineExpose({ previous, next, goTo, pause: () => { autoplayPaused.value = true 
 </script>
 
 <template>
+  <!--
+    w-full min-w-0: карусель — блок на всю ширину батька. У flex-рядку без
+    цього її ширину давав max-content слайдів (найдовший абзац у рядок), і
+    на 375px вона виходила за край на 38px з кожного боку.
+  -->
   <section
     role="region"
     aria-roledescription="carousel"
     :aria-label="ariaLabel"
-    class="relative outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
+    class="relative w-full min-w-0 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
     tabindex="0"
     @keydown="onKeydown"
     @mouseenter="hovering = true"

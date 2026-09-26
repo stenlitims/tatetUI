@@ -34,7 +34,7 @@ function choose(value: ThemePreference, event: MouseEvent, close: () => void) {
       <button
         type="button"
         v-bind="triggerAttrs"
-        class="flex h-9 w-9 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="relative flex h-9 w-9 items-center justify-center rounded-control border border-line text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
         aria-label="Тема оформлення"
         @click="toggle"
       >

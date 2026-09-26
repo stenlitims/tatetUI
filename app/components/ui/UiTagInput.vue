@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
-import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
+import { dropdownPanelStyle, listenViewportChanges, observePanelSize } from '~/utils/overlayPosition'
 import {
   dropdownEmptyClass,
   dropdownPanelClass,
@@ -288,53 +288,49 @@ const panelStyle = ref<Record<string, string>>({})
 function updatePosition() {
   const anchor = fieldEl.value
   if (!anchor || typeof window === 'undefined') return
-  const rect = anchor.getBoundingClientRect()
-  const point = computeAnchoredPanelPosition(
-    rect,
-    { width: rect.width, height: panelEl.value?.offsetHeight || 240 },
-    { width: window.innerWidth, height: window.innerHeight },
-    'bottom-start',
-  )
-  panelStyle.value = {
-    top: `${Math.round(point.top)}px`,
-    left: `${Math.round(point.left)}px`,
-    width: `${Math.round(rect.width)}px`,
-    zIndex: String(getOverlayChildZIndex(anchor)),
-  }
+  panelStyle.value = dropdownPanelStyle(anchor, panelEl.value)
 }
 
 /*
  * Поле РОСТЕ: мітки переносяться на новий рядок, і висота тригера
  * змінюється, поки панель відкрита. Слухати лише scroll і resize вікна
  * недостатньо — панель відклеїлася б від поля тієї ж миті, коли мітка
- * перейшла на наступний рядок.
+ * перейшла на наступний рядок. Панель теж міняє висоту на кожен символ
+ * запиту, а visualViewport повідомляє про клавіатуру, що виїхала.
  */
 let fieldObserver: ResizeObserver | null = null
+let stopViewport: (() => void) | null = null
+let stopPanelSize: (() => void) | null = null
+
+function detachReposition() {
+  fieldObserver?.disconnect()
+  fieldObserver = null
+  stopViewport?.()
+  stopViewport = null
+  stopPanelSize?.()
+  stopPanelSize = null
+}
 
 watch(showPanel, async (open) => {
   if (!open) {
-    fieldObserver?.disconnect()
-    window.removeEventListener('scroll', updatePosition, true)
-    window.removeEventListener('resize', updatePosition)
+    detachReposition()
     return
   }
   await nextTick()
   updatePosition()
-  window.addEventListener('scroll', updatePosition, true)
-  window.addEventListener('resize', updatePosition)
-  if (typeof ResizeObserver !== 'undefined' && fieldEl.value) {
+  stopViewport ??= listenViewportChanges(updatePosition)
+  if (typeof ResizeObserver !== 'undefined' && fieldEl.value && !fieldObserver) {
     fieldObserver = new ResizeObserver(updatePosition)
     fieldObserver.observe(fieldEl.value)
   }
 })
 
-onBeforeUnmount(() => {
-  fieldObserver?.disconnect()
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('scroll', updatePosition, true)
-    window.removeEventListener('resize', updatePosition)
-  }
+watch(panelEl, (panel) => {
+  stopPanelSize?.()
+  stopPanelSize = panel ? observePanelSize(panel, updatePosition) : null
 })
+
+onBeforeUnmount(detachReposition)
 
 /*
  * Teleport вмикається лише після монтування. Перевірка

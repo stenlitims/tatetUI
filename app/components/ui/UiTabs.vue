@@ -362,7 +362,10 @@ function tabClass(tab: TabItem) {
 </script>
 
 <template>
-  <div :class="vertical ? 'flex items-start gap-6' : ''">
+  <!-- min-w-0: у flex-рядку батька вкладки інакше тримали б ширину всіх
+       кнопок у рядок (max-content), і прокрутка списку вкладок на вузькому
+       екрані не вмикалася б ніколи — ряд виходив за край. -->
+  <div :class="vertical ? 'flex min-w-0 items-start gap-6' : 'min-w-0'">
     <div :class="scrollerClass">
       <div
         ref="tablistEl"

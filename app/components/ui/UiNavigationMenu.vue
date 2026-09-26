@@ -6,7 +6,13 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId,
  * веде на обгортку над RouterLink, а рядок 'NuxtLink' дав би мертвий тег.
  */
 import { NuxtLink } from '#components'
-import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
+import {
+  computeAnchoredPanelPosition,
+  getOverlayChildZIndex,
+  getVisibleViewport,
+  listenViewportChanges,
+  viewportMaxWidth,
+} from '~/utils/overlayPosition'
 
 export interface NavigationMenuChild {
   id: string
@@ -175,7 +181,7 @@ const navEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
 const triggerRefs = new Map<string, HTMLElement>()
 const teleportReady = shallowRef(false)
-const panelPosition = shallowRef({ top: '0px', left: '0px', zIndex: '1100' })
+const panelPosition = shallowRef<Record<string, string>>({ top: '0px', left: '0px', zIndex: '1100' })
 const baseId = useId()
 
 /*
@@ -256,15 +262,17 @@ function updatePosition() {
   const trigger = triggerRefs.get(item.id)
   if (!trigger) return
   const rect = trigger.getBoundingClientRect()
+  const viewport = getVisibleViewport()
   const point = computeAnchoredPanelPosition(
     rect,
     { width: panelEl.value?.offsetWidth || 320, height: panelEl.value?.offsetHeight || 160 },
-    { width: window.innerWidth, height: window.innerHeight },
+    viewport,
     props.placement,
   )
   panelPosition.value = {
     top: `${Math.round(point.top)}px`,
     left: `${Math.round(point.left)}px`,
+    maxWidth: viewportMaxWidth(viewport),
     zIndex: String(getOverlayChildZIndex(trigger)),
   }
 }
@@ -364,6 +372,8 @@ function onPointerDown(event: PointerEvent) {
   close(false)
 }
 
+let stopViewport: (() => void) | null = null
+
 watch(openId, async (value) => {
   if (!value) return
   await nextTick()
@@ -373,14 +383,12 @@ watch(openId, async (value) => {
 onMounted(() => {
   teleportReady.value = true
   document.addEventListener('pointerdown', onPointerDown, true)
-  window.addEventListener('resize', updatePosition, { passive: true })
-  window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
+  stopViewport = listenViewportChanges(updatePosition)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onPointerDown, true)
-  window.removeEventListener('resize', updatePosition)
-  window.removeEventListener('scroll', updatePosition, true)
+  stopViewport?.()
   triggerRefs.clear()
 })
 </script>

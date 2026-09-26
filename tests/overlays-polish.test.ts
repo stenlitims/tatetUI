@@ -570,10 +570,10 @@ describe('UiTooltip', () => {
     vi.useFakeTimers()
     await mount(tooltip)
     const wrapper = document.getElementById('hint')!.parentElement!
-    wrapper.dispatchEvent(new MouseEvent('mouseenter'))
+    wrapper.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))
     await vi.advanceTimersByTimeAsync(200)
     const panel = document.querySelector<HTMLElement>('[role="tooltip"]')!
-    wrapper.dispatchEvent(new MouseEvent('mouseleave'))
+    wrapper.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }))
     vi.advanceTimersByTime(50)
     panel.dispatchEvent(new MouseEvent('mouseenter'))
     vi.advanceTimersByTime(500)

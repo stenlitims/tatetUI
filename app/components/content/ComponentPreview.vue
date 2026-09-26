@@ -135,7 +135,7 @@ function tabClass(value: 'preview' | 'code') {
 
     <div
       v-show="tab === 'preview'"
-      class="flex flex-wrap items-center justify-center gap-4 p-8"
+      class="flex flex-wrap items-center justify-center gap-4 px-4 py-8 sm:p-8"
       :class="[stage, bare ? '' : 'preview-stage bg-main']"
     >
       <component :is="Demo" />

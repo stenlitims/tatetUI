@@ -138,6 +138,23 @@ const ROUNDING: Record<NonNullable<typeof props.position>, string> = {
 }
 
 /*
+ * Краї екрана, до яких прилягає панель, можуть лежати під вирізом камери,
+ * рядком стану чи заокругленням кутів (iPhone у ландшафті, сайт,
+ * встановлений на головний екран). env() дорівнює нулю там, де вирізу
+ * немає, тож на десктопі це не змінює нічого. Нижній край уже враховано
+ * у футері й паддінгу вмісту.
+ *
+ * Працює лише з `viewport-fit=cover` у meta viewport — без нього браузер
+ * сам тримає сторінку поза вирізами, і всі env() дорівнюють нулю.
+ */
+const SAFE_AREA: Record<NonNullable<typeof props.position>, string> = {
+  left: 'pl-[env(safe-area-inset-left)] pt-[env(safe-area-inset-top)]',
+  right: 'pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]',
+  top: 'pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] pt-[env(safe-area-inset-top)]',
+  bottom: 'pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]',
+}
+
+/*
  * Розміри розділені по осях: та сама назва `md` означає ширину для
  * бокового drawer'а і висоту для нижнього.
  *
@@ -155,13 +172,18 @@ const HORIZONTAL_SIZES: Record<NonNullable<typeof props.size>, string> = {
   auto: 'w-auto max-w-[95vw]',
 }
 
+/*
+ * dvh, а не vh. На телефоні 1vh рахується від ВЕЛИКОГО вікна — без панелі
+ * адреси, — тож нижній sheet `xl` (90vh) при видимій панелі браузера був
+ * вищим за екран, і його шапка з хрестиком ховалася під верхнім краєм.
+ */
 const VERTICAL_SIZES: Record<NonNullable<typeof props.size>, string> = {
-  xs: 'h-[30vh]',
-  sm: 'h-[45vh]',
-  md: 'h-[60vh]',
-  lg: 'h-[75vh]',
-  xl: 'h-[90vh]',
-  '2xl': 'h-[95vh]',
+  xs: 'h-[30dvh]',
+  sm: 'h-[45dvh]',
+  md: 'h-[60dvh]',
+  lg: 'h-[75dvh]',
+  xl: 'h-[90dvh]',
+  '2xl': 'h-[95dvh]',
   full: 'h-[100dvh]',
   auto: 'h-auto max-h-[85dvh]',
 }
@@ -374,6 +396,7 @@ onBeforeUnmount(() => {
             sizeClass,
             isHorizontal ? 'h-full' : 'w-full',
             ROUNDING[position],
+            SAFE_AREA[position],
             position === 'right' ? 'border-l' : '',
             position === 'left' ? 'border-r' : '',
             position === 'bottom' ? 'border-t' : '',
@@ -443,7 +466,7 @@ onBeforeUnmount(() => {
           </div>
 
           <div
-            class="scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+            class="scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
             :class="contentPaddingClass"
           >
             <slot />

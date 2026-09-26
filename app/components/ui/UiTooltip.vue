@@ -107,6 +107,62 @@ function hide() {
   layer.deactivate()
 }
 
+/*
+ * Дотик. Наведення на телефоні немає, але браузер після тапу шле сумісні
+ * mouseenter — і підказка з'являлася через 200 мс ПІСЛЯ натискання та
+ * лишалася висіти, поки не торкнешся чогось іншого. Тому наведення
+ * слухаємо через pointer-події й дотик із них відкидаємо, а для дотику є
+ * власний жест, як на Android: довге натискання показує підказку, відпускання
+ * ховає її через паузу на дочитування. Клік, що йде слідом за довгим
+ * натисканням, гаситься: людина хотіла прочитати, а не натиснути.
+ */
+const LONG_PRESS_MS = 500
+const TOUCH_LINGER_MS = 1500
+let longPressTimer: ReturnType<typeof setTimeout> | undefined
+let lingerTimer: ReturnType<typeof setTimeout> | undefined
+let shownByTouch = false
+
+function clearTouchTimers() {
+  if (longPressTimer) clearTimeout(longPressTimer)
+  if (lingerTimer) clearTimeout(lingerTimer)
+  longPressTimer = undefined
+  lingerTimer = undefined
+}
+
+function onPointerEnter(event: PointerEvent) {
+  if (event.pointerType !== 'touch') onTriggerEnter()
+}
+
+function onPointerLeave(event: PointerEvent) {
+  if (event.pointerType !== 'touch') onTriggerLeave()
+}
+
+function onTouchEnd() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = undefined
+  }
+  if (!shownByTouch) return
+  if (lingerTimer) clearTimeout(lingerTimer)
+  lingerTimer = setTimeout(() => {
+    lingerTimer = undefined
+    shownByTouch = false
+    hide()
+  }, TOUCH_LINGER_MS)
+}
+
+function onClickCapture(event: MouseEvent) {
+  if (!shownByTouch) return
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+function onContextMenu(event: MouseEvent) {
+  // Android на довгому натисканні шле contextmenu — системне меню виділення
+  // тексту поверх підказки ні до чого.
+  if (shownByTouch || longPressTimer) event.preventDefault()
+}
+
 function onTriggerEnter() {
   overTrigger = true
   if (hideTimer) {
@@ -181,8 +237,16 @@ function onFocusOut(event: FocusEvent) {
 }
 
 /** Натискання ховає підказку: людина вже діє, підказка лише заступає результат. */
-function onPointerDown() {
+function onPointerDown(event: PointerEvent) {
+  clearTouchTimers()
+  shownByTouch = false
   hide()
+  if (event.pointerType !== 'touch' || props.disabled) return
+  longPressTimer = setTimeout(() => {
+    longPressTimer = undefined
+    shownByTouch = true
+    show()
+  }, LONG_PRESS_MS)
 }
 
 function updatePosition() {
@@ -227,6 +291,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  clearTouchTimers()
   hide()
   if (typeof document !== 'undefined') {
     window.removeEventListener('scroll', onScrollOrResize, true)
@@ -241,14 +306,20 @@ watch(tooltipEl, (el) => {
 </script>
 
 <template>
+  <!-- -webkit-touch-callout: інакше iOS на довгому натисканні показує
+       власну виноску поверх підказки. -->
   <span
     ref="wrapperEl"
-    class="inline-flex"
-    @mouseenter="onTriggerEnter"
-    @mouseleave="onTriggerLeave"
+    class="inline-flex [-webkit-touch-callout:none]"
+    @pointerenter="onPointerEnter"
+    @pointerleave="onPointerLeave"
     @focusin="onFocusIn"
     @focusout="onFocusOut"
     @pointerdown="onPointerDown"
+    @pointerup="onTouchEnd"
+    @pointercancel="onTouchEnd"
+    @click.capture="onClickCapture"
+    @contextmenu="onContextMenu"
   >
     <slot :described-by="describedBy" />
 

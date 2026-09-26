@@ -134,7 +134,14 @@ const editor = useEditor({
        * оформлення жило б у scoped-стилях редактора, публічній сторінці
        * довелося б мати власну копію — і копії розійшлися б за тиждень.
        */
-      class: 'ui-prose focus:outline-none',
+      /*
+       * max-md:text-[16px]: iOS Safari зумує сторінку при фокусі на
+       * будь-якому редагованому елементі з font-size < 16px, і contenteditable
+       * тут не виняток. Корінь сайту 15px, тож без цього кожен дотик до
+       * редактора на iPhone збільшував сторінку. Заголовки в ui-prose — у em,
+       * тож масштабуються разом.
+       */
+      class: 'ui-prose focus:outline-none max-md:text-[16px]',
       'aria-label': props.ariaLabel,
       'aria-readonly': String(!!props.readonly),
       'aria-disabled': String(!!props.disabled),

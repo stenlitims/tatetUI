@@ -158,7 +158,14 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: 'uk' },
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        /*
+         * viewport-fit=cover — без нього iOS тримає сторінку поза вирізом
+         * камери й заокругленими кутами, а env(safe-area-inset-*) завжди
+         * дорівнює нулю. Тобто всі безпечні зони бібліотеки (футер модалки,
+         * нижній sheet, тостер, UiActionBar) на iPhone просто не діяли.
+         * Відповідно, хром сайту сам тримає ці зони (див. layouts).
+         */
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'color-scheme', content: 'light dark' },
         /*
          * theme-color двома записами з media, а не одним.

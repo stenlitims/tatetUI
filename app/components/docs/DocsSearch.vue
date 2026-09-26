@@ -113,7 +113,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onGlobalKeydown))
   <div>
     <button
       type="button"
-      class="flex h-9 items-center gap-2 rounded-control border border-line px-2.5 text-sm text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      class="relative flex h-9 items-center gap-2 rounded-control border border-line px-2.5 text-sm text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
       @click="open()"
     >
       <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">

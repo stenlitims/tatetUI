@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
 import { focusNextAfter } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
-import { getOverlayChildZIndex } from '~/utils/overlayPosition'
+import { getOverlayChildZIndex, getVisibleViewport, viewportMaxWidth } from '~/utils/overlayPosition'
 
 const props = withDefaults(
   defineProps<{
@@ -53,7 +53,7 @@ const targetEl = ref<HTMLElement | null>(null)
 const menuEl = ref<HTMLElement | null>(null)
 const teleportReady = shallowRef(false)
 const point = shallowRef({ x: 0, y: 0 })
-const position = shallowRef({ top: '0px', left: '0px', zIndex: '1100' })
+const position = shallowRef<Record<string, string>>({ top: '0px', left: '0px', zIndex: '1100' })
 const menuId = `${useId()}-context-menu`
 
 const targetAttrs = computed(() => ({
@@ -99,9 +99,15 @@ function updatePosition() {
   const width = menuEl.value?.offsetWidth || 224
   const height = menuEl.value?.offsetHeight || 160
   const edge = 8
+  // Видима область, а не innerWidth/innerHeight: при pinch-zoom на
+  // телефоні меню інакше відкривалося в тій частині сторінки, якої не видно.
+  const view = getVisibleViewport()
+  const top = view.top ?? 0
+  const left = view.left ?? 0
   position.value = {
-    top: `${Math.round(Math.max(edge, Math.min(point.value.y, window.innerHeight - height - edge)))}px`,
-    left: `${Math.round(Math.max(edge, Math.min(point.value.x, window.innerWidth - width - edge)))}px`,
+    top: `${Math.round(Math.max(top + edge, Math.min(point.value.y, top + view.height - height - edge)))}px`,
+    left: `${Math.round(Math.max(left + edge, Math.min(point.value.x, left + view.width - width - edge)))}px`,
+    maxWidth: viewportMaxWidth(view),
     zIndex: String(getOverlayChildZIndex(targetEl.value)),
   }
 }
@@ -322,7 +328,7 @@ defineExpose({ show, close })
         role="menu"
         :aria-label="ariaLabel"
         data-ui-context-menu
-        class="scrollbar-thin origin-top-left fixed max-h-80 overflow-y-auto rounded-control border border-line bg-dropdown p-1 text-ink shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="scrollbar-thin origin-top-left fixed max-h-80 overflow-y-auto overscroll-contain rounded-control border border-line bg-dropdown p-1 text-ink shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :style="{ ...position, width }"
         tabindex="-1"
         @keydown="onMenuKeydown"

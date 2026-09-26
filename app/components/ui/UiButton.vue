@@ -163,7 +163,10 @@ const isLink = computed(() => props.variant === 'link')
 const classes = computed(() => [
   // Перелік властивостей явний: `transition` (all) анімував би ще й width під
   // час зміни тексту, і кнопка «пливла» б. Тривалість — типова з токенів.
-  'relative inline-flex items-center rounded-control font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] select-none',
+  // whitespace-nowrap: висота кнопки фіксована (h-10), і підпис, що
+  // переносився у вузькому ряду на телефоні, виходив за заливку другим
+  // рядком («Завантажити / дані» поверх сусіднього рядка).
+  'relative inline-flex items-center whitespace-nowrap rounded-control font-medium transition-[color,background-color,border-color,box-shadow,transform,opacity] select-none',
   // Масштаб натискання — лише в кнопок з поверхнею: у link стискати нема
   // чого, і текст посеред абзацу «підстрибував» би.
   isLink.value ? '' : 'active:scale-[0.98]',

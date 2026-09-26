@@ -197,7 +197,7 @@ function showAll() {
             v-for="option in (['sm', 'md'] as const)"
             :key="option"
             type="button"
-            class="flex-1 rounded-control border px-2 py-1.5 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            class="h-12 flex-1 rounded-control border px-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
             :class="
               density === option
                 ? 'border-primary-200 bg-primary-50 text-accent'
@@ -221,7 +221,7 @@ function showAll() {
         <div
           v-for="(header, index) in headers"
           :key="header.value"
-          class="flex items-center gap-2 px-2 py-1.5 transition-colors hover:bg-hover"
+          class="flex items-center gap-2 px-2 transition-colors hover:bg-hover md:py-1.5"
           :draggable="index >= (pinned ? 1 : 0)"
           @dragstart="onDragStart(index, $event)"
           @dragover.prevent
@@ -239,10 +239,12 @@ function showAll() {
             </svg>
           </span>
 
-          <label class="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink">
+          <!-- На дотику ціль — увесь рядок мітки (min-h-12), а не 13px
+               нативного квадратика. -->
+          <label class="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-[15px] text-ink md:min-h-0 md:gap-2 md:text-sm">
             <input
               type="checkbox"
-              class="shrink-0 accent-[var(--accent-solid)]"
+              class="h-4 w-4 shrink-0 accent-[var(--accent-solid)] md:h-auto md:w-auto"
               :checked="header.visible !== false"
               :disabled="header.visible !== false && !canHide(header)"
               @change="toggleVisibility(header)"
@@ -278,7 +280,7 @@ function showAll() {
           <input
             v-if="!header.flex"
             type="number"
-            class="w-16 shrink-0 rounded-control border border-line bg-input px-1.5 py-1 text-right text-xs tabular-nums text-ink transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
+            class="h-11 w-16 shrink-0 rounded-control border border-line bg-input px-1.5 text-right text-[16px] tabular-nums text-ink md:h-auto md:py-1 md:text-xs transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
             :value="header.width"
             :min="40"
             :max="800"
@@ -293,14 +295,14 @@ function showAll() {
       <div class="flex gap-1 border-t border-line px-2 py-2">
         <button
           type="button"
-          class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
           @click="showAll"
         >
           Показати всі
         </button>
         <button
           type="button"
-          class="flex-1 rounded-control px-2 py-1.5 text-xs text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
           @click="emit('reset')"
         >
           Скинути

@@ -31,10 +31,12 @@ const italic = shallowRef(false)
       <UiButton variant="outline" size="sm" label="Збільшити" :disabled="zoom >= 200" @click="zoom += 25">+</UiButton>
     </UiButtonGroup>
 
+    <!-- Block-група ділить ширину порівну, а підпис кнопки не переноситься:
+         три слова влазять і в 320px екран, довші підписи — ні. -->
     <UiButtonGroup label="Дії з файлом" block>
-      <UiButton variant="outline">Завантажити</UiButton>
+      <UiButton variant="outline">Друк</UiButton>
+      <UiButton variant="outline">Експорт</UiButton>
       <UiButton variant="outline">Поділитися</UiButton>
-      <UiButton variant="outline">Перейменувати</UiButton>
     </UiButtonGroup>
   </div>
 </template>

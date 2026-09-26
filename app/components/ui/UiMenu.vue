@@ -12,8 +12,11 @@ import {
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import {
-  computeAnchoredPanelPosition,
   getOverlayChildZIndex,
+  getVisibleViewport,
+  listenViewportChanges,
+  placeAnchoredPanel,
+  viewportMaxWidth,
   type AnchoredPlacement,
 } from '~/utils/overlayPosition'
 
@@ -132,30 +135,28 @@ function updatePosition() {
 
   const panel = menuEl.value
   const rect = trigger.getBoundingClientRect()
-  const viewport = { width: window.innerWidth, height: window.innerHeight }
-  const placement = PLACEMENT[props.placement]
-  // Запасні розміри на перший прохід: до рендеру панель ще не має габаритів.
+  const viewport = getVisibleViewport()
   // Висота — ПРИРОДНА (scrollHeight + рамки), а не поточна: коли панель уже
   // обмежена max-height, offsetHeight бреше про те, скільки їй треба.
-  const width = panel?.offsetWidth ?? 200
-  const natural = panel ? panel.scrollHeight + (panel.offsetHeight - panel.clientHeight) : 100
-
-  let point = computeAnchoredPanelPosition(rect, { width, height: natural }, viewport, placement)
-  const fits = natural <= point.maxHeight
-  if (!fits) {
-    point = computeAnchoredPanelPosition(rect, { width, height: point.maxHeight }, viewport, placement)
-  }
+  const point = placeAnchoredPanel(rect, panel, viewport, PLACEMENT[props.placement], {
+    fallback: { width: 200, height: 100 },
+  })
 
   const style: Record<string, string> = {
     top: `${Math.round(point.top)}px`,
     left: `${Math.round(point.left)}px`,
+    // Не вужче за тригер: меню «CSV / XLSX» під кнопкою «Експорт» було
+    // 54px завширшки — вужче за саму кнопку. І не ширше за екран: width
+    // споживача (20rem) на 320px телефоні виходила за край.
+    minWidth: `${Math.round(Math.min(rect.width, viewport.width - 16))}px`,
+    maxWidth: viewportMaxWidth(viewport),
     zIndex: String(getOverlayChildZIndex(trigger)),
   }
   // Прокрутка лише тоді, коли вміст справді не влазить у вікно. Постійний
   // overflow обрізав би кільця фокуса пунктів у меню, яким прокрутка не
   // потрібна, а без жодного обмеження нижні пункти довгого меню
   // опинялися за краєм екрана — недосяжні ні мишею, ні стрілками.
-  if (!fits) {
+  if (!point.fits) {
     style.maxHeight = `${Math.floor(point.maxHeight)}px`
     style.overflowY = 'auto'
   }
@@ -336,18 +337,18 @@ watch(menuEl, (el) => {
   if (el) void nextTick(updatePosition)
 })
 
+// Прокрутка контейнерів, resize і visualViewport (клавіатура, pinch-zoom):
+// без цього відкрита панель лишалася б висіти на місці, поки якір від'їжджає.
+let stopViewport: (() => void) | null = null
+
 onMounted(() => {
   teleportReady.value = true
-  window.addEventListener('resize', onScrollOrResize, { passive: true })
-  // capture: подія scroll не спливає, тож без цього відкрита панель
-  // лишалася б висіти на місці, поки контейнер під нею від'їжджає.
-  window.addEventListener('scroll', onScrollOrResize, { passive: true, capture: true })
+  stopViewport = listenViewportChanges(onScrollOrResize)
 })
 
 onBeforeUnmount(() => {
   resetTypeahead()
-  window.removeEventListener('resize', onScrollOrResize)
-  window.removeEventListener('scroll', onScrollOrResize, true)
+  stopViewport?.()
 })
 
 defineExpose({
@@ -388,7 +389,7 @@ defineExpose({
           ref="menuEl"
           :role="panelRole === 'none' ? undefined : panelRole"
           :aria-label="ariaLabel"
-          class="scrollbar-thin fixed rounded-control border border-line bg-dropdown py-1 text-ink shadow-overlay"
+          class="scrollbar-thin fixed overscroll-contain rounded-control border border-line bg-dropdown py-1 text-ink shadow-overlay"
           :class="ORIGIN[resolvedPlacement]"
           :style="panelStyle"
           @keydown="onPanelKeydown"

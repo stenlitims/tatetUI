@@ -28,7 +28,7 @@ import {
   type FieldSize,
 } from '~/utils/uiFieldStyles'
 import { orderSelection } from '~/utils/multiSelect'
-import { getOverlayChildZIndex } from '~/utils/overlayPosition'
+import { dropdownPanelStyle, listenViewportChanges, observePanelSize } from '~/utils/overlayPosition'
 
 // class/style — на обгортку, решта атрибутів (aria-label, data-*) — на тригер.
 defineOptions({ inheritAttrs: false })
@@ -184,35 +184,33 @@ const panelStyle = ref<Record<string, string>>({})
 function updatePosition() {
   const anchor = triggerEl.value
   if (!anchor) return
-  const rect = anchor.getBoundingClientRect()
-  const margin = 4
-  const needed = dropdownEl.value?.offsetHeight || 240
-  const spaceBelow = window.innerHeight - rect.bottom
-  const spaceAbove = rect.top
-
-  const openBelow = spaceBelow >= needed || spaceBelow >= spaceAbove
-  const top = openBelow ? rect.bottom + margin : rect.top - needed - margin
-
-  panelStyle.value = {
-    position: 'fixed',
-    top: `${Math.max(margin, top)}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    zIndex: String(getOverlayChildZIndex(anchor)),
-  }
+  panelStyle.value = dropdownPanelStyle(anchor, dropdownEl.value)
 }
 
-// capture: подія scroll не спливає — без нього панель висить на місці,
-// поки список під нею від'їжджає у внутрішніх контейнерах.
+/*
+ * Прокрутка будь-якого контейнера (capture — scroll не спливає), resize і
+ * visualViewport: екранна клавіатура, що виїхала вже після відкриття,
+ * інакше накривала б нижні пункти. Плюс розмір самої панелі — список
+ * міняє висоту під час фільтрації чи підвантаження.
+ */
+let stopViewport: (() => void) | null = null
+let stopPanelSize: (() => void) | null = null
+
 function attachReposition() {
-  window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
-  window.addEventListener('resize', updatePosition, { passive: true })
+  stopViewport ??= listenViewportChanges(updatePosition)
 }
 
 function detachReposition() {
-  window.removeEventListener('scroll', updatePosition, true)
-  window.removeEventListener('resize', updatePosition)
+  stopViewport?.()
+  stopViewport = null
+  stopPanelSize?.()
+  stopPanelSize = null
 }
+
+watch(dropdownEl, (panel) => {
+  stopPanelSize?.()
+  stopPanelSize = panel ? observePanelSize(panel, updatePosition) : null
+})
 
 /* ---------------------------------------------------------------- */
 /*  Відкриття / закриття                                            */

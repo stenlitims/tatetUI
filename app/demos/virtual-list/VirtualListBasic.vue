@@ -19,7 +19,7 @@ const items: Row[] = Array.from({ length: 10_000 }, (_, i) => ({
 <template>
   <UiVirtualList :items="items" :item-height="36" height="16rem">
     <template #item="{ item, index }">
-      <div class="flex items-center justify-between gap-3 border-b border-line px-3">
+      <div class="flex h-full items-center justify-between gap-3 border-b border-line px-3">
         <span class="min-w-0 truncate text-sm">{{ item.label }}</span>
         <span class="shrink-0 text-xs tabular-nums text-muted">#{{ index }} · {{ item.value }}</span>
       </div>

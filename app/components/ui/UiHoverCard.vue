@@ -2,7 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
-import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
+import {
+  computeAnchoredPanelPosition,
+  getOverlayChildZIndex,
+  getVisibleViewport,
+  listenViewportChanges,
+  viewportMaxWidth,
+} from '~/utils/overlayPosition'
 
 const props = withDefaults(
   defineProps<{
@@ -71,9 +77,10 @@ const panelEl = ref<HTMLElement | null>(null)
 const teleportReady = shallowRef(false)
 const panelHovered = shallowRef(false)
 const triggerFocused = shallowRef(false)
-const position = shallowRef({ top: '0px', left: '0px', zIndex: '1100' })
+const position = shallowRef<Record<string, string>>({ top: '0px', left: '0px', zIndex: '1100' })
 const panelId = `${useId()}-hover-card`
 let openTimer: number | null = null
+let stopViewport: (() => void) | null = null
 let closeTimer: number | null = null
 
 /*
@@ -116,15 +123,17 @@ function updatePosition() {
   const trigger = triggerEl.value
   if (!trigger || typeof window === 'undefined') return
   const rect = trigger.getBoundingClientRect()
+  const viewport = getVisibleViewport()
   const point = computeAnchoredPanelPosition(
     rect,
     { width: panelEl.value?.offsetWidth || 320, height: panelEl.value?.offsetHeight || 160 },
-    { width: window.innerWidth, height: window.innerHeight },
+    viewport,
     props.placement,
   )
   position.value = {
     top: `${Math.round(point.top)}px`,
     left: `${Math.round(point.left)}px`,
+    maxWidth: viewportMaxWidth(viewport),
     zIndex: String(getOverlayChildZIndex(trigger)),
   }
 }
@@ -180,13 +189,32 @@ function scheduleClose() {
   }, Math.max(0, props.closeDelay))
 }
 
+/*
+ * Дотик картку НЕ відкриває. Наведення на телефоні немає, а сумісні
+ * mouseenter і фокус, які браузер шле слідом за тапом по посиланню,
+ * відкривали картку поверх переходу — вона блимала на мить перед новою
+ * сторінкою або лишалася висіти, якщо посилання вело в межах сторінки.
+ * Вміст картки — додатковий (у тригера є власна дія), тож на дотику його
+ * просто немає, як і в нативних прев'ю посилань.
+ */
+let lastTouchAt = Number.NEGATIVE_INFINITY
+
+function onRootTouchstart(event: TouchEvent) {
+  lastTouchAt = event.timeStamp
+}
+
+function fromTouch(event: Event) {
+  return event.timeStamp - lastTouchAt < 1000
+}
+
 function onTriggerFocus(event: FocusEvent) {
   triggerEl.value = event.currentTarget as HTMLElement
   triggerFocused.value = true
-  scheduleOpen()
+  if (!fromTouch(event)) scheduleOpen()
 }
 
 function onTriggerMouseenter(event: MouseEvent) {
+  if (fromTouch(event)) return
   triggerEl.value = event.currentTarget as HTMLElement
   scheduleOpen()
 }
@@ -243,6 +271,7 @@ function onPanelLeave() {
 }
 
 function onRootMouseenter(event: MouseEvent) {
+  if (fromTouch(event)) return
   triggerEl.value = rootEl.value?.querySelector<HTMLElement>('a, button, [tabindex]')
     ?? (event.target instanceof HTMLElement ? event.target : rootEl.value)
   scheduleOpen()
@@ -260,22 +289,20 @@ watch(() => props.modelValue, async (visible) => {
 
 onMounted(() => {
   teleportReady.value = true
-  window.addEventListener('resize', onViewportChange, { passive: true })
-  window.addEventListener('scroll', onViewportChange, { passive: true, capture: true })
+  stopViewport = listenViewportChanges(onViewportChange)
   if (props.modelValue) layer.activate()
 })
 
 onBeforeUnmount(() => {
   clearTimers()
-  window.removeEventListener('resize', onViewportChange)
-  window.removeEventListener('scroll', onViewportChange, true)
+  stopViewport?.()
 })
 
 defineExpose({ open, close })
 </script>
 
 <template>
-  <span ref="rootEl" class="contents" @mouseenter="onRootMouseenter">
+  <span ref="rootEl" class="contents" @mouseenter="onRootMouseenter" @touchstart.passive="onRootTouchstart">
     <slot name="trigger" :open="modelValue" :trigger-attrs="triggerAttrs" />
   </span>
 

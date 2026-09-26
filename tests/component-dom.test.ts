@@ -225,19 +225,19 @@ describe('базові DOM та ARIA контракти', () => {
       },
     )
     const wrapper = mounted.host.querySelector<HTMLElement>('span')!
-    wrapper.dispatchEvent(new MouseEvent('mouseenter'))
+    wrapper.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))
     wrapper.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
     expect(vi.getTimerCount()).toBe(1)
-    wrapper.dispatchEvent(new MouseEvent('mouseleave'))
+    wrapper.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }))
     vi.advanceTimersByTime(100)
     expect(document.body.querySelector('[role="tooltip"]')).toBeNull()
 
-    wrapper.dispatchEvent(new MouseEvent('mouseenter'))
+    wrapper.dispatchEvent(new PointerEvent('pointerenter', { pointerType: 'mouse' }))
     await vi.advanceTimersByTimeAsync(100)
     await nextTick()
     const tooltip = document.body.querySelector<HTMLElement>('[role="tooltip"]')!
     expect(mounted.host.querySelector('button')?.getAttribute('aria-describedby')).toBe(tooltip.id)
-    wrapper.dispatchEvent(new MouseEvent('mouseleave'))
+    wrapper.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }))
     await nextTick()
     vi.runAllTimers()
     mounted.unmount()

@@ -11,7 +11,7 @@ import {
   useId,
   watch,
 } from 'vue'
-import { getOverlayChildZIndex } from '~/utils/overlayPosition'
+import { dropdownPanelStyle, listenViewportChanges, observePanelSize } from '~/utils/overlayPosition'
 import {
   clearButtonClass,
   dropdownEmptyClass,
@@ -146,41 +146,35 @@ const panelStyle = ref<Record<string, string>>({})
  * копіюватись у чужий проєкт без жодної нової залежності.
  */
 function updatePosition() {
-  const trigger = inputEl.value
-  if (!trigger) return
-  const rect = trigger.getBoundingClientRect()
-  const margin = 4
-  const needed = dropdownEl.value?.offsetHeight || 240
-  const spaceBelow = window.innerHeight - rect.bottom
-  const spaceAbove = rect.top
-
-  // Відкриваємо вгору лише якщо знизу справді не влазить І згори більше.
-  const openBelow = spaceBelow >= needed || spaceBelow >= spaceAbove
-  const top = openBelow ? rect.bottom + margin : rect.top - needed - margin
-
-  panelStyle.value = {
-    position: 'fixed',
-    top: `${Math.max(margin, top)}px`,
-    left: `${rect.left}px`,
-    width: `${rect.width}px`,
-    zIndex: String(getOverlayChildZIndex(trigger)),
-  }
+  const anchor = inputEl.value
+  if (!anchor) return
+  panelStyle.value = dropdownPanelStyle(anchor, dropdownEl.value)
 }
 
 /*
- * capture: true — щоб ловити прокрутку і у ВНУТРІШНІХ контейнерах.
- * Подія scroll не спливає, тож без capture відкрита панель лишалася б
- * висіти на місці, поки список під нею від'їжджає.
+ * Прокрутка будь-якого контейнера (capture — scroll не спливає), resize і
+ * visualViewport: екранна клавіатура, що виїхала вже після відкриття,
+ * інакше накривала б нижні пункти. Плюс розмір самої панелі — список
+ * міняє висоту під час фільтрації чи підвантаження.
  */
+let stopViewport: (() => void) | null = null
+let stopPanelSize: (() => void) | null = null
+
 function attachReposition() {
-  window.addEventListener('scroll', updatePosition, { passive: true, capture: true })
-  window.addEventListener('resize', updatePosition, { passive: true })
+  stopViewport ??= listenViewportChanges(updatePosition)
 }
 
 function detachReposition() {
-  window.removeEventListener('scroll', updatePosition, true)
-  window.removeEventListener('resize', updatePosition)
+  stopViewport?.()
+  stopViewport = null
+  stopPanelSize?.()
+  stopPanelSize = null
 }
+
+watch(dropdownEl, (panel) => {
+  stopPanelSize?.()
+  stopPanelSize = panel ? observePanelSize(panel, updatePosition) : null
+})
 
 /* ---------------------------------------------------------------- */
 /*  Відкриття / закриття                                            */

@@ -409,7 +409,7 @@ onBeforeUnmount(() => {
                   :id="optionId(row.index!)"
                   role="option"
                   :aria-selected="row.index === activeIndex"
-                  class="flex cursor-pointer items-center justify-between gap-3 rounded-control px-2.5 py-2.5 text-sm transition-colors md:py-2"
+                  class="flex cursor-pointer items-center justify-between gap-3 rounded-control px-2.5 py-3 text-base transition-colors md:py-2 md:text-sm"
                   :class="row.index === activeIndex ? 'bg-primary-50 text-accent' : 'text-ink hover:bg-hover'"
                   @pointermove="onRowPointerMove(row.index!)"
                   @click="selectAt(row.index!)"

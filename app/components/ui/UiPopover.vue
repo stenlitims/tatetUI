@@ -2,7 +2,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, useId, watch } from 'vue'
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
-import { computeAnchoredPanelPosition, getOverlayChildZIndex } from '~/utils/overlayPosition'
+import {
+  getOverlayChildZIndex,
+  getVisibleViewport,
+  listenViewportChanges,
+  placeAnchoredPanel,
+  viewportMaxWidth,
+} from '~/utils/overlayPosition'
 
 const props = withDefaults(
   defineProps<{
@@ -130,18 +136,21 @@ function updatePosition() {
   const anchor = focusableTrigger() ?? triggerEl.value
   if (!anchor) return
   const rect = anchor.getBoundingClientRect()
-  const panel = { width: panelEl.value?.offsetWidth ?? 240, height: panelEl.value?.offsetHeight ?? 160 }
-  const position = computeAnchoredPanelPosition(
-    rect,
-    panel,
-    { width: window.innerWidth, height: window.innerHeight },
-    props.placement,
-  )
+  const viewport = getVisibleViewport()
+  const position = placeAnchoredPanel(rect, panelEl.value, viewport, props.placement, {
+    fallback: { width: 240, height: 160 },
+  })
   panelStyle.value = {
     position: 'fixed',
     top: `${Math.round(position.top)}px`,
     left: `${Math.round(position.left)}px`,
     width: props.width || 'auto',
+    // width споживача (20rem) на 320px екрані виходила за край — вікно
+    // сильніше за бажану ширину.
+    maxWidth: viewportMaxWidth(viewport),
+    // Над клавіатурою форма в поповері може не влізти — тоді вона
+    // прокручується, а не ховає нижні поля під краєм.
+    ...(position.fits ? {} : { maxHeight: `${Math.floor(position.maxHeight)}px`, overflowY: 'auto' }),
     zIndex: String(getOverlayChildZIndex(anchor)),
   }
 }
@@ -238,10 +247,13 @@ watch(() => props.modelValue, (openValue) => {
   }
 })
 
+// visualViewport теж: поле всередині поповера відкриває клавіатуру, і
+// панель мусить піднятися над нею, а не лишитися під нею.
+let stopViewport: (() => void) | null = null
+
 onMounted(() => {
   teleportReady.value = true
-  window.addEventListener('resize', onViewportChange, { passive: true })
-  window.addEventListener('scroll', onViewportChange, { passive: true, capture: true })
+  stopViewport = listenViewportChanges(onViewportChange)
   // Відкритий із першого рендеру: watch не спрацьовує на початкове значення.
   if (props.modelValue) {
     layer.activate()
@@ -249,10 +261,7 @@ onMounted(() => {
   }
 })
 
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onViewportChange)
-  window.removeEventListener('scroll', onViewportChange, true)
-})
+onBeforeUnmount(() => stopViewport?.())
 
 defineExpose({ open, close, toggle })
 </script>

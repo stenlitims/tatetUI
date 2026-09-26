@@ -108,9 +108,15 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
       {{ label }}<span v-if="required" class="text-danger" aria-hidden="true"> *</span>
     </label>
 
+    <!--
+      Колонки minmax(0, 3rem): комірка росте до 45px, але стискається, коли
+      місця менше. Із фіксованими size-12 шість комірок і проміжки займали
+      310px і виходили за картку на 375px екрані (на 320px — за екран).
+    -->
     <div
-      class="relative inline-grid max-w-full grid-flow-col gap-2 rounded-control"
+      class="relative inline-grid max-w-full grid-cols-[repeat(var(--ui-otp-cells),minmax(0,3rem))] gap-1.5 rounded-control sm:gap-2 md:grid-cols-[repeat(var(--ui-otp-cells),2.5rem)]"
       :class="{ 'cursor-not-allowed opacity-50': disabled }"
+      :style="{ '--ui-otp-cells': cells.length }"
       @click="inputEl?.focus()"
     >
       <!-- text-[16px]: поле невидиме, але iOS дивиться на його font-size — з
@@ -139,7 +145,7 @@ defineExpose({ focus: () => inputEl.value?.focus(), select: () => inputEl.value?
         v-for="(cell, index) in cells"
         :key="index"
         aria-hidden="true"
-        class="flex size-12 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-[border-color,box-shadow] md:size-10"
+        class="flex h-12 min-w-0 items-center justify-center rounded-control border bg-input text-lg font-semibold text-ink transition-[border-color,box-shadow] md:h-10"
         :class="[
           error ? 'border-danger' : 'border-line',
           focused && index === activeIndex

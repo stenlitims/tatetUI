@@ -145,9 +145,23 @@ function stepAttrs(step: StepItem, index: number) {
 const touchZone =
   "pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-[max(100%,3rem)]"
 
+/*
+ * Горизонтальний ряд на телефоні.
+ *
+ * Пункти з лінією — flex-1 з нульовою основою, тож перенестися на новий
+ * рядок вони не можуть ніколи: три кроки з підписами на 375px просто
+ * виїжджали за край («Публікац…»). Нижче sm підписи лишаються лише в
+ * АКТИВНОГО кроку, решта — тільки для скрінрідера (номер і стан кружечка
+ * видно й так). Активний підпис обрізається трикрапкою, а не розпирає ряд.
+ */
+function isCollapsedOnMobile(index: number) {
+  return !vertical.value && stateOf(index) !== 'active'
+}
+
 function stepClass(step: StepItem, index: number) {
   return [
     'group relative flex items-start gap-2.5 text-left',
+    vertical.value ? '' : 'min-w-0',
     interactive.value
       ? [
           'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset',
@@ -203,7 +217,7 @@ function itemClass(index: number) {
         <div
           v-if="!vertical && index > 0"
           class="flex h-8 items-center"
-          :class="compact ? 'px-1' : 'min-w-6 flex-1 px-1.5'"
+          :class="compact ? 'px-1' : 'min-w-3 flex-1 px-1 sm:min-w-6 sm:px-1.5'"
           aria-hidden="true"
         >
           <!-- У compact лінія має власну ширину: у контейнері без ширини
@@ -240,13 +254,13 @@ function itemClass(index: number) {
 
           <!-- Compact ховає підпис візуально, але не для скрінрідера: інакше
                крок звучав би лише як «1». -->
-          <span v-if="!compact" class="min-w-0">
-            <span class="block text-sm font-medium leading-tight" :class="labelClass(index)">
+          <span v-if="!compact" class="min-w-0" :class="isCollapsedOnMobile(index) ? 'max-sm:sr-only' : ''">
+            <span class="block text-sm font-medium leading-tight max-sm:truncate" :class="labelClass(index)">
               <slot name="label" :step="step" :state="stateOf(index)" :error="hasError(index)">{{ step.label }}</slot>
             </span>
             <span
               v-if="step.description && stateOf(index) !== 'upcoming'"
-              class="mt-0.5 block text-xs text-muted"
+              class="mt-0.5 block text-xs text-muted max-sm:truncate"
             >
               {{ step.description }}
             </span>

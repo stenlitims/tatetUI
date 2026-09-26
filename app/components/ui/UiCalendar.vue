@@ -269,8 +269,23 @@ function dayState(date: Date, month: Date) {
  * контрастом близько 2,8:1. У темній темі та сама помилка була непомітна,
  * бо `--ink` там світлий.
  */
+/*
+ * Розмір клітинки дня на телефоні — до 45px (ціль дотику), але не ширше
+ * за сьому частину екрана мінус поля. Клітинки стоять впритул, тож
+ * невидима зона ::after тут неможлива — вона накрила б сусідній день.
+ * 45px × 7 = 315px — рівно стільки влазить у 375px разом із відступами
+ * сторінки й панелі; на 320px клітинка стискається до ~37px, а сітка
+ * лишається в екрані. Тижні займають ще одну вузьку колонку — її ширина
+ * віднімається з доступного місця. `md:` повертає десктопні 37.5px.
+ */
+const cellSize = computed(() =>
+  props.showWeekNumbers
+    ? 'size-[min(3rem,calc((100vw-6rem)/7))] md:size-10'
+    : 'size-[min(3rem,calc((100vw-4rem)/7))] md:size-10',
+)
+
 function dayClass(state: ReturnType<typeof dayState>) {
-  const base = 'relative flex h-10 w-10 items-center justify-center text-sm tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+  const base = `relative flex ${cellSize.value} items-center justify-center text-[15px] tabular-nums transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:text-sm`
 
   if (state.disabled) return `${base} cursor-not-allowed text-muted opacity-40`
 
@@ -471,7 +486,7 @@ defineExpose({
                 :key="weekday.long"
                 scope="col"
                 :aria-label="weekday.long"
-                class="w-10 pb-1 text-xs font-medium capitalize text-muted"
+                class="pb-1 text-xs font-medium capitalize text-muted"
               >
                 <span aria-hidden="true">{{ weekday.short }}</span>
               </th>
@@ -497,7 +512,8 @@ defineExpose({
                      однакової кількості клітинок у кожному рядку. -->
                 <span
                   v-if="!showOutsideDays && dayState(day, grid.month).outside"
-                  class="block h-10 w-10"
+                  class="block"
+                  :class="cellSize"
                   aria-hidden="true"
                 />
                 <slot v-else name="day" v-bind="dayState(day, grid.month)">

@@ -150,6 +150,19 @@
     font-weight: 600;
   }
 
+  /* На телефоні таблиця з кількома колонками ширша за екран, і вся
+     сторінка прокручувалася вбік (roadmap на 320px мав 620px вмісту).
+     display: block робить прокручуваною саму таблицю: внутрішня таблиця
+     лишається шириною за вмістом, а текст переноситься, доки вміщається.
+     Лише нижче md — на десктопі таблиця далі тягнеться на всю ширину. */
+  @media (width < 48rem) {
+    .docs-prose > table {
+      display: block;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+  }
+
   .docs-prose > blockquote {
     padding-left: 1rem;
     border-left: 3px solid var(--accent);

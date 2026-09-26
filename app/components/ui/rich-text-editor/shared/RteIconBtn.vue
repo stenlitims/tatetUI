@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { touchTargetClass } from '~/utils/uiFieldStyles'
 import RteIcon from './RteIcon.vue'
 import type { RteIconName } from './icons'
 
@@ -17,7 +18,9 @@ import type { RteIconName } from './icons'
  * Розміри `h-9 md:h-8` — щільність тулбара. Раніше було `h-11 md:h-8` з
  * посиланням на fieldSizes.sm, але поля на мобільному тепер 45px
  * (h-12), а тулбар не поле: кнопки мають лишатися компактними, зону
- * дотику пальцю дає невидима зона (W3C 2.5.8), а не заливка. У вихідному
+ * дотику пальцю дає невидима зона 45×45 (W3C 2.5.8, touchTargetClass),
+ * а не заливка. Раніше коментар її обіцяв, а класу не було: на телефоні
+ * ціль лишалась 34px. У вихідному
  * проєкті було `h-7 sm:h-8`, тобто на мобільному МЕНШЕ — перевернуто
  * відносно правила дому, і обидва розміри нижче порога влучності пальця.
  */
@@ -43,12 +46,13 @@ defineSlots<Record<string, never>>()
 <template>
   <button
     type="button"
-    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
-    :class="
+    class="relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-control transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40 md:h-8 md:w-8"
+    :class="[
+      touchTargetClass,
       active
         ? 'bg-hover text-accent'
-        : 'text-muted hover:bg-hover hover:text-ink disabled:hover:bg-transparent'
-    "
+        : 'text-muted hover:bg-hover hover:text-ink active:bg-hover disabled:hover:bg-transparent',
+    ]"
     :title="title"
     :aria-label="title"
     :aria-pressed="active"
