@@ -392,6 +392,32 @@ describe('UiLightbox — панель інструментів', () => {
     mounted.unmount()
   })
 
+  it('Tab докручує панель інструментів і стрічку мініатюр до кнопки цілою, клік — ні', async () => {
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images })
+    await nextTick()
+    await nextTick()
+    // Шпигун — після відкриття: стрічка сама центрує поточну мініатюру.
+    const scrolled: unknown[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (this: HTMLElement, options) {
+      scrolled.push([this.getAttribute('aria-label'), options])
+    })
+    // Збільшення вимкнене, поки фото не завантажилось, — беремо слайдшоу.
+    const slideshow = button('Запустити слайдшоу')!
+    const thumb = document.body.querySelectorAll<HTMLButtonElement>('[aria-label="Мініатюри"] button')[1]!
+
+    // Клік чи тап: кнопка без :focus-visible. Прокрутка зараз зсунула б
+    // її з-під пальця.
+    slideshow.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    thumb.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(scrolled).toEqual([])
+
+    slideshow.focus()
+    thumb.focus()
+    const nearest = { block: 'nearest', inline: 'nearest' }
+    expect(scrolled).toEqual([['Запустити слайдшоу', nearest], [thumb.getAttribute('aria-label'), nearest]])
+    mounted.unmount()
+  })
+
   it('підписи перекриваються частково, решта лишається українською', async () => {
     const mounted = await mountComponent(UiLightbox, {
       modelValue: true,

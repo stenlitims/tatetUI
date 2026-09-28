@@ -252,6 +252,43 @@ describe('UiTabs — один шлях зміни вкладки', () => {
   })
 })
 
+describe('UiTabs — смуга, що гортається', () => {
+  const nearest = { block: 'nearest', inline: 'nearest' }
+
+  it('фокус з клавіатури докручує смугу до вкладки цілою, фокус від кліку — ні', async () => {
+    const scrolled: unknown[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (this: HTMLElement, options) {
+      scrolled.push([this.textContent?.trim(), options])
+    })
+    const mounted = await mountComponent(UiTabs, { tabs: threeTabs })
+    const tabs = [...mounted.host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+
+    // Клік чи тап: вкладка без :focus-visible. Прокрутка зараз зсунула б
+    // її з-під пальця.
+    tabs[1]!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(scrolled).toEqual([])
+
+    // Tab у список, далі стрілка: roving focus переводить фокус кодом, і
+    // Chromium частково видиму вкладку сам не докручує.
+    tabs[0]!.focus()
+    tabs[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    await nextTick()
+    await nextTick()
+    expect(document.activeElement).toBe(tabs[1])
+    expect(scrolled).toEqual([['A', nearest], ['B', nearest]])
+    mounted.unmount()
+  })
+
+  it('поля смуги вміщують фокус-кільце крайньої вкладки', async () => {
+    const mounted = await mountComponent(UiTabs, { tabs: threeTabs })
+    const scroller = mounted.host.querySelector('[role="tablist"]')!.parentElement!
+    // Без полів overflow різав кільце крайньої вкладки збоку, а в underline
+    // на десктопі — ще й згори й знизу, навіть коли гортати нічого.
+    expect(scroller.className.split(/\s+/)).toEqual(expect.arrayContaining(['-m-1', 'p-1', 'scroll-px-1']))
+    mounted.unmount()
+  })
+})
+
 describe('UiCarousel — клавіатура', () => {
   it('стрілки з поля вводу всередині слайда не гортають карусель', async () => {
     const updates: number[] = []
@@ -519,6 +556,31 @@ describe('UiBreadcrumb', () => {
       if (scrollWidth) Object.defineProperty(HTMLElement.prototype, 'scrollWidth', scrollWidth)
       if (clientWidth) Object.defineProperty(HTMLElement.prototype, 'clientWidth', clientWidth)
     }
+  })
+
+  it('Tab докручує ланцюжок до посилання цілим, клік — ні', async () => {
+    const scrolled: unknown[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (this: HTMLElement, options) {
+      scrolled.push([this.textContent?.trim(), options])
+    })
+    const mounted = await mountComponent(UiBreadcrumb, {
+      items: [{ label: 'Каталог', to: '/' }, { label: 'Електроніка', to: '/' }, { label: 'Смартфон' }],
+    })
+    const [catalog, electronics] = mounted.host.querySelectorAll<HTMLAnchorElement>('a')
+
+    // Клік чи тап: посилання без :focus-visible.
+    electronics!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(scrolled).toEqual([])
+
+    // Ланцюжок прокручено до кінця, тож Tab починає з посилання ліворуч,
+    // яке Chromium, частково видиме, лишив би обрізаним.
+    catalog!.focus()
+    expect(scrolled).toEqual([['Каталог', { block: 'nearest', inline: 'nearest' }]])
+
+    // Поля під кільце крайнього посилання й той самий відступ для прокрутки.
+    const nav = mounted.host.querySelector('nav')!
+    expect(nav.className.split(/\s+/)).toEqual(expect.arrayContaining(['-mx-1', 'px-1', 'scroll-px-1']))
+    mounted.unmount()
   })
 })
 

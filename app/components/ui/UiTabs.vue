@@ -297,17 +297,33 @@ function onKeydown(event: KeyboardEvent, index: number) {
 }
 
 /*
- * Невидима зона дотику 45×45 виходить за межі кнопки. Контейнер прокрутки
- * (overflow-x-auto — отже й overflow-y) обрізав її по своїй рамці: тап на
- * 2px вище кнопки вже не влучав, а сама стрічка ще й прокручувалась
- * вертикально на ~3px. Паддінг на coarse-вказівнику вміщує зону всередину,
- * від'ємний марджин компенсує його, тож верстка навколо не зсувається.
+ * Контейнер прокрутки (overflow-x-auto — отже й overflow-y) обрізає все, що
+ * виходить за його рамку. Без полів він різав фокус-кільце (2px) underline:
+ * у крайньої вкладки — збоку, а на десктопі в кожної ще й згори й знизу,
+ * навіть коли прокручувати нічого (у pills кільце вміщує власний p-1
+ * списку). На дотику ж різалась невидима зона 45×45: тап на 2px вище
+ * кнопки вже не влучав, а стрічка ще й прокручувалась вертикально на ~3px.
+ * Поля вміщують і кільце, і зону (на coarse-вказівнику — вищі), від'ємний
+ * марджин компенсує їх, тож верстка навколо не зсувається. scroll-px-1 —
+ * той самий відступ, коли фокус докручує вкладку (onScrollerFocusin).
  */
 const scrollerClass = computed(() =>
   vertical.value
     ? 'shrink-0'
-    : 'scrollbar-none overflow-x-auto pointer-coarse:-my-1.5 pointer-coarse:py-1.5',
+    : 'scrollbar-none -m-1 overflow-x-auto p-1 scroll-px-1 pointer-coarse:-my-1.5 pointer-coarse:py-1.5',
 )
+
+/*
+ * Chromium на фокус (стрілки, Tab) докручує смугу лише до вкладки, схованої
+ * повністю, і то по центру; частково видиму лишає обрізаною разом із
+ * фокус-кільцем. `nearest` разом зі scroll-padding смуги показує вкладку
+ * цілою. Лише для фокуса з клавіатури: прокрутка посеред кліку чи тапу
+ * зсунула б вкладку з-під пальця.
+ */
+function onScrollerFocusin(event: FocusEvent) {
+  const target = event.target as HTMLElement
+  if (target.matches(':focus-visible')) target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
 
 // Межа underline — на самому списку, а не на обгортці: паддінг обгортки
 // вище інакше відсунув би її від індикатора.
@@ -366,7 +382,7 @@ function tabClass(tab: TabItem) {
        кнопок у рядок (max-content), і прокрутка списку вкладок на вузькому
        екрані не вмикалася б ніколи — ряд виходив за край. -->
   <div :class="vertical ? 'flex min-w-0 items-start gap-6' : 'min-w-0'">
-    <div :class="scrollerClass">
+    <div :class="scrollerClass" @focusin="onScrollerFocusin">
       <div
         ref="tablistEl"
         role="tablist"

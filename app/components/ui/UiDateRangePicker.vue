@@ -225,6 +225,18 @@ function applyPreset(preset: DateRangePreset) {
   if (props.autoClose) close()
 }
 
+/*
+ * Смуга пресетів на телефоні гортається вбік. Chromium на Tab докручує її
+ * лише до пресету, схованого повністю, і то по центру; частково видимий
+ * лишає обрізаним. `nearest` разом зі scroll-padding смуги показує його
+ * цілим. Лише для фокуса з клавіатури: прокрутка посеред тапу зсунула б
+ * пресет з-під пальця.
+ */
+function onPresetsFocusin(event: FocusEvent) {
+  const target = event.target as HTMLElement
+  if (target.matches(':focus-visible')) target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
 /* ------------------------------------------------------------------ */
 /*  Календар                                                          */
 /* ------------------------------------------------------------------ */
@@ -479,10 +491,13 @@ defineExpose({
               (-mx-3 px-3), тож обрізання читається як «далі є ще». py-1
               дає місце невидимій зоні дотику: overflow-x-auto обрізає й
               по вертикалі, і 45px зона h-10 пігулки інакше різалась би.
+              scroll-px-3 — той самий відступ від краю панелі, коли фокус
+              докручує пресет (onPresetsFocusin).
             -->
             <div
               v-if="availablePresets.length"
-              class="scrollbar-none -mx-3 flex gap-1.5 overflow-x-auto overscroll-x-contain px-3 py-1 md:mx-0 md:w-40 md:shrink-0 md:flex-col md:overflow-visible md:border-r md:border-line md:py-0 md:pl-0 md:pr-3"
+              class="scrollbar-none -mx-3 flex gap-1.5 overflow-x-auto overscroll-x-contain px-3 py-1 scroll-px-3 md:mx-0 md:w-40 md:shrink-0 md:flex-col md:overflow-visible md:border-r md:border-line md:py-0 md:pl-0 md:pr-3"
+              @focusin="onPresetsFocusin"
             >
               <button
                 v-for="preset in availablePresets"

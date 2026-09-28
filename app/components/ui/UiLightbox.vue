@@ -1182,6 +1182,18 @@ function onPanelFocusIn(event: FocusEvent) {
   }
 }
 
+/*
+ * Панель інструментів і стрічка мініатюр гортаються вбік. Chromium на Tab
+ * докручує смугу лише до кнопки, схованої повністю, і то по центру;
+ * частково видиму лишає обрізаною разом із фокус-кільцем. `nearest` разом
+ * зі scroll-padding смуги показує кнопку цілою. Лише для фокуса з
+ * клавіатури: прокрутка посеред кліку чи тапу зсунула б кнопку з-під пальця.
+ */
+function onStripFocusIn(event: FocusEvent) {
+  const target = event.target as HTMLElement
+  if (target.matches(':focus-visible')) target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
 /* ------------------------------------------------------------------ */
 /*  Слайдшоу, повний екран, мініатюри, завантаження                    */
 /* ------------------------------------------------------------------ */
@@ -1835,8 +1847,13 @@ defineExpose({
               <!-- Прокрутка, а не перенос: на вузькому телефоні з повним
                    набором інструментів кнопки не мають наповзати на
                    лічильник чи ламати висоту панелі. p-1 — місце для
-                   фокус-кільця, яке overflow інакше обрізав би. -->
-              <div class="scrollbar-none -m-1 flex min-w-0 items-center gap-2 overflow-x-auto p-1">
+                   фокус-кільця, яке overflow інакше обрізав би, а
+                   scroll-px-1 — той самий відступ, коли фокус докручує
+                   кнопку (onStripFocusIn). -->
+              <div
+                class="scrollbar-none -m-1 flex min-w-0 items-center gap-2 overflow-x-auto p-1 scroll-px-1"
+                @focusin="onStripFocusIn"
+              >
                 <slot v-if="image" name="actions" :image="image" :index="current" />
 
                 <template v-for="tool in toolbarItems" :key="tool">
@@ -2190,6 +2207,8 @@ defineExpose({
             Стрічка мініатюр: w-fit + mx-auto, а не justify-center на
             контейнері з прокруткою — інакше при переповненні ліві мініатюри
             опиняються за лівим краєм, куди прокрутка вже не дістає.
+            scroll-px-4 — той самий відступ від краю, коли Tab докручує
+            мініатюру (onStripFocusIn).
           -->
           <div
             v-if="showThumbnails"
@@ -2199,7 +2218,12 @@ defineExpose({
             @pointerenter="onChromePointer(true)"
             @pointerleave="onChromePointer(false)"
           >
-            <div class="scrollbar-none mx-auto flex w-fit max-w-full gap-2 overflow-x-auto px-4 py-1" role="group" :aria-label="text.thumbnails">
+            <div
+              class="scrollbar-none mx-auto flex w-fit max-w-full gap-2 overflow-x-auto px-4 py-1 scroll-px-4"
+              role="group"
+              :aria-label="text.thumbnails"
+              @focusin="onStripFocusIn"
+            >
               <button
                 v-for="(item, index) in images"
                 :key="`${item.src}-${index}`"

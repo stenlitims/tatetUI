@@ -61,6 +61,19 @@ onMounted(() => {
 onBeforeUnmount(() => resizeObserver?.disconnect())
 
 watch(() => props.items, () => void nextTick(revealCurrent), { deep: true })
+
+/*
+ * Ланцюжок прокручено до кінця, тож Tab починає з посилань, захованих
+ * ліворуч. Chromium на фокус докручує смугу лише до посилання, схованого
+ * повністю, і то по центру; частково видиме лишає обрізаним разом із
+ * фокус-кільцем. `nearest` разом зі scroll-padding показує його цілим.
+ * Лише для фокуса з клавіатури: прокрутка посеред кліку чи тапу зсунула б
+ * посилання з-під пальця.
+ */
+function onNavFocusin(event: FocusEvent) {
+  const target = event.target as HTMLElement
+  if (target.matches(':focus-visible')) target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
 </script>
 
 <template>
@@ -69,9 +82,17 @@ watch(() => props.items, () => void nextTick(revealCurrent), { deep: true })
   <!--
     py-3.5 -my-3.5: місце для невидимої зони дотику посилань. overflow-x-auto
     обрізає й по вертикалі, тож 45px зона навколо 19px рядка без цього
-    різалася б по висоті рядка. Від'ємний margin повертає розкладку як була.
+    різалася б по висоті рядка. px-1 -mx-1 — те саме для фокус-кільця
+    (2px) крайнього посилання, яке рамка смуги інакше зрізала збоку, а
+    scroll-px-1 — той самий відступ, коли фокус докручує посилання
+    (onNavFocusin). Від'ємний margin повертає розкладку як була.
   -->
-  <nav ref="navEl" :aria-label="ariaLabel" class="scrollbar-none -my-3.5 overflow-x-auto whitespace-nowrap py-3.5">
+  <nav
+    ref="navEl"
+    :aria-label="ariaLabel"
+    class="scrollbar-none -mx-1 -my-3.5 overflow-x-auto whitespace-nowrap px-1 py-3.5 scroll-px-1"
+    @focusin="onNavFocusin"
+  >
     <ol class="flex min-w-max items-center gap-1.5 text-sm">
       <template v-for="(item, index) in items" :key="index">
         <li v-if="index > 0" class="flex text-muted" aria-hidden="true">

@@ -256,6 +256,32 @@ describe('UiDateRangePicker', () => {
     expect(presets).toHaveLength(1)
   })
 
+  it('Tab докручує смугу пресетів до пресету цілим, тап — ні', async () => {
+    vi.spyOn(window, 'matchMedia').mockReturnValue({
+      matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList)
+    mounted = await mountComponent(UiDateRangePicker, { today: TODAY })
+    mounted.host.querySelector('button')!.click()
+    await nextTick(); await nextTick()
+
+    // Шпигун — після відкриття: фокус переходить у календар, і це не пресет.
+    const scrolled: unknown[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (this: HTMLElement, options) {
+      scrolled.push([this.textContent?.trim(), options])
+    })
+    const preset = (label: string) =>
+      [...document.body.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((el) => el.textContent?.trim() === label)!
+
+    // Тап: пресет без :focus-visible. Прокрутка зсунула б його з-під пальця.
+    preset('Цей місяць').dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(scrolled).toEqual([])
+
+    preset('Останні 30 днів').focus()
+    expect(scrolled).toEqual([['Останні 30 днів', { block: 'nearest', inline: 'nearest' }]])
+    // Докручений пресет стає на ту саму відстань від краю панелі, що й перший.
+    expect(preset('Сьогодні').parentElement!.className.split(/\s+/)).toContain('scroll-px-3')
+  })
+
   it('тригер має dialog-семантику й очищення', async () => {
     vi.spyOn(window, 'matchMedia').mockReturnValue({
       matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn(),
