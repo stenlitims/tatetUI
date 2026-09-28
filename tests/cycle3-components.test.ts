@@ -222,6 +222,63 @@ describe('ActionBar', () => {
     expect(dismissed).toHaveLength(2)
     mounted.unmount()
   })
+
+  const actions = () => [h('button', 'Архівувати'), h('button', 'Експорт'), h('button', 'Видалити')]
+  const classes = (el: Element) => el.className.split(/\s+/)
+
+  it('розкладку обирає ширина контейнера, а не екрана', async () => {
+    const mounted = await mountComponent(UiActionBar, { open: true, count: 5 }, { default: actions })
+    const region = mounted.host.querySelector('[role="region"]')!
+    const [summary, group, dismiss] = [...region.children]
+
+    // Липка панель живе в дравері, вужчому за вікно: sm:flex-nowrap ставив
+    // її в один ряд там, де лічильник стискався до «запи…».
+    expect(classes(region.parentElement!)).toContain('@container')
+    expect(classes(region)).toContain('@xl:flex-nowrap')
+    expect(classes(region).filter((name) => /^(sm|md|lg):flex-(no)?wrap$/.test(name))).toEqual([])
+    expect(classes(summary!)).toEqual(expect.arrayContaining(['@xl:shrink-0', '@xl:basis-auto']))
+    // Контейнер ширину з вмісту не бере: без w-full у flex-col items-center панель схлопувалась.
+    expect(classes(mounted.host.firstElementChild!)).toContain('w-full')
+
+    // Вузька панель: дії окремим рядком ПІД лічильником і хрестиком, але в
+    // DOM (а отже й у порядку Tab) — перед хрестиком.
+    expect(classes(group!)).toEqual(expect.arrayContaining(['order-last', 'basis-full', '@xl:order-none']))
+    expect(dismiss!.getAttribute('aria-label')).toBe('Закрити панель')
+
+    // Смуга, що гортається на телефоні: з justify-end те, що вилізло за
+    // початковий край, прокруткою вже не дістати.
+    const strip = group!.firstElementChild!
+    expect(classes(strip)).toEqual(expect.arrayContaining(['max-md:flex-nowrap', 'max-md:overflow-x-auto']))
+    expect(strip.className).not.toMatch(/justify-end/)
+    expect(strip.querySelectorAll('button')).toHaveLength(3)
+    mounted.unmount()
+  })
+
+  it('без дій немає порожнього рядка під лічильником', async () => {
+    const mounted = await mountComponent(UiActionBar, { open: true, label: 'Незбережені зміни' })
+    const region = mounted.host.querySelector('[role="region"]')!
+    expect(region.children).toHaveLength(2)
+    expect(region.lastElementChild!.getAttribute('aria-label')).toBe('Закрити панель')
+    mounted.unmount()
+  })
+
+  it('фокус з клавіатури докручує смугу до кнопки цілою, фокус від кліку — ні', async () => {
+    const scrolled: unknown[] = []
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(function (this: HTMLElement, options) {
+      scrolled.push([this.textContent, options])
+    })
+    const mounted = await mountComponent(UiActionBar, { open: true, count: 5 }, { default: actions })
+    const [first, second] = mounted.host.querySelectorAll<HTMLButtonElement>('[role="region"] button')
+
+    // Клік чи тап: кнопка без :focus-visible. Прокрутка зараз зсунула б її
+    // з-під пальця.
+    second!.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    expect(scrolled).toEqual([])
+
+    first!.focus()
+    expect(scrolled).toEqual([['Архівувати', { block: 'nearest', inline: 'nearest' }]])
+    mounted.unmount()
+  })
 })
 
 describe('FormField', () => {

@@ -49,7 +49,11 @@ const emit = defineEmits<{
 }>()
 
 defineSlots<{
-  /** Кнопки дій — праворуч, на мобільному переносяться під лічильник. */
+  /**
+   * Кнопки дій. У панелі від 36rem завширшки — праворуч в один ряд, у
+   * вужчій — окремим рядком під лічильником; на телефоні цей рядок не
+   * переноситься, а гортається вбік.
+   */
   default?: () => unknown
   /** Власний вміст лівої частини замість лічильника й `label`. */
   summary?: (props: { count: number | null }) => unknown
@@ -86,6 +90,18 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 /*
+ * Chromium на Tab докручує смугу дій лише до кнопки, схованої повністю, і
+ * то по центру; частково видиму лишає обрізаною разом із фокус-кільцем.
+ * `nearest` разом зі scroll-padding смуги показує кнопку цілою. Лише для
+ * фокуса з клавіатури: прокрутка посеред кліку чи тапу зсунула б кнопку
+ * з-під пальця.
+ */
+function onActionsFocusin(event: FocusEvent) {
+  const target = event.target as HTMLElement
+  if (target.matches(':focus-visible')) target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
+/*
  * Корінь — сам липкий елемент, а не обгортка навколо нього: sticky липне
  * лише в межах батька, і обгортка заввишки з панель не дала б їй
  * прилипнути взагалі. Коли панель закрита, корінь порожній і має нульову
@@ -93,8 +109,13 @@ function onKeydown(event: KeyboardEvent) {
  *
  * У `fixed` корінь лишається в потоці порожнім якорем: у ньому живе
  * live-регіон, а сама панель телепортується в <body>.
+ *
+ * w-full — бо смуга всередині є контейнером запитів, а контейнер ширину
+ * з вмісту не бере. У батьку, що підганяє дітей під вміст (flex-col
+ * items-center, grid place-items-center), панель без неї схлопувалась
+ * до 25px рамки й полів.
  */
-const rootClass = computed(() => (props.placement === 'sticky' ? 'sticky bottom-0 z-40' : ''))
+const rootClass = computed(() => (props.placement === 'sticky' ? 'sticky bottom-0 z-40 w-full' : ''))
 
 const shellClass = computed(() =>
   props.placement === 'fixed'
@@ -128,21 +149,36 @@ defineExpose({
         leave-to-class="translate-y-3 opacity-0"
       >
         <!-- Смуга пропускає кліки крізь себе: на всю ширину вона не має
-             перекривати сторінку по боках від самої панелі. -->
+             перекривати сторінку по боках від самої панелі.
+
+             Вона ж — контейнер для запитів @xl: розкладку обирає ширина,
+             яку панелі дали, а не ширина екрана. Липка панель здебільшого
+             живе в дравері чи бічній панелі, набагато вужчій за вікно, і
+             медіазапит `sm:` ставив її в один ряд там, де місця вже не було. -->
         <div
           v-if="open"
-          class="pointer-events-none flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+          class="@container pointer-events-none flex justify-center pb-[max(0.75rem,env(safe-area-inset-bottom))]"
           :class="shellClass"
         >
+          <!-- Дві розкладки, межа — 36rem ширини контейнера:
+               - вужча: лічильник і хрестик угорі, дії — окремим рядком на
+                 всю ширину під ними. Раніше лічильник мав основу 0 і
+                 стискався першим: п'ять кнопок різали підпис до «запи…», а
+                 на телефоні кнопки ставали стовпчиком, хрестик — окремим
+                 рядком унизу;
+               - ширша: один ряд. Лічильник не стискається — заради нього
+                 панель і читають; дії, що не вмістилися, переносяться
+                 всередині своєї групи.
+               Порядок Tab від ширини не залежить: дії, потім хрестик. -->
           <div
             ref="barEl"
             role="region"
             :aria-label="ariaLabel"
             tabindex="-1"
-            class="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 rounded-overlay border border-line bg-card/95 py-2 pl-3 pr-2 shadow-overlay outline-none backdrop-blur-md sm:flex-nowrap sm:pl-4"
+            class="pointer-events-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 rounded-overlay border border-line bg-card/95 py-2 pl-3 pr-2 shadow-overlay outline-none backdrop-blur-md sm:pl-4 @xl:flex-nowrap"
             @keydown="onKeydown"
           >
-            <div class="flex min-w-0 flex-1 items-center gap-2.5">
+            <div class="flex min-w-0 flex-1 items-center gap-2.5 @xl:shrink-0 @xl:basis-auto">
               <slot name="summary" :count="hasCount ? count! : null">
                 <span
                   v-if="hasCount"
@@ -155,8 +191,26 @@ defineExpose({
               </slot>
             </div>
 
-            <div class="flex flex-wrap items-center gap-1.5">
-              <slot />
+            <!-- Без дій обгортки немає зовсім: у вузькій розкладці вона
+                 займає власний рядок, і порожня лишала б під лічильником
+                 зайвий проміжок.
+
+                 Зовнішній вузол — місце групи в розкладці; min-w-0 дає смузі
+                 всередині стиснутися, а не розпирати панель. Внутрішній —
+                 сама смуга: на телефоні вона не переноситься, а гортається
+                 вбік — один ряд, а не кілька. overflow-x-auto обрізає й
+                 по вертикалі, тому -m-1.5 p-1.5 дають місце фокус-кільцю
+                 (4px) і невидимій зоні дотику 45px навколо h-9-кнопки, а
+                 scroll-px-1.5 — той самий відступ, коли фокус докручує
+                 кнопку (onActionsFocusin). justify-end тут не можна: те,
+                 що вилізло б за початковий край, прокруткою вже не дістати. -->
+            <div v-if="$slots.default" class="order-last min-w-0 basis-full @xl:order-none @xl:basis-auto">
+              <div
+                class="scrollbar-none -m-1.5 flex flex-wrap items-center gap-1.5 overscroll-x-contain p-1.5 scroll-px-1.5 max-md:flex-nowrap max-md:overflow-x-auto max-md:*:shrink-0"
+                @focusin="onActionsFocusin"
+              >
+                <slot />
+              </div>
             </div>
 
             <button
