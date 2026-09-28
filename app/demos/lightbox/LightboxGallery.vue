@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { shallowRef } from 'vue'
 import UiButton from '~/components/ui/UiButton.vue'
-import UiLightbox, { type LightboxImage } from '~/components/ui/UiLightbox.vue'
+import UiLightbox, { type LightboxItem } from '~/components/ui/UiLightbox.vue'
 import { useToast } from '~/composables/useToast'
 
 const toast = useToast()
 
-const images: LightboxImage[] = [
+const images: LightboxItem[] = [
   { src: '/demo/vase-terracotta.svg', alt: 'Ваза з червоної глини на світлому тлі', caption: 'Ваза «Теракота» — червона глина, ручне формування, 32 см' },
   { src: '/demo/vase-cobalt.svg', alt: 'Висока ваза під кобальтовою поливою', caption: 'Ваза «Кобальт» — кам’яна маса, полива з крапом' },
   { src: '/demo/mug-cream.svg', alt: 'Чашка з кремовою поливою і коричневим обідком', caption: 'Чашка «Вершки», 350 мл' },
@@ -16,6 +16,10 @@ const images: LightboxImage[] = [
 
 const open = shallowRef(false)
 const index = shallowRef(0)
+
+// Мініатюри на сторінці: з них фото «виростає» при відкритті й у них же
+// повертається при закритті — навіть якщо в галереї догорнули до іншого.
+const thumbs: (HTMLElement | null)[] = []
 
 function show(at: number) {
   index.value = at
@@ -31,16 +35,21 @@ function show(at: number) {
              закриття повернеться саме сюди. -->
         <button
           type="button"
-          class="block w-full overflow-hidden rounded-card border border-line transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
+          class="block w-full overflow-clip rounded-card border border-line transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-ring-offset"
           :aria-label="`Відкрити фото ${at + 1}: ${image.alt}`"
           @click="show(at)"
         >
-          <img :src="image.src" alt="" class="aspect-square w-full object-cover" />
+          <img
+            :ref="(element) => (thumbs[at] = element as HTMLElement | null)"
+            :src="image.src"
+            alt=""
+            class="aspect-square w-full object-cover"
+          />
         </button>
       </li>
     </ul>
 
-    <UiLightbox v-model="open" v-model:index="index" :images="images">
+    <UiLightbox v-model="open" v-model:index="index" :images="images" :origin="(i) => thumbs[i]">
       <template #actions="{ image }">
         <UiButton
           variant="outline"

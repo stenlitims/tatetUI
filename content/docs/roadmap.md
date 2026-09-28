@@ -79,7 +79,7 @@ API-сторінки та accessibility-контракти. Початкові �
 | [`UiButtonGroup`](/docs/components/button-group) | Зчеплені кнопки панелі інструментів | Button | `group` з назвою, не `toolbar` | stable |
 | [`UiPageHeader`](/docs/components/page-header) | Шапка сторінки чи розділу | Breadcrumb + Tabs | рівень заголовка окремо від кегля | stable |
 | [`UiSparkline`](/docs/components/sparkline) | Тренд у плитці метрики чи рядку | StatCard | один `role="img"` з підсумком | stable |
-| [`UiLightbox`](/docs/components/lightbox) | Перегляд фото на весь екран | Overlay stack + Carousel gestures | пастка фокуса, оголошення кадру | stable |
+| [`UiLightbox`](/docs/components/lightbox) | Фото, відео й сторінки на весь екран — рівня Fancybox | Overlay stack + Carousel gestures + Fullscreen API | пастка фокуса, оголошення кадру, фокус на мініатюру після закриття | stable |
 | [`UiSpinner`](/docs/components/spinner) | Очікування без відомої тривалості | — | статус лише з назвою | stable |
 | [`UiProgressRing`](/docs/components/progress-ring) | Прогрес у щільному місці | Progress | невизначений стан без `aria-valuenow` | stable |
 | [`UiIndicator`](/docs/components/indicator) | Лічильник чи крапка на іконці | Avatar, Button | число в назві кнопки, не в значку | stable |

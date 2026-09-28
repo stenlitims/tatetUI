@@ -10,7 +10,7 @@ import UiProgressRing from '~/components/ui/UiProgressRing.vue'
 import UiRating from '~/components/ui/UiRating.vue'
 import UiSparkline from '~/components/ui/UiSparkline.vue'
 import UiSpinner from '~/components/ui/UiSpinner.vue'
-import { lightboxIndex, zoomScroll } from '~/utils/lightbox'
+import { lightboxIndex, zoomAround } from '~/utils/lightbox'
 import { mountComponent } from './helpers/mountComponent'
 
 beforeAll(() => {
@@ -336,19 +336,15 @@ describe('utils/lightbox', () => {
     expect(lightboxIndex(2, 0)).toBe(0)
   })
 
-  it('zoomScroll лишає деталь під вказівником і не йде у від’ємне', () => {
-    expect(
-      zoomScroll({
-        fractionX: 0.5,
-        fractionY: 0.25,
-        zoomedWidth: 1600,
-        zoomedHeight: 1200,
-        offsetLeft: 0,
-        offsetTop: 0,
-        pointerX: 400,
-        pointerY: 300,
-      }),
-    ).toEqual({ left: 400, top: 0 })
+  it('zoomAround лишає деталь під вказівником на місці', () => {
+    // Центр зображення зсунутий на (40, −20), вказівник — у точці (100, 50)
+    // відносно центру сцени. Деталь під ним у координатах зображення:
+    // (100 − 40, 50 + 20) / 1 = (60, 70). Після збільшення вдвічі вона має
+    // лишитися під тим самим вказівником.
+    const offset = zoomAround({ point: { x: 100, y: 50 }, offset: { x: 40, y: -20 }, scale: 1, nextScale: 2 })
+    expect(offset).toEqual({ x: -20, y: -90 })
+    expect(offset.x + 60 * 2).toBe(100)
+    expect(offset.y + 70 * 2).toBe(50)
   })
 })
 

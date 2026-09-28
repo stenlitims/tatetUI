@@ -55,6 +55,10 @@ function zoom(index: number) {
   lightboxOpen.value = true
 }
 
+// Фото каруселі — звідки галерея «виростає» і куди повертається. Карусель
+// іде за індексом галереї, тож при закритті поточне фото вже на місці.
+const slideImages: (HTMLElement | null)[] = []
+
 const PRICES: Record<Glaze, { price: number; old: number; stock: number }> = {
   terracotta: { price: 1450, old: 1700, stock: 12 },
   cobalt: { price: 1890, old: 1890, stock: 3 },
@@ -205,7 +209,13 @@ const accordionItems = [
               :aria-label="`Збільшити фото ${index + 1}: ${item.alt}`"
               @click="zoom(index)"
             >
-              <img :src="item.src" :alt="item.alt" class="aspect-[4/3] w-full object-cover" draggable="false" />
+              <img
+                :ref="(element) => (slideImages[index] = element as HTMLElement | null)"
+                :src="item.src"
+                :alt="item.alt"
+                class="aspect-[4/3] w-full object-cover"
+                draggable="false"
+              />
             </button>
           </template>
         </UiCarousel>
@@ -392,6 +402,6 @@ const accordionItems = [
       </div>
     </section>
 
-    <UiLightbox v-model="lightboxOpen" v-model:index="slide" :images="images" />
+    <UiLightbox v-model="lightboxOpen" v-model:index="slide" :images="images" :origin="(i) => slideImages[i]" />
   </div>
 </template>
