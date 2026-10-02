@@ -72,6 +72,25 @@ export function columnsMinWidth(headers: { width?: number }[], selectionWidth: n
   return columns + selectionWidth
 }
 
+/**
+ * Скільки колонок, видимих ТИПОВО, користувач сховав.
+ *
+ * Прихована колонка — єдина частина розкладки, якої не видно в самій
+ * таблиці: порядок і ширини читаються оком, відсутність — ні. Кнопка
+ * налаштувань ховається до наведення, тож без окремого сигналу шлях назад
+ * до схованої колонки був би невидимим двічі. Колонки, сховані дефолтами
+ * споживача, не рахуються: це його рішення, а не зміна користувача.
+ */
+export function countHiddenByUser(
+  current: { value: string; visible?: boolean }[],
+  defaults: { value: string; visible?: boolean }[],
+): number {
+  const visibleByDefault = new Set(
+    defaults.filter((header) => header.visible !== false).map((header) => header.value),
+  )
+  return current.filter((header) => header.visible === false && visibleByDefault.has(header.value)).length
+}
+
 export interface StoredColumn {
   value: string
   width?: number

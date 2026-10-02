@@ -13,6 +13,7 @@
  * ні в хук prerender:routes — обидва нерекурсивні. Тож власної сторінки
  * цей файл не потребує, як і RteToolbar.
  */
+import { computed } from 'vue'
 import UiMenu from '../UiMenu.vue'
 import { clampWidth } from '~/utils/tableColumns'
 
@@ -45,8 +46,34 @@ const props = withDefaults(
      * колонки немає, і проп не передають.
      */
     pinned?: string
+    /**
+     * Вигляд тригера.
+     *
+     * `corner` — кут шапки таблиці: іконка без рамки на смузі кольору
+     * шапки, видна на наведенні на таблицю (`group/table` у хоста), з
+     * клавіатури, поки панель відкрита, і завжди — на дотику. Позицію
+     * (sticky, висоту шапки) задає ХОСТ: корінь тут свідомо без власного
+     * `position`, бо хостовий `sticky` на тому самому вузлі з ним
+     * конфліктував би.
+     *
+     * `toolbar` — повнорозмірна кнопка 45×45 у рядку над мобільними
+     * картками, поруч із сортуванням.
+     */
+    trigger?: 'corner' | 'toolbar'
+    /**
+     * Скільки колонок, видимих типово, сховав користувач. Більше нуля —
+     * крапка на тригері, видима і тоді, коли сам тригер схований.
+     */
+    hiddenCount?: number
+    /**
+     * Таблиця прокручується далі праворуч (`corner`). Тоді під правим
+     * краєм кута — середина чужого заголовка, і підкладка закриває смугу
+     * до самого краю; інакше там край останньої колонки з її хватом
+     * ресайзу, і останні 4px лишаються відкритими.
+     */
+    overflowsRight?: boolean
   }>(),
-  { pinned: undefined },
+  { pinned: undefined, trigger: 'corner', hiddenCount: 0, overflowsRight: false },
 )
 
 const emit = defineEmits<{
@@ -71,6 +98,49 @@ const iconButtonClass =
   'relative flex h-8 w-8 items-center justify-center rounded-control text-muted transition-colors ' +
   'hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
   'disabled:cursor-not-allowed disabled:opacity-40'
+
+/*
+ * Коли кутовий тригер видно. Чотири умови, і кожна закриває окремий шлях:
+ * наведення на таблицю — миша; :focus-visible — клавіатура (Tab дістає
+ * невидиму кнопку, і вона мусить проявитися); aria-expanded — панель
+ * відкрита, а курсор уже на ній, тобто поза таблицею, і без цієї умови
+ * якір панелі зникав би з-під неї; pointer-coarse — наведення на дотику не
+ * буває взагалі.
+ *
+ * Ховається opacity, а не v-if чи visibility: кнопка лишається в
+ * Tab-обході й у дереві доступності, змінюється лише те, що видно оком.
+ */
+const CORNER_REVEAL =
+  'opacity-0 transition-opacity duration-(--duration-fast) group-hover/table:opacity-100 ' +
+  'group-has-[:focus-visible]/corner:opacity-100 group-has-[[aria-expanded=true]]/corner:opacity-100 ' +
+  'pointer-coarse:opacity-100'
+
+/*
+ * Невидима зона дотику кутового тригера. 45×45, як усюди, але корінь
+ * обрізає її (overflow-clip) рівно по висоті шапки: у щільній шапці
+ * (27px) повна зона залізла б на 9px у перший рядок, і тап по його
+ * правому краю відкривав би налаштування замість рядка.
+ */
+const cornerButtonClass =
+  'pointer-events-auto relative flex items-center justify-center rounded-control text-muted ' +
+  'transition-colors hover:bg-hover hover:text-ink aria-expanded:bg-hover aria-expanded:text-ink ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+const toolbarButtonClass =
+  'relative flex h-12 w-12 items-center justify-center rounded-control border border-line bg-input ' +
+  'text-muted transition-colors hover:text-ink active:bg-hover aria-expanded:text-ink ' +
+  'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+
+// Розмір кнопки йде за висотою шапки: h-7 у звичайній (38px), h-6 у
+// щільній (27px) — інакше кнопка впиралась би в межі рядка.
+const CORNER_SIZE = { sm: 'h-6 w-6', md: 'h-7 w-7' } as const
+const CORNER_ICON = { sm: 'h-3.5 w-3.5', md: 'h-4 w-4' } as const
+
+const triggerLabel = computed(() =>
+  props.hiddenCount > 0
+    ? `Налаштування колонок (приховано: ${props.hiddenCount})`
+    : 'Налаштування колонок',
+)
 
 /** Перший індекс, який взагалі можна рухати. Закріплена колонка — нульовий. */
 const firstMovable = () => (props.pinned ? 1 : 0)
@@ -165,149 +235,204 @@ function showAll() {
 </script>
 
 <template>
-  <UiMenu width="20rem" placement="bottom-end" panel-role="dialog" aria-label="Налаштування колонок">
-    <template #trigger="{ toggle, triggerAttrs }">
-      <button
-        v-bind="triggerAttrs"
-        type="button"
-        :class="[iconButtonClass, touchTargetClass]"
-        class="h-9 w-9"
-        aria-label="Налаштування колонок"
-        @click="toggle"
-      >
-        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path
-            d="M4 6h16M4 12h16M4 18h16"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-          />
-          <circle cx="8" cy="6" r="2" fill="currentColor" />
-          <circle cx="16" cy="12" r="2" fill="currentColor" />
-          <circle cx="10" cy="18" r="2" fill="currentColor" />
-        </svg>
-      </button>
-    </template>
+  <!--
+    Кутовий корінь — смуга заввишки з шапку: pointer-events-none, щоб
+    крізь поля й підкладку клік доходив до заголовка під ними (сортування,
+    хват ресайзу останньої колонки), і overflow-clip, що обрізає зону
+    дотику по висоті шапки.
+  -->
+  <div
+    :class="
+      trigger === 'corner'
+        ? 'group/corner pointer-events-none flex items-center overflow-clip pl-3 pr-1'
+        : 'flex shrink-0'
+    "
+  >
+    <!--
+      Підкладка кольору шапки з м'яким краєм ліворуч. Без неї іконка
+      лягала б просто на текст заголовка: на праворуч вирівняному підписі
+      останньої колонки і на будь-якому заголовку, що опинився під кутом
+      при горизонтальній прокрутці.
 
-    <template #content>
-      <div v-if="densityToggle" class="border-b border-line px-3 py-2">
-        <p class="mb-1.5 text-xs font-medium text-muted">Щільність</p>
-        <div class="flex gap-1">
-          <button
-            v-for="option in (['sm', 'md'] as const)"
-            :key="option"
-            type="button"
-            class="h-12 flex-1 rounded-control border px-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
-            :class="
-              density === option
-                ? 'border-primary-200 bg-primary-50 text-accent'
-                : 'border-line text-muted hover:bg-hover'
-            "
-            @click="emit('update:density', option)"
-          >
-            {{ option === 'sm' ? 'Щільно' : 'Звичайно' }}
-          </button>
-        </div>
-        <!--
-          У дереві щільність міняє ВИСОТУ рядка, а не паддінг: висота
-          входить в арифметику вікна множенням, тож мусить бути числом ще
-          до рендеру. У плоскій таблиці рядок росте за вмістом, і там це
-          саме паддінг. Панель однакова, наслідок різний — і це єдина
-          різниця, яку варто тримати в голові.
-        -->
-      </div>
+      right-1 лишає відкритими останні 4px — там хват ресайзу останньої
+      колонки, і підкладка ховала б його. Але лише коли праворуч справді
+      край таблиці: посеред прокрутки в цій смузі визирав би шматок
+      літери чужого заголовка, і підкладка доходить до краю.
+    -->
+    <span
+      v-if="trigger === 'corner'"
+      class="absolute inset-y-0 left-0 flex"
+      :class="[CORNER_REVEAL, overflowsRight ? 'right-0' : 'right-1']"
+      aria-hidden="true"
+    >
+      <span class="w-3 shrink-0 bg-gradient-to-r from-transparent to-subtle" />
+      <span class="flex-1 bg-subtle" />
+    </span>
 
-      <div class="scrollbar-thin max-h-72 overflow-y-auto py-1">
-        <div
-          v-for="(header, index) in headers"
-          :key="header.value"
-          class="flex items-center gap-2 px-2 transition-colors hover:bg-hover md:py-1.5"
-          :draggable="index >= (pinned ? 1 : 0)"
-          @dragstart="onDragStart(index, $event)"
-          @dragover.prevent
-          @drop.prevent="onDrop(index)"
+    <UiMenu width="20rem" placement="bottom-end" panel-role="dialog" aria-label="Налаштування колонок">
+      <template #trigger="{ toggle, triggerAttrs }">
+        <button
+          v-bind="triggerAttrs"
+          type="button"
+          :class="
+            trigger === 'corner'
+              ? [cornerButtonClass, CORNER_SIZE[density], touchTargetClass]
+              : toolbarButtonClass
+          "
+          :aria-label="triggerLabel"
+          :title="triggerLabel"
+          @click="toggle"
         >
-          <span
-            class="text-muted"
-            :class="index >= (pinned ? 1 : 0) ? 'cursor-grab active:cursor-grabbing' : 'opacity-30'"
+          <svg
+            :class="trigger === 'corner' ? [CORNER_REVEAL, CORNER_ICON[density]] : 'h-4 w-4'"
+            viewBox="0 0 24 24"
+            fill="none"
             aria-hidden="true"
           >
-            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-              <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-              <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-            </svg>
-          </span>
-
-          <!-- На дотику ціль — увесь рядок мітки (min-h-12), а не 13px
-               нативного квадратика. -->
-          <label class="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-[15px] text-ink md:min-h-0 md:gap-2 md:text-sm">
-            <input
-              type="checkbox"
-              class="h-4 w-4 shrink-0 accent-[var(--accent-solid)] md:h-auto md:w-auto"
-              :checked="header.visible !== false"
-              :disabled="header.visible !== false && !canHide(header)"
-              @change="toggleVisibility(header)"
+            <path
+              d="M4 6h16M4 12h16M4 18h16"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
             />
-            <span class="truncate">{{ label(header) }}</span>
-          </label>
+            <circle cx="8" cy="6" r="2" fill="currentColor" />
+            <circle cx="16" cy="12" r="2" fill="currentColor" />
+            <circle cx="10" cy="18" r="2" fill="currentColor" />
+          </svg>
+          <!--
+            Крапка — поза CORNER_REVEAL і видима навіть у спокої: схована
+            колонка — єдиний стан розкладки, якого не видно в самій таблиці,
+            і крапка показує, де шукати шлях назад.
+          -->
+          <span
+            v-if="hiddenCount > 0"
+            class="absolute rounded-full bg-accent-solid"
+            :class="trigger === 'corner' ? 'right-0.5 top-0.5 h-1.5 w-1.5' : 'right-2 top-2 h-2 w-2'"
+            aria-hidden="true"
+          />
+        </button>
+      </template>
 
-          <div class="flex shrink-0 gap-0.5">
+      <template #content>
+        <div v-if="densityToggle" class="border-b border-line px-3 py-2">
+          <p class="mb-1.5 text-xs font-medium text-muted">Щільність</p>
+          <div class="flex gap-1">
             <button
+              v-for="option in (['sm', 'md'] as const)"
+              :key="option"
               type="button"
-              :class="[iconButtonClass, touchTargetClass]"
-              :disabled="index <= (pinned ? 1 : 0)"
-              :aria-label="`Перемістити «${label(header)}» вище`"
-              @click="move(index, -1)"
+              class="h-12 flex-1 rounded-control border px-2 text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
+              :class="
+                density === option
+                  ? 'border-primary-200 bg-primary-50 text-accent'
+                  : 'border-line text-muted hover:bg-hover'
+              "
+              @click="emit('update:density', option)"
             >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 19V5m0 0-6 6m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              :class="[iconButtonClass, touchTargetClass]"
-              :disabled="index < (pinned ? 1 : 0) || index === headers.length - 1"
-              :aria-label="`Перемістити «${label(header)}» нижче`"
-              @click="move(index, 1)"
-            >
-              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M12 5v14m0 0 6-6m-6 6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
+              {{ option === 'sm' ? 'Щільно' : 'Звичайно' }}
             </button>
           </div>
-
-          <input
-            v-if="!header.flex"
-            type="number"
-            class="h-11 w-16 shrink-0 rounded-control border border-line bg-input px-1.5 text-right text-[16px] tabular-nums text-ink md:h-auto md:py-1 md:text-xs transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
-            :value="header.width"
-            :min="40"
-            :max="800"
-            aria-label="Ширина колонки, px"
-            @change="setWidth(header, ($event.target as HTMLInputElement).value)"
-          />
+          <!--
+            У дереві щільність міняє ВИСОТУ рядка, а не паддінг: висота
+            входить в арифметику вікна множенням, тож мусить бути числом ще
+            до рендеру. У плоскій таблиці рядок росте за вмістом, і там це
+            саме паддінг. Панель однакова, наслідок різний — і це єдина
+            різниця, яку варто тримати в голові.
+          -->
         </div>
-      </div>
 
-      <slot name="extra" />
+        <div class="scrollbar-thin max-h-72 overflow-y-auto py-1">
+          <div
+            v-for="(header, index) in headers"
+            :key="header.value"
+            class="flex items-center gap-2 px-2 transition-colors hover:bg-hover md:py-1.5"
+            :draggable="index >= (pinned ? 1 : 0)"
+            @dragstart="onDragStart(index, $event)"
+            @dragover.prevent
+            @drop.prevent="onDrop(index)"
+          >
+            <span
+              class="text-muted"
+              :class="index >= (pinned ? 1 : 0) ? 'cursor-grab active:cursor-grabbing' : 'opacity-30'"
+              aria-hidden="true"
+            >
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
+                <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
+                <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
+              </svg>
+            </span>
 
-      <div class="flex gap-1 border-t border-line px-2 py-2">
-        <button
-          type="button"
-          class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
-          @click="showAll"
-        >
-          Показати всі
-        </button>
-        <button
-          type="button"
-          class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
-          @click="emit('reset')"
-        >
-          Скинути
-        </button>
-      </div>
-    </template>
-  </UiMenu>
+            <!-- На дотику ціль — увесь рядок мітки (min-h-12), а не 13px
+                 нативного квадратика. -->
+            <label class="flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-[15px] text-ink md:min-h-0 md:gap-2 md:text-sm">
+              <input
+                type="checkbox"
+                class="h-4 w-4 shrink-0 accent-[var(--accent-solid)] md:h-auto md:w-auto"
+                :checked="header.visible !== false"
+                :disabled="header.visible !== false && !canHide(header)"
+                @change="toggleVisibility(header)"
+              />
+              <span class="truncate">{{ label(header) }}</span>
+            </label>
+
+            <div class="flex shrink-0 gap-0.5">
+              <button
+                type="button"
+                :class="[iconButtonClass, touchTargetClass]"
+                :disabled="index <= (pinned ? 1 : 0)"
+                :aria-label="`Перемістити «${label(header)}» вище`"
+                @click="move(index, -1)"
+              >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 19V5m0 0-6 6m6-6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                :class="[iconButtonClass, touchTargetClass]"
+                :disabled="index < (pinned ? 1 : 0) || index === headers.length - 1"
+                :aria-label="`Перемістити «${label(header)}» нижче`"
+                @click="move(index, 1)"
+              >
+                <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M12 5v14m0 0 6-6m-6 6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </button>
+            </div>
+
+            <input
+              v-if="!header.flex"
+              type="number"
+              class="h-11 w-16 shrink-0 rounded-control border border-line bg-input px-1.5 text-right text-[16px] tabular-nums text-ink md:h-auto md:py-1 md:text-xs transition-[border-color,box-shadow] hover:border-line-strong focus:outline-none focus-visible:border-accent-solid focus-visible:ring-[3px] focus-visible:ring-ring/30"
+              :value="header.width"
+              :min="40"
+              :max="800"
+              aria-label="Ширина колонки, px"
+              @change="setWidth(header, ($event.target as HTMLInputElement).value)"
+            />
+          </div>
+        </div>
+
+        <slot name="extra" />
+
+        <div class="flex gap-1 border-t border-line px-2 py-2">
+          <button
+            type="button"
+            class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
+            @click="showAll"
+          >
+            Показати всі
+          </button>
+          <button
+            type="button"
+            class="h-12 flex-1 rounded-control px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
+            @click="emit('reset')"
+          >
+            Скинути
+          </button>
+        </div>
+      </template>
+    </UiMenu>
+  </div>
 </template>

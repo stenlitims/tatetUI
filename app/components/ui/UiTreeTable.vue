@@ -25,6 +25,7 @@ import {
   clampWidth,
   columnsMinWidth,
   compareValues,
+  countHiddenByUser,
   mergeColumnSettings,
   COLUMN_DEFAULT_WIDTH,
   type StoredColumn,
@@ -231,6 +232,22 @@ const ALIGN_CELL: Record<Align, string> = {
 }
 
 /*
+ * Кнопка налаштувань у куті шапки — той самий контракт, що в UiTable.
+ * Запасна висота смуги — однорядкова шапка без нижньої межі: py-2 плюс
+ * рядок text-xs / text-sm. Резерв останньої колонки — лише на дотику, де
+ * кнопка видна завжди; з мишею вона з'являється на наведенні.
+ */
+const CORNER_FALLBACK_HEIGHT: Record<Density, string> = { sm: '2rem', md: '2.25rem' }
+const CORNER_RESERVE: Record<Density, string> = { sm: 'pointer-coarse:pe-8', md: 'pointer-coarse:pe-9' }
+
+// Кнопки «Розгорнути / Згорнути всі» в панелі налаштувань. Панель живе у
+// двох місцях — кут шапки і рядок над картками, — тож клас один на обидва.
+const BRANCH_BUTTON =
+  'h-12 flex-1 rounded-control border border-line px-2 text-sm text-muted transition-colors ' +
+  'hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
+  'md:h-auto md:py-1.5 md:text-xs'
+
+/*
  * Роздільник рядків — псевдоелемент, а не border.
  *
  * border на <tr> чи <td> входить у висоту рядка, і кожен рядок ставав би
@@ -301,6 +318,7 @@ const visibleHeaders = computed(() => localHeaders.value.filter((h) => h.visible
 const showSettings = computed(() => !!props.tableId)
 const densityCell = computed(() => DENSITY_CELL[localDensity.value])
 const columnCount = computed(() => visibleHeaders.value.length + (props.selectable ? 1 : 0))
+const hiddenByUser = computed(() => countHiddenByUser(localHeaders.value, props.headers))
 
 const rowHeightPx = computed(() => {
   const explicit = props.rowHeight
@@ -693,6 +711,18 @@ const canScrollRight = computed(
   () => tableMinWidth.value - viewportWidth.value - scrollLeft.value > 1,
 )
 
+/*
+ * Висота шапки для смуги під кнопкою налаштувань. Міряється, а не
+ * виводиться зі щільності: колонка прапорців і власні `header-*` слоти
+ * роблять шапку вищою за розрахункову. Мінус 1px — лінія під шапкою.
+ */
+const headEl = ref<HTMLElement | null>(null)
+const headHeight = ref(0)
+
+const cornerStyle = computed(() => ({
+  height: headHeight.value > 0 ? `${headHeight.value - 1}px` : CORNER_FALLBACK_HEIGHT[localDensity.value],
+}))
+
 let observer: ResizeObserver | null = null
 
 onMounted(() => {
@@ -707,12 +737,18 @@ onMounted(() => {
    * розкладки міняє висоту прихованого контейнера на нуль — теж без неї.
    */
   if (hasResizeObserver) {
-    observer = new ResizeObserver(() => {
+    observer = new ResizeObserver((entries) => {
       measureTable()
       measureCards()
+      for (const entry of entries) {
+        if (entry.target !== headEl.value) continue
+        // borderBoxSize дробовий і не бачить scale предка — див. UiTable.
+        headHeight.value = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight
+      }
     })
     if (scrollEl.value) observer.observe(scrollEl.value)
     if (cardEl.value) observer.observe(cardEl.value)
+    if (headEl.value) observer.observe(headEl.value)
   }
   window.addEventListener('resize', measureTable, { passive: true })
   window.addEventListener('resize', measureCards, { passive: true })
@@ -1324,44 +1360,41 @@ defineExpose({
       </div>
     </Transition>
 
-    <div v-if="showSettings" class="mb-2 flex items-center justify-end">
+    <!--
+      Рядок над картками — лише нижче md: шапки в картках немає, тож і
+      кута для кнопки налаштувань теж. Від шапки таблиці їх відрізняє лише
+      вигляд тригера; панель і її стан ті самі.
+    -->
+    <div v-if="showSettings && mobileCards" class="mb-2 flex items-center justify-end md:hidden">
       <TableColumnSettings
+        trigger="toolbar"
         :headers="localHeaders"
         :density="localDensity"
         :density-toggle="densityToggle"
         :pinned="treeColumnValue"
+        :hidden-count="hiddenByUser"
         @update:headers="onSettingsHeaders"
         @update:density="onSettingsDensity"
         @reset="resetAll"
       >
-        <!-- Керування гілками — єдине, чого немає в плоскій таблиці, тож
-             воно приходить слотом, а не другим набором пропсів у спільній
-             панелі. -->
         <template #extra>
           <div class="border-t border-line px-3 py-2">
             <p class="mb-1.5 text-xs font-medium text-muted">Гілки</p>
             <div class="flex gap-1">
-              <button
-                type="button"
-                class="h-12 flex-1 rounded-control border border-line px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
-                @click="expandAll"
-              >
-                Розгорнути всі
-              </button>
-              <button
-                type="button"
-                class="h-12 flex-1 rounded-control border border-line px-2 text-sm text-muted transition-colors hover:bg-hover hover:text-ink active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring md:h-auto md:py-1.5 md:text-xs"
-                @click="collapseAll"
-              >
-                Згорнути всі
-              </button>
+              <button type="button" :class="BRANCH_BUTTON" @click="expandAll">Розгорнути всі</button>
+              <button type="button" :class="BRANCH_BUTTON" @click="collapseAll">Згорнути всі</button>
             </div>
           </div>
         </template>
       </TableColumnSettings>
     </div>
 
-    <div class="relative">
+    <!--
+      isolate тримає z-index шапки (20, закріплена колонка — 30) і кнопки
+      налаштувань (40) усередині дерева, а не в змаганні з липкою шапкою
+      сторінки — див. UiTable. group/table проявляє кнопку в куті шапки.
+    -->
+    <div class="group/table relative isolate">
       <div
         ref="scrollEl"
         class="scrollbar-thin relative overflow-auto rounded-card border border-line bg-card"
@@ -1370,408 +1403,444 @@ defineExpose({
         @scroll.passive="measureTable"
       >
         <!--
-          border-separate, а НЕ border-collapse: злиті межі діляться між
-          сусідніми рядками й входять у їхню висоту, а вікно множить
-          висоту рядка на індекс. Заразом це знімає давню проблему з
-          position: sticky на комірках зліпленої таблиці.
-
-          Нульовий інтервал заданий інлайново, а не класом
-          border-spacing-0: аудит стилів у check:docs читає будь-яке
-          `border-*` як колірну утиліту й шукає токен «spacing-0».
-          Послабити аудит заради одного класу — гірша угода, ніж три
-          слова в тому ж :style, де вже живуть tableLayout і minWidth.
+          Сітка з однією клітинкою, де дерево й кнопка налаштувань лежать
+          одне на одному — той самий прийом, що в UiTable, і з тих самих
+          причин. top-0 тут безумовний: шапка дерева липка завжди.
         -->
-        <table
-          role="treegrid"
-          :aria-label="ariaLabel"
-          :aria-rowcount="flatRows.length + 1"
-          :aria-busy="loading || undefined"
-          :aria-multiselectable="selectable || undefined"
-          class="w-full border-separate"
-          :style="{ tableLayout: 'fixed', minWidth: `${tableMinWidth}px`, borderSpacing: '0' }"
-        >
+        <div class="grid" :style="{ minWidth: `${tableMinWidth}px` }">
+          <TableColumnSettings
+            v-if="showSettings"
+            trigger="corner"
+            class="sticky right-0 top-0 z-40 col-start-1 row-start-1 self-start justify-self-end"
+            :style="cornerStyle"
+            :headers="localHeaders"
+            :density="localDensity"
+            :density-toggle="densityToggle"
+            :pinned="treeColumnValue"
+            :hidden-count="hiddenByUser"
+            :overflows-right="canScrollRight"
+            @update:headers="onSettingsHeaders"
+            @update:density="onSettingsDensity"
+            @reset="resetAll"
+          >
+            <!-- Керування гілками — єдине, чого немає в плоскій таблиці, тож
+                 воно приходить слотом, а не другим набором пропсів у спільній
+                 панелі. -->
+            <template #extra>
+              <div class="border-t border-line px-3 py-2">
+                <p class="mb-1.5 text-xs font-medium text-muted">Гілки</p>
+                <div class="flex gap-1">
+                  <button type="button" :class="BRANCH_BUTTON" @click="expandAll">Розгорнути всі</button>
+                  <button type="button" :class="BRANCH_BUTTON" @click="collapseAll">Згорнути всі</button>
+                </div>
+              </div>
+            </template>
+          </TableColumnSettings>
           <!--
-            Ширини живуть ТУТ, а не на кожній комірці. За table-layout:
-            fixed враховується лише перший рядок, тож інлайновий width на
-            кожному <td> був би мертвим стилем, помноженим на кількість
-            рядків. Колонка без width (flex) забирає залишок.
-          -->
-          <colgroup>
-            <col v-if="selectable" :style="{ width: '44px' }" />
-            <col
-              v-for="header in visibleHeaders"
-              :key="header.value"
-              :style="header.flex ? undefined : { width: `${header.width ?? 120}px` }"
-            />
-          </colgroup>
+            border-separate, а НЕ border-collapse: злиті межі діляться між
+            сусідніми рядками й входять у їхню висоту, а вікно множить
+            висоту рядка на індекс. Заразом це знімає давню проблему з
+            position: sticky на комірках зліпленої таблиці.
 
-          <thead>
-            <tr aria-rowindex="1">
-              <th
-                v-if="selectable"
-                scope="col"
-                class="sticky top-0 border-b border-line bg-subtle px-2 py-2"
-                :class="stickyTreeColumn ? 'left-0 z-30' : 'z-20'"
-              >
-                <UiCheckbox
-                  :model-value="headerSelection === 'all'"
-                  :indeterminate="headerSelection === 'some'"
-                  :disabled="!allSelectableKeys.length"
-                  class="w-5"
-                  @update:model-value="toggleAll($event)"
-                >
-                  <span class="sr-only">Обрати всі вузли дерева</span>
-                </UiCheckbox>
-              </th>
-              <th
+            Нульовий інтервал заданий інлайново, а не класом
+            border-spacing-0: аудит стилів у check:docs читає будь-яке
+            `border-*` як колірну утиліту й шукає токен «spacing-0».
+            Послабити аудит заради одного класу — гірша угода, ніж три
+            слова в тому ж :style, де вже живуть tableLayout і minWidth.
+          -->
+          <table
+            role="treegrid"
+            :aria-label="ariaLabel"
+            :aria-rowcount="flatRows.length + 1"
+            :aria-busy="loading || undefined"
+            :aria-multiselectable="selectable || undefined"
+            class="col-start-1 row-start-1 w-full border-separate"
+            :style="{ tableLayout: 'fixed', minWidth: `${tableMinWidth}px`, borderSpacing: '0' }"
+          >
+            <!--
+              Ширини живуть ТУТ, а не на кожній комірці. За table-layout:
+              fixed враховується лише перший рядок, тож інлайновий width на
+              кожному <td> був би мертвим стилем, помноженим на кількість
+              рядків. Колонка без width (flex) забирає залишок.
+            -->
+            <colgroup>
+              <col v-if="selectable" :style="{ width: '44px' }" />
+              <col
                 v-for="header in visibleHeaders"
                 :key="header.value"
-                scope="col"
-                :aria-sort="ariaSort(header)"
-                :title="header.title"
-                class="group/th relative border-b border-line bg-subtle py-2 font-medium text-muted"
-                :class="[
-                  densityCell,
-                  alignClass(header),
-                  isTreeSticky(header) ? 'sticky top-0 z-30' : 'sticky top-0 z-20',
-                  isTreeSticky(header) && canScrollLeft ? 'ui-tree-table-sticky-edge' : '',
-                ]"
-                :style="isTreeSticky(header) ? treeStickyStyle : undefined"
-              >
-                <slot :name="`header-${header.value}`" :header="header">
-                  <button
-                    v-if="header.sortable"
-                    type="button"
-                    class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
-                    @click="toggleSort(header)"
-                  >
-                    <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
-                         підпис: праворуч у комірці живе ручка зміни ширини. -->
-                    <span class="truncate">{{ header.text }}</span>
-                    <!-- Привид-шеврон: підказка, що колонка сортується.
-                         На дотику наведення не буває — там привид видно завжди. -->
-                    <svg
-                      class="h-3 w-3 shrink-0 transition-opacity"
-                      :class="
-                        internalSort?.by === header.value
-                          ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
-                      "
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path
-                        :d="
-                          internalSort?.by === header.value && internalSort.dir === 'desc'
-                            ? 'M6 9l6 6 6-6'
-                            : 'M6 15l6-6 6 6'
-                        "
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      />
-                    </svg>
-                  </button>
-                  <span v-else class="block truncate">{{ header.text }}</span>
-                </slot>
+                :style="header.flex ? undefined : { width: `${header.width ?? 120}px` }"
+              />
+            </colgroup>
 
-                <!-- Хват ресайзу. touch-none обов'язковий: без нього
-                     браузер забирає горизонтальний жест собі. -->
-                <!-- Хват проявляється на наведенні на заголовок: інакше про
-                     ресайз можна дізнатися лише випадково, наштовхнувшись
-                     курсором на невидиму смужку в 6px. -->
-                <span
-                  v-if="isResizable(header)"
-                  class="absolute inset-y-1.5 right-0 w-1 rounded-full bg-line-strong opacity-0 transition-opacity cursor-col-resize touch-none group-hover/th:opacity-100 hover:bg-accent-solid"
-                  :class="resizing?.value === header.value ? 'opacity-100 bg-accent-solid' : ''"
-                  @pointerdown="onResizeStart($event, header)"
-                  @pointermove="onResizeMove"
-                  @pointerup="onResizeEnd"
-                  @pointercancel="onResizeEnd"
-                  @dblclick.stop="resetWidth(header)"
-                  @click.stop
-                />
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <!--
-              v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
-              елементі у Vue 3 v-if має вищий пріоритет і не бачить
-              змінної циклу.
-            -->
-            <template v-if="showSkeleton">
-              <tr v-for="row in skeletonRows" :key="`sk-${row}`">
-                <td v-if="selectable" class="relative px-2" :class="ROW_SEPARATOR">
-                  <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
-                    <UiSkeleton class="h-4 w-4 rounded-control" />
-                  </div>
-                </td>
-                <td
-                  v-for="header in visibleHeaders"
-                  :key="header.value"
-                  class="relative"
-                  :class="[densityCell, ROW_SEPARATOR]"
-                >
-                  <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
-                    <!-- Ширина заглушки детермінована, а не Math.random():
-                         інакше вона мінялась би на кожному рендері. -->
-                    <UiSkeleton
-                      class="h-3"
-                      :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
-                    />
-                  </div>
-                </td>
-              </tr>
-            </template>
-
-            <tr v-else-if="showEmpty">
-              <td :colspan="columnCount" class="p-0">
-                <slot name="empty">
-                  <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
-                </slot>
-              </td>
-            </tr>
-
-            <template v-else>
-              <!-- Розпірки замість абсолютного позиціювання: абсолютний
-                   <tr> вибиває рядок із табличного боксу, і <colgroup>
-                   перестає керувати ширинами. -->
-              <tr v-if="range.topPad > 0" aria-hidden="true" :style="{ height: `${range.topPad}px` }">
-                <td :colspan="columnCount" class="p-0" />
-              </tr>
-
-              <tr
-                v-for="row in visibleRows"
-                :key="String(row.id)"
-                :ref="(el) => setRowEl(row.id, el)"
-                :tabindex="row.id === activeId ? 0 : -1"
-                :aria-level="row.depth + 1"
-                :aria-posinset="row.posinset"
-                :aria-setsize="row.setsize"
-                :aria-rowindex="row.index + 2"
-                :aria-expanded="row.hasChildren ? row.expanded : undefined"
-                :aria-selected="selectable ? rowSelection(row).checked : undefined"
-                :aria-busy="loadingSet.has(row.id) || undefined"
-                class="focus:outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
-                :class="[
-                  rowSelection(row).checked ? 'bg-primary-50' : 'bg-card hover:bg-hover',
-                  rowClickable || expandOnClick ? 'cursor-pointer' : '',
-                  rowClass?.(row.item),
-                ]"
-                @click="onRowClick(row)"
-                @keydown="onRowKeydown($event, row)"
-              >
-                <!-- @click.stop обов'язковий: без нього перемикання
-                     прапорця ще й «активує» рядок. -->
-                <td
+            <thead ref="headEl">
+              <tr aria-rowindex="1">
+                <th
                   v-if="selectable"
-                  class="relative bg-inherit px-2"
-                  :class="[ROW_SEPARATOR, stickyTreeColumn ? 'sticky left-0 z-10' : '']"
-                  role="gridcell"
-                  @click.stop
-                  @pointerdown="pendingShift = $event.shiftKey"
+                  scope="col"
+                  class="sticky top-0 border-b border-line bg-subtle px-2 py-2"
+                  :class="stickyTreeColumn ? 'left-0 z-30' : 'z-20'"
                 >
-                  <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
-                    <UiCheckbox
-                      :model-value="rowSelection(row).checked"
-                      :indeterminate="rowSelection(row).indeterminate"
-                      :disabled="!canSelectId(row.id)"
-                      class="w-5"
-                      @update:model-value="toggleRow(row, $event)"
-                    >
-                      <span class="sr-only">{{ rowSelectionLabel(row) }}</span>
-                    </UiCheckbox>
-                  </div>
-                </td>
-
-                <td
-                  v-for="header in visibleHeaders"
+                  <UiCheckbox
+                    :model-value="headerSelection === 'all'"
+                    :indeterminate="headerSelection === 'some'"
+                    :disabled="!allSelectableKeys.length"
+                    class="w-5"
+                    @update:model-value="toggleAll($event)"
+                  >
+                    <span class="sr-only">Обрати всі вузли дерева</span>
+                  </UiCheckbox>
+                </th>
+                <th
+                  v-for="(header, index) in visibleHeaders"
                   :key="header.value"
-                  :role="header.value === treeColumnValue ? 'rowheader' : 'gridcell'"
-                  class="relative bg-inherit"
+                  scope="col"
+                  :aria-sort="ariaSort(header)"
+                  :title="header.title"
+                  class="group/th relative border-b border-line bg-subtle py-2 font-medium text-muted"
                   :class="[
                     densityCell,
-                    ROW_SEPARATOR,
-                    isTreeSticky(header) ? 'sticky z-10' : '',
+                    alignClass(header),
+                    isTreeSticky(header) ? 'sticky top-0 z-30' : 'sticky top-0 z-20',
                     isTreeSticky(header) && canScrollLeft ? 'ui-tree-table-sticky-edge' : '',
+                    showSettings && index === visibleHeaders.length - 1 ? CORNER_RESERVE[localDensity] : '',
                   ]"
                   :style="isTreeSticky(header) ? treeStickyStyle : undefined"
                 >
-                  <!-- Висота задається ТУТ, а не на <tr>: height на рядку
-                       таблиці — це мінімум, і будь-який вміст слота
-                       роздув би рядок, зламавши арифметику вікна. -->
-                  <div
-                    v-if="header.value === treeColumnValue"
-                    class="flex items-center overflow-hidden"
-                    :style="{ height: `${rowHeightPx}px` }"
-                  >
-                    <!--
-                      УСІ колонки ієрархії однакової ширини (w-5), і це не
-                      косметика. Коліно займає колонку БАТЬКА, а не власну
-                      додаткову, тож вертикаль дитини лягає рівно під центр
-                      шеврона батька. Коли напрямні були по 8px, коліно 20px,
-                      а шеврон ще 20px, кожен рівень зсувався на пів колонки
-                      — лінії підходили до папок повз них.
-                    -->
-                    <span
-                      v-for="(line, level) in row.guides"
-                      :key="level"
-                      class="relative h-full w-5 shrink-0"
-                      aria-hidden="true"
+                  <slot :name="`header-${header.value}`" :header="header">
+                    <button
+                      v-if="header.sortable"
+                      type="button"
+                      class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+                      @click="toggleSort(header)"
                     >
-                      <span v-if="line" class="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
-                    </span>
-
-                    <!-- Коліно. Нижня половина — лише за наявності
-                         наступного сусіда, інакше драбина рветься між
-                         сусідніми рядками. -->
-                    <span
-                      v-if="row.depth > 0"
-                      class="relative h-full w-5 shrink-0"
-                      aria-hidden="true"
-                    >
-                      <!--
-                        -translate-x-1/2 на КОЖНІЙ вертикалі обов'язковий.
-                        Без нього left-1/2 ставить на центр колонки лівий
-                        КРАЙ лінії, а не її середину, і вся драбина стоїть
-                        на пів пікселя правіше за шеврони. На екрані 1x це
-                        півпікселя округлюється в сусідній стовпчик — лінія
-                        видимо промахується повз папку.
-                      -->
-                      <span class="absolute bottom-1/2 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
-                      <span class="absolute left-1/2 top-1/2 h-px w-1/2 bg-line" />
-                      <span
-                        v-if="row.hasNextSibling"
-                        class="absolute bottom-0 left-1/2 top-1/2 w-px -translate-x-1/2 bg-line"
-                      />
-                    </span>
-
-                    <!-- Тоггл — span, а не button: у Tab-порядку між
-                         двома рядками інакше опинилося б стільки кнопок,
-                         скільки рядків у вікні. Доступна афорданс —
-                         aria-expanded на рядку плюс ← і →. -->
-                    <span
-                      v-if="row.hasChildren"
-                      class="relative flex h-full w-5 shrink-0 items-center justify-center text-muted transition-colors hover:text-ink"
-                      :class="CHEVRON_TOUCH"
-                      aria-hidden="true"
-                      @click.stop="toggle(row)"
-                    >
-                      <!-- Індикатор рівно на місці шеврона й того ж
-                           розміру: він його ЗАМІНЮЄ, тож будь-який інший
-                           розмір смикає рядок при кожному відкритті. -->
+                      <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
+                           підпис: праворуч у комірці живе ручка зміни ширини. -->
+                      <span class="truncate">{{ header.text }}</span>
+                      <!-- Привид-шеврон: підказка, що колонка сортується.
+                           На дотику наведення не буває — там привид видно завжди. -->
                       <svg
-                        v-if="loadingSet.has(row.id)"
-                        class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <circle
-                          class="opacity-30"
-                          cx="12"
-                          cy="12"
-                          r="9"
-                          stroke="currentColor"
-                          stroke-width="3"
-                        />
-                        <path
-                          d="M21 12a9 9 0 0 0-9-9"
-                          stroke="currentColor"
-                          stroke-width="3"
-                          stroke-linecap="round"
-                        />
-                      </svg>
-                      <svg
-                        v-else
-                        class="h-3.5 w-3.5 transition-transform"
-                        :class="row.expanded ? 'rotate-90' : ''"
+                        class="h-3 w-3 shrink-0 transition-opacity"
+                        :class="
+                          internalSort?.by === header.value
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
+                        "
                         viewBox="0 0 24 24"
                         fill="none"
                         aria-hidden="true"
                       >
                         <path
-                          d="M9 6l6 6-6 6"
+                          :d="
+                            internalSort?.by === header.value && internalSort.dir === 'desc'
+                              ? 'M6 9l6 6 6-6'
+                              : 'M6 15l6-6 6 6'
+                          "
                           stroke="currentColor"
                           stroke-width="2"
                           stroke-linecap="round"
                         />
                       </svg>
-                    </span>
-                    <!--
-                      У листка шеврона немає, і горизонталь обривалась за
-                      цілу колонку до вмісту. Продовжуємо її тут — але не
-                      до самого краю: right-1.5 лишає зазор.
+                    </button>
+                    <span v-else class="block truncate">{{ header.text }}</span>
+                  </slot>
 
-                      Зазор обов'язковий саме тому, що іконка — слот, а не
-                      обов'язковий елемент. Коли її не передали, одразу за
-                      цією колонкою починається текст, і лінія впиралася б
-                      у першу літеру. З іконкою той самий зазор теж
-                      доречний — у гілок він уже є, бо шеврон центрований
-                      у своїй колонці.
-                    -->
-                    <span v-else class="relative h-full w-5 shrink-0" aria-hidden="true">
-                      <span
-                        v-if="row.depth > 0"
-                        class="absolute left-0 right-1.5 top-1/2 h-px bg-line"
-                      />
-                    </span>
+                  <!-- Хват ресайзу. touch-none обов'язковий: без нього
+                       браузер забирає горизонтальний жест собі. -->
+                  <!-- Хват проявляється на наведенні на заголовок: інакше про
+                       ресайз можна дізнатися лише випадково, наштовхнувшись
+                       курсором на невидиму смужку в 6px. -->
+                  <span
+                    v-if="isResizable(header)"
+                    class="absolute inset-y-1.5 right-0 w-1 rounded-full bg-line-strong opacity-0 transition-opacity cursor-col-resize touch-none group-hover/th:opacity-100 hover:bg-accent-solid"
+                    :class="resizing?.value === header.value ? 'opacity-100 bg-accent-solid' : ''"
+                    @pointerdown="onResizeStart($event, header)"
+                    @pointermove="onResizeMove"
+                    @pointerup="onResizeEnd"
+                    @pointercancel="onResizeEnd"
+                    @dblclick.stop="resetWidth(header)"
+                    @click.stop
+                  />
+                </th>
+              </tr>
+            </thead>
 
-                    <span v-if="$slots.icon" class="mr-1.5 flex shrink-0 items-center text-muted">
-                      <slot
-                        name="icon"
-                        :item="row.item"
-                        :depth="row.depth"
-                        :expanded="row.expanded"
-                        :has-children="row.hasChildren"
-                      />
-                    </span>
-
-                    <span class="min-w-0 flex-1 truncate text-ink">
-                      <slot
-                        name="label"
-                        :item="row.item"
-                        :depth="row.depth"
-                        :expanded="row.expanded"
-                        :has-children="row.hasChildren"
-                      >
-                        {{ displayValue(row.item, header.value) }}
-                      </slot>
-                    </span>
-                  </div>
-
-                  <div
-                    v-else
-                    class="flex items-center overflow-hidden"
-                    :style="{ height: `${rowHeightPx}px` }"
+            <tbody>
+              <!--
+                v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
+                елементі у Vue 3 v-if має вищий пріоритет і не бачить
+                змінної циклу.
+              -->
+              <template v-if="showSkeleton">
+                <tr v-for="row in skeletonRows" :key="`sk-${row}`">
+                  <td v-if="selectable" class="relative px-2" :class="ROW_SEPARATOR">
+                    <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
+                      <UiSkeleton class="h-4 w-4 rounded-control" />
+                    </div>
+                  </td>
+                  <td
+                    v-for="header in visibleHeaders"
+                    :key="header.value"
+                    class="relative"
+                    :class="[densityCell, ROW_SEPARATOR]"
                   >
-                    <span class="min-w-0 flex-1 truncate">
-                      <slot
-                        :name="`cell-${header.value}`"
-                        :item="row.item"
-                        :header="header"
-                        :depth="row.depth"
-                      >
-                        {{ displayValue(row.item, header.value) }}
-                      </slot>
-                    </span>
-                  </div>
+                    <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
+                      <!-- Ширина заглушки детермінована, а не Math.random():
+                           інакше вона мінялась би на кожному рендері. -->
+                      <UiSkeleton
+                        class="h-3"
+                        :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
+                      />
+                    </div>
+                  </td>
+                </tr>
+              </template>
+
+              <tr v-else-if="showEmpty">
+                <td :colspan="columnCount" class="p-0">
+                  <slot name="empty">
+                    <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
+                  </slot>
                 </td>
               </tr>
 
-              <tr
-                v-if="range.bottomPad > 0"
-                aria-hidden="true"
-                :style="{ height: `${range.bottomPad}px` }"
-              >
-                <td :colspan="columnCount" class="p-0" />
-              </tr>
-            </template>
-          </tbody>
-        </table>
+              <template v-else>
+                <!-- Розпірки замість абсолютного позиціювання: абсолютний
+                     <tr> вибиває рядок із табличного боксу, і <colgroup>
+                     перестає керувати ширинами. -->
+                <tr v-if="range.topPad > 0" aria-hidden="true" :style="{ height: `${range.topPad}px` }">
+                  <td :colspan="columnCount" class="p-0" />
+                </tr>
+
+                <tr
+                  v-for="row in visibleRows"
+                  :key="String(row.id)"
+                  :ref="(el) => setRowEl(row.id, el)"
+                  :tabindex="row.id === activeId ? 0 : -1"
+                  :aria-level="row.depth + 1"
+                  :aria-posinset="row.posinset"
+                  :aria-setsize="row.setsize"
+                  :aria-rowindex="row.index + 2"
+                  :aria-expanded="row.hasChildren ? row.expanded : undefined"
+                  :aria-selected="selectable ? rowSelection(row).checked : undefined"
+                  :aria-busy="loadingSet.has(row.id) || undefined"
+                  class="focus:outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                  :class="[
+                    rowSelection(row).checked ? 'bg-primary-50' : 'bg-card hover:bg-hover',
+                    rowClickable || expandOnClick ? 'cursor-pointer' : '',
+                    rowClass?.(row.item),
+                  ]"
+                  @click="onRowClick(row)"
+                  @keydown="onRowKeydown($event, row)"
+                >
+                  <!-- @click.stop обов'язковий: без нього перемикання
+                       прапорця ще й «активує» рядок. -->
+                  <td
+                    v-if="selectable"
+                    class="relative bg-inherit px-2"
+                    :class="[ROW_SEPARATOR, stickyTreeColumn ? 'sticky left-0 z-10' : '']"
+                    role="gridcell"
+                    @click.stop
+                    @pointerdown="pendingShift = $event.shiftKey"
+                  >
+                    <div class="flex items-center" :style="{ height: `${rowHeightPx}px` }">
+                      <UiCheckbox
+                        :model-value="rowSelection(row).checked"
+                        :indeterminate="rowSelection(row).indeterminate"
+                        :disabled="!canSelectId(row.id)"
+                        class="w-5"
+                        @update:model-value="toggleRow(row, $event)"
+                      >
+                        <span class="sr-only">{{ rowSelectionLabel(row) }}</span>
+                      </UiCheckbox>
+                    </div>
+                  </td>
+
+                  <td
+                    v-for="header in visibleHeaders"
+                    :key="header.value"
+                    :role="header.value === treeColumnValue ? 'rowheader' : 'gridcell'"
+                    class="relative bg-inherit"
+                    :class="[
+                      densityCell,
+                      ROW_SEPARATOR,
+                      isTreeSticky(header) ? 'sticky z-10' : '',
+                      isTreeSticky(header) && canScrollLeft ? 'ui-tree-table-sticky-edge' : '',
+                    ]"
+                    :style="isTreeSticky(header) ? treeStickyStyle : undefined"
+                  >
+                    <!-- Висота задається ТУТ, а не на <tr>: height на рядку
+                         таблиці — це мінімум, і будь-який вміст слота
+                         роздув би рядок, зламавши арифметику вікна. -->
+                    <div
+                      v-if="header.value === treeColumnValue"
+                      class="flex items-center overflow-hidden"
+                      :style="{ height: `${rowHeightPx}px` }"
+                    >
+                      <!--
+                        УСІ колонки ієрархії однакової ширини (w-5), і це не
+                        косметика. Коліно займає колонку БАТЬКА, а не власну
+                        додаткову, тож вертикаль дитини лягає рівно під центр
+                        шеврона батька. Коли напрямні були по 8px, коліно 20px,
+                        а шеврон ще 20px, кожен рівень зсувався на пів колонки
+                        — лінії підходили до папок повз них.
+                      -->
+                      <span
+                        v-for="(line, level) in row.guides"
+                        :key="level"
+                        class="relative h-full w-5 shrink-0"
+                        aria-hidden="true"
+                      >
+                        <span v-if="line" class="absolute bottom-0 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
+                      </span>
+
+                      <!-- Коліно. Нижня половина — лише за наявності
+                           наступного сусіда, інакше драбина рветься між
+                           сусідніми рядками. -->
+                      <span
+                        v-if="row.depth > 0"
+                        class="relative h-full w-5 shrink-0"
+                        aria-hidden="true"
+                      >
+                        <!--
+                          -translate-x-1/2 на КОЖНІЙ вертикалі обов'язковий.
+                          Без нього left-1/2 ставить на центр колонки лівий
+                          КРАЙ лінії, а не її середину, і вся драбина стоїть
+                          на пів пікселя правіше за шеврони. На екрані 1x це
+                          півпікселя округлюється в сусідній стовпчик — лінія
+                          видимо промахується повз папку.
+                        -->
+                        <span class="absolute bottom-1/2 left-1/2 top-0 w-px -translate-x-1/2 bg-line" />
+                        <span class="absolute left-1/2 top-1/2 h-px w-1/2 bg-line" />
+                        <span
+                          v-if="row.hasNextSibling"
+                          class="absolute bottom-0 left-1/2 top-1/2 w-px -translate-x-1/2 bg-line"
+                        />
+                      </span>
+
+                      <!-- Тоггл — span, а не button: у Tab-порядку між
+                           двома рядками інакше опинилося б стільки кнопок,
+                           скільки рядків у вікні. Доступна афорданс —
+                           aria-expanded на рядку плюс ← і →. -->
+                      <span
+                        v-if="row.hasChildren"
+                        class="relative flex h-full w-5 shrink-0 items-center justify-center text-muted transition-colors hover:text-ink"
+                        :class="CHEVRON_TOUCH"
+                        aria-hidden="true"
+                        @click.stop="toggle(row)"
+                      >
+                        <!-- Індикатор рівно на місці шеврона й того ж
+                             розміру: він його ЗАМІНЮЄ, тож будь-який інший
+                             розмір смикає рядок при кожному відкритті. -->
+                        <svg
+                          v-if="loadingSet.has(row.id)"
+                          class="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <circle
+                            class="opacity-30"
+                            cx="12"
+                            cy="12"
+                            r="9"
+                            stroke="currentColor"
+                            stroke-width="3"
+                          />
+                          <path
+                            d="M21 12a9 9 0 0 0-9-9"
+                            stroke="currentColor"
+                            stroke-width="3"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                        <svg
+                          v-else
+                          class="h-3.5 w-3.5 transition-transform"
+                          :class="row.expanded ? 'rotate-90' : ''"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M9 6l6 6-6 6"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                          />
+                        </svg>
+                      </span>
+                      <!--
+                        У листка шеврона немає, і горизонталь обривалась за
+                        цілу колонку до вмісту. Продовжуємо її тут — але не
+                        до самого краю: right-1.5 лишає зазор.
+
+                        Зазор обов'язковий саме тому, що іконка — слот, а не
+                        обов'язковий елемент. Коли її не передали, одразу за
+                        цією колонкою починається текст, і лінія впиралася б
+                        у першу літеру. З іконкою той самий зазор теж
+                        доречний — у гілок він уже є, бо шеврон центрований
+                        у своїй колонці.
+                      -->
+                      <span v-else class="relative h-full w-5 shrink-0" aria-hidden="true">
+                        <span
+                          v-if="row.depth > 0"
+                          class="absolute left-0 right-1.5 top-1/2 h-px bg-line"
+                        />
+                      </span>
+
+                      <span v-if="$slots.icon" class="mr-1.5 flex shrink-0 items-center text-muted">
+                        <slot
+                          name="icon"
+                          :item="row.item"
+                          :depth="row.depth"
+                          :expanded="row.expanded"
+                          :has-children="row.hasChildren"
+                        />
+                      </span>
+
+                      <span class="min-w-0 flex-1 truncate text-ink">
+                        <slot
+                          name="label"
+                          :item="row.item"
+                          :depth="row.depth"
+                          :expanded="row.expanded"
+                          :has-children="row.hasChildren"
+                        >
+                          {{ displayValue(row.item, header.value) }}
+                        </slot>
+                      </span>
+                    </div>
+
+                    <div
+                      v-else
+                      class="flex items-center overflow-hidden"
+                      :style="{ height: `${rowHeightPx}px` }"
+                    >
+                      <span class="min-w-0 flex-1 truncate">
+                        <slot
+                          :name="`cell-${header.value}`"
+                          :item="row.item"
+                          :header="header"
+                          :depth="row.depth"
+                        >
+                          {{ displayValue(row.item, header.value) }}
+                        </slot>
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+
+                <tr
+                  v-if="range.bottomPad > 0"
+                  aria-hidden="true"
+                  :style="{ height: `${range.bottomPad}px` }"
+                >
+                  <td :colspan="columnCount" class="p-0" />
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!-- Оверлей оновлення: дані вже є, але йде повторний запит. Заміняти

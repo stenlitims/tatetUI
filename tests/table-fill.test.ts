@@ -57,7 +57,9 @@ describe('UiTable fill', () => {
     const { root, wrapper, scroller } = boxes(mounted.host)
 
     expect(root.className).not.toContain('flex-col')
-    expect(wrapper.className.trim()).toBe('relative')
+    // Ні flex-колонки, ні min-h-0. Решта класів каркаса (isolate,
+    // group/table) від fill не залежить і тут не перевіряється.
+    expect(wrapper.className).not.toMatch(/\bflex\b|min-h-0/)
     expect(scroller.className).not.toContain('min-h-0')
     expect(scroller.style.maxHeight).toBe('24rem')
   })

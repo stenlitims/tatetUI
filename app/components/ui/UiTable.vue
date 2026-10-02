@@ -26,6 +26,7 @@ import {
   clampWidth,
   columnsMinWidth,
   compareValues,
+  countHiddenByUser,
   mergeColumnSettings,
   COLUMN_DEFAULT_WIDTH,
   type StoredColumn,
@@ -290,6 +291,22 @@ const DENSITY_SELECTION = {
   md: 'px-2 py-2.5',
 } as const
 
+/*
+ * Висота смуги під кнопкою налаштувань до першого виміру шапки (сервер і
+ * перший клієнтський рендер): однорядкова шапка без нижньої межі —
+ * py-1.5 + рядок text-xs і py-2.5 + рядок text-sm.
+ */
+const CORNER_FALLBACK_HEIGHT = { sm: '1.75rem', md: '2.5rem' } as const
+
+/*
+ * На дотику кнопка в куті шапки видна ЗАВЖДИ, тож остання колонка віддає
+ * їй місце: інакше праворуч вирівняний підпис («Сума») назавжди лишився б
+ * під кнопкою. З мишею кнопка з'являється лише на наведенні, і постійний
+ * резерв там був би діркою в шапці заради тимчасової кнопки. Ширина —
+ * кнопка (h-7 / h-6) плюс її відступ від краю і зазор до підпису.
+ */
+const CORNER_RESERVE = { sm: 'pointer-coarse:pe-8', md: 'pointer-coarse:pe-9' } as const
+
 /* ---------------------------------------------------------------- */
 /*  Стан колонок                                                    */
 /* ---------------------------------------------------------------- */
@@ -324,6 +341,9 @@ const isMounted = ref(false)
 const visibleHeaders = computed(() => localHeaders.value.filter((h) => h.visible !== false))
 const showSettings = computed(() => !!props.tableId)
 const columnCount = computed(() => visibleHeaders.value.length + (props.selectable ? 1 : 0))
+// Дефолти — props.headers: колонку, сховану самим споживачем, користувач
+// не ховав, і крапки на кнопці вона не вмикає.
+const hiddenByUser = computed(() => countHiddenByUser(localHeaders.value, props.headers))
 
 function storageKey() {
   return `table_settings_${props.tableId}`
@@ -593,6 +613,34 @@ const stickyColumnStyle = computed(() =>
 const isStickyColumn = (header: TableHeader) =>
   props.stickyColumn && header.value === visibleHeaders.value[0]?.value
 
+/*
+ * Висота шапки — для смуги під кнопкою налаштувань у куті.
+ *
+ * Міряється, а не виводиться зі щільності: колонка прапорців робить шапку
+ * вищою (40.4px проти 38.5px), а власний `header-*` слот — будь-якою.
+ * Смуга мусить збігатися з шапкою точно, інакше її підкладка або не
+ * накриває текст заголовка, або з'їдає лінію під шапкою.
+ */
+const headEl = ref<HTMLElement | null>(null)
+const headHeight = ref(0)
+
+const cornerStyle = computed(() => ({
+  // Мінус 1px — нижня межа шапки лишається видимою під смугою.
+  height: headHeight.value > 0 ? `${headHeight.value - 1}px` : CORNER_FALLBACK_HEIGHT[localDensity.value],
+}))
+
+function onObservedResize(entries: ResizeObserverEntry[]) {
+  measure()
+  for (const entry of entries) {
+    if (entry.target !== headEl.value) continue
+    // borderBoxSize дробовий і не бачить трансформацій предка (модалка
+    // відкривається з scale-95); offsetHeight округлив би 38.5 до 39, і
+    // смуга накрила б половину лінії під шапкою. Під display:none (картки
+    // нижче md) — нуль, і до повернення таблиці діє запасна висота.
+    headHeight.value = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight
+  }
+}
+
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
@@ -600,10 +648,13 @@ onMounted(() => {
   isMounted.value = true
   void nextTick(measure)
   // ResizeObserver ловить те, чого не ловить resize вікна: згортання
-  // сайдбара міняє ширину контейнера без жодної події вікна.
+  // сайдбара міняє ширину контейнера без жодної події вікна. Шапку він
+  // спостерігає окремо: перемикання щільності міняє її висоту, а розмір
+  // контейнера з maxHeight лишається тим самим.
   if (typeof ResizeObserver !== 'undefined' && scrollEl.value) {
-    resizeObserver = new ResizeObserver(measure)
+    resizeObserver = new ResizeObserver(onObservedResize)
     resizeObserver.observe(scrollEl.value)
+    if (headEl.value) resizeObserver.observe(headEl.value)
   }
   window.addEventListener('resize', measure, { passive: true })
 })
@@ -879,24 +930,17 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
     </Transition>
 
     <!--
-      Тулбар налаштувань — рядок над таблицею, а не липка колонка.
-
-      Колонка під кнопкою (40px порожніх <td> у кожному рядку) створювала
-      мертву смугу вздовж таблиці, крала ширину в останню колонку і
-      розганяла горизонтальний скрол навіть там, де вміст вміщувався.
-      Липкий жолоб right-0 при цьому ЗАВЖДИ накривав останні 40px вмісту —
-      останню колонку не можна було прочитати навіть повністю прогорнувши.
-
-      Тулбар не залежить ані від щільності рядків, ані від скролбарів.
-      На мобільних картках колонок немає, але налаштування лишаються
-      доцільними: видимість та порядок керують полями у картках.
+      Рядок над картками — ЛИШЕ нижче md і лише з мобільними картками.
+      Шапки в картках немає, тож і кута для кнопки налаштувань теж: вона
+      стає поруч із сортуванням, яке тут потрібне з тієї ж причини. На
+      картках колонок немає, але налаштування лишаються доцільними:
+      видимість і порядок керують полями в картках.
     -->
     <div
-      v-if="showSettings || mobileSortHeaders.length"
-      class="mb-2 flex items-center gap-2"
-      :class="showSettings ? '' : 'md:hidden'"
+      v-if="mobileCards && (showSettings || mobileSortHeaders.length)"
+      class="mb-2 flex items-center gap-2 md:hidden"
     >
-      <div v-if="mobileSortHeaders.length" class="flex min-w-0 flex-1 items-center gap-2 md:hidden">
+      <div v-if="mobileSortHeaders.length" class="flex min-w-0 flex-1 items-center gap-2">
         <label :for="mobileSortId" class="shrink-0 text-sm text-muted">Сортувати</label>
         <select
           :id="mobileSortId"
@@ -929,10 +973,12 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       </div>
       <TableColumnSettings
         v-if="showSettings"
+        trigger="toolbar"
         class="ml-auto"
         :headers="localHeaders"
         :density="localDensity"
         :density-toggle="densityToggle"
+        :hidden-count="hiddenByUser"
         @update:headers="onSettingsHeaders"
         @update:density="onSettingsDensity"
         @reset="resetAll"
@@ -944,14 +990,21 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
       прокрутки всередині сховано, картки — сусідній вузол). Саме тому
       тут `min-h-0` без `flex-1`: порожній `flex-1` з'їв би весь вільний
       простір і зіштовхнув картки за екран.
+
+      isolate тримає z-index шапки (20, закріплена колонка — 30) і кнопки
+      налаштувань (40) усередині таблиці. Без нього вони змагалися з
+      липкою шапкою СТОРІНКИ: виміряно на сайті документації — комірка
+      «SKU» закріпленої колонки (z-30) малювалася поверх його верхньої
+      панелі (теж z-30, але раніше в DOM), коли сторінку гортали під неї.
+
+      group/table — наведення на таблицю проявляє кнопку в куті шапки.
     -->
-    <div class="relative" :class="fill ? 'flex min-h-0 flex-col' : ''">
+    <div class="group/table relative isolate" :class="fill ? 'flex min-h-0 flex-col' : ''">
       <!--
         bg-card на контейнері обов'язковий, а не косметика: компонент і сам
-        малює card у трьох місцях — кнопку налаштувань, градієнт прокрутки і
-        оверлей «Оновлення…». Без власної поверхні вони лягають на те, що
-        просвічує крізь прозорі рядки (типово bg-main), і кнопка налаштувань
-        стає світлою плямою над останньою колонкою.
+        малює card у двох місцях — градієнт прокрутки і оверлей
+        «Оновлення…». Без власної поверхні вони лягають на те, що просвічує
+        крізь прозорі рядки (типово bg-main).
       -->
       <div
         ref="scrollEl"
@@ -961,250 +1014,294 @@ const showEmpty = computed(() => !props.loading && sortedItems.value.length === 
         @scroll.passive="measure"
       >
         <!--
-          border-separate з нульовим інтервалом, а НЕ border-collapse:
-          злиті межі не малюються під закріпленою шапкою — вона отримує
-          власний контекст малювання, і лінія під нею зникає рівно на час
-          прокрутки. Роздільники рядків тому — псевдоелементи комірок.
+          Сітка з однією клітинкою, де таблиця й кнопка налаштувань лежать
+          ОДНА НА ОДНІЙ. Кнопка — sticky-елемент сітки: right-0 тримає її
+          біля правого краю видимої області за будь-якої горизонтальної
+          прокрутки, top-0 — лише з липкою шапкою, тож без неї кнопка їде
+          вгору разом із шапкою, до якої належить. Жодного JS на прокрутці.
 
-          Нульовий інтервал заданий інлайново, а не класом border-spacing-0:
-          аудит стилів у check:docs читає будь-яке `border-*` як колірну
-          утиліту й шукає токен «spacing-0».
+          Чому не інакше:
+          - колонка під кнопку — 40px порожніх <td> у кожному рядку: мертва
+            смуга вздовж таблиці, вкрадена ширина й зайвий горизонтальний
+            скрол там, де вміст вміщувався;
+          - рядок над таблицею — ціла висота рядка заради іконки, якої
+            більшість часу ніхто не торкається;
+          - absolute на обгортці поза прокруткою — не знає про прокрутку:
+            без липкої шапки кнопка лишалась би висіти над рядками, коли
+            шапка вже поїхала, а відступ від вертикального скролбара
+            довелося б рахувати руками.
+
+          Ширина сітки — max(контейнер, мінімум таблиці): sticky-елемент
+          зсувається лише в межах своєї клітинки, і клітинка завширшки з
+          контейнер не дала б кнопці доїхати до краю прокрученої таблиці.
         -->
-        <table
-          class="w-full border-separate"
-          :aria-busy="loading || undefined"
-          :aria-multiselectable="selectable || undefined"
-          :style="{ tableLayout: 'fixed', minWidth: `${tableMinWidth}px`, borderSpacing: '0' }"
-        >
+        <div class="grid" :style="{ minWidth: `${tableMinWidth}px` }">
           <!--
-            Ширини живуть ТУТ, а не на кожній комірці. За table-layout: fixed
-            враховується лише перший рядок, тож інлайновий width на кожному
-            <td> був би мертвим стилем, помноженим на кількість рядків.
-            Колонка без width (flex) забирає залишок — це весь механізм, без JS.
+            У DOM — ПЕРЕД таблицею: Tab доходить до налаштувань одразу, а не
+            після обходу всіх рядків клікабельної таблиці.
           -->
-          <colgroup>
-            <col v-if="selectable" :style="{ width: `${SELECTION_COLUMN_WIDTH}px` }" />
-            <col
-              v-for="header in visibleHeaders"
-              :key="header.value"
-              :style="header.flex ? undefined : { width: `${header.width ?? COLUMN_DEFAULT_WIDTH}px` }"
-            />
-          </colgroup>
+          <TableColumnSettings
+            v-if="showSettings"
+            trigger="corner"
+            class="sticky right-0 z-40 col-start-1 row-start-1 self-start justify-self-end"
+            :class="canStickHeader ? 'top-0' : ''"
+            :style="cornerStyle"
+            :headers="localHeaders"
+            :density="localDensity"
+            :density-toggle="densityToggle"
+            :hidden-count="hiddenByUser"
+            :overflows-right="canScrollRight"
+            @update:headers="onSettingsHeaders"
+            @update:density="onSettingsDensity"
+            @reset="resetAll"
+          />
+          <!--
+            border-separate з нульовим інтервалом, а НЕ border-collapse:
+            злиті межі не малюються під закріпленою шапкою — вона отримує
+            власний контекст малювання, і лінія під нею зникає рівно на час
+            прокрутки. Роздільники рядків тому — псевдоелементи комірок.
 
-          <thead>
-            <tr>
-              <th
-                v-if="selectable"
-                scope="col"
-                class="border-b border-line bg-subtle"
-                :class="[
-                  densitySelectionClass,
-                  canStickHeader ? 'sticky top-0' : '',
-                  stickyColumn ? 'sticky left-0 z-30' : 'z-20',
-                ]"
-              >
-                <UiCheckbox
-                  :model-value="headerSelection === 'all'"
-                  :indeterminate="headerSelection === 'some'"
-                  :disabled="!selectablePageKeys.length"
-                  class="w-5"
-                  @update:model-value="toggleAll($event)"
-                >
-                  <span class="sr-only">Обрати всі рядки на сторінці</span>
-                </UiCheckbox>
-              </th>
-              <th
+            Нульовий інтервал заданий інлайново, а не класом border-spacing-0:
+            аудит стилів у check:docs читає будь-яке `border-*` як колірну
+            утиліту й шукає токен «spacing-0».
+          -->
+          <table
+            class="col-start-1 row-start-1 w-full border-separate"
+            :aria-busy="loading || undefined"
+            :aria-multiselectable="selectable || undefined"
+            :style="{ tableLayout: 'fixed', minWidth: `${tableMinWidth}px`, borderSpacing: '0' }"
+          >
+            <!--
+              Ширини живуть ТУТ, а не на кожній комірці. За table-layout: fixed
+              враховується лише перший рядок, тож інлайновий width на кожному
+              <td> був би мертвим стилем, помноженим на кількість рядків.
+              Колонка без width (flex) забирає залишок — це весь механізм, без JS.
+            -->
+            <colgroup>
+              <col v-if="selectable" :style="{ width: `${SELECTION_COLUMN_WIDTH}px` }" />
+              <col
                 v-for="header in visibleHeaders"
                 :key="header.value"
-                scope="col"
-                :aria-sort="ariaSort(header)"
-                :title="header.title"
-                class="group/th relative border-b border-line bg-subtle font-medium text-muted"
-                :class="[
-                  densityClass,
-                  alignClass(header),
-                  canStickHeader ? 'sticky top-0' : '',
-                  isStickyColumn(header) ? 'sticky z-30' : 'z-20',
-                  isStickyColumn(header) && canScrollLeft ? 'ui-table-sticky-edge' : '',
-                ]"
-                :style="isStickyColumn(header) ? stickyColumnStyle : undefined"
-              >
-                <slot :name="`header-${header.value}`" :header="header">
-                  <button
-                    v-if="header.sortable"
-                    type="button"
-                    class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
-                    @click="toggleSort(header)"
-                  >
-                    <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
-                         підпис: праворуч у комірці живе ручка зміни ширини. -->
-                    <span class="truncate">{{ header.text }}</span>
-                    <!-- Привид-шеврон: підказка, що колонка взагалі сортується.
-                         На дотику наведення не буває — там привид видно завжди. -->
-                    <svg
-                      class="h-3 w-3 shrink-0 transition-opacity"
-                      :class="
-                        internalSort?.by === header.value
-                          ? 'opacity-100'
-                          : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
-                      "
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path
-                        :d="
-                          internalSort?.by === header.value && internalSort.dir === 'desc'
-                            ? 'M6 9l6 6 6-6'
-                            : 'M6 15l6-6 6 6'
-                        "
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                      />
-                    </svg>
-                  </button>
-                  <span v-else class="block truncate">{{ header.text }}</span>
-                </slot>
+                :style="header.flex ? undefined : { width: `${header.width ?? COLUMN_DEFAULT_WIDTH}px` }"
+              />
+            </colgroup>
 
-                <!-- Хват ресайзу проявляється на наведенні на заголовок:
-                     інакше про можливість тягнути можна дізнатися лише
-                     випадково, наштовхнувшись на невидиму смужку. touch-none
-                     обов'язковий — без нього браузер забирає горизонтальний
-                     жест собі як прокрутку. -->
-                <span
-                  v-if="isResizable(header)"
-                  class="absolute inset-y-1.5 right-0 w-1 cursor-col-resize touch-none rounded-full bg-line-strong opacity-0 transition-opacity group-hover/th:opacity-100 hover:bg-accent-solid"
-                  :class="resizing?.value === header.value ? 'bg-accent-solid opacity-100' : ''"
-                  @pointerdown="onResizeStart($event, header)"
-                  @pointermove="onResizeMove"
-                  @pointerup="onResizeEnd"
-                  @pointercancel="onResizeEnd"
-                  @dblclick.stop="resetWidth(header)"
-                  @click.stop
-                />
-              </th>
-            </tr>
-          </thead>
-
-          <tbody>
-            <!--
-              v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
-              елементі у Vue 3 v-if має вищий пріоритет і не бачить змінної
-              циклу.
-            -->
-            <template v-if="showSkeleton">
-              <tr v-for="row in skeletonRows" :key="`sk-${row}`" class="bg-card">
-                <td v-if="selectable" class="relative" :class="[densitySelectionClass, ROW_SEPARATOR]">
-                  <UiSkeleton class="h-4 w-4 rounded-control" />
-                </td>
-                <td
-                  v-for="header in visibleHeaders"
-                  :key="header.value"
-                  class="relative"
-                  :class="[densityClass, ROW_SEPARATOR]"
-                >
-                  <!-- Ширина заглушки детермінована, а не Math.random(): інакше
-                       вона мінялася б на кожному рендері й миготіла. -->
-                  <UiSkeleton
-                    class="h-3"
-                    :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
-                  />
-                </td>
-              </tr>
-            </template>
-
-            <tr v-else-if="showEmpty">
-              <td :colspan="columnCount" class="p-0">
-                <slot name="empty">
-                  <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
-                </slot>
-              </td>
-            </tr>
-
-            <template v-else>
-              <!--
-                Клікабельний рядок лишається рядком: role="button" на <tr>
-                стирав семантику таблиці (комірки більше не пов'язані із
-                заголовками) і робив прапорець та кнопки в комірках
-                вкладеними в кнопку — для скрінрідера їх не існувало.
-                Фокусований рядок скрінрідер зачитує вмістом, Enter/Space
-                і клік у режимі читання активують його так само.
-              -->
-              <tr
-                v-for="item in sortedItems"
-                :key="String(item[keyRow])"
-                class="transition-colors"
-                :class="[
-                  // Тло рядка непрозоре ЗАВЖДИ, а не лише з tableId: під
-                  // закріпленою колонкою й градієнтами прокрутки крізь
-                  // прозорий рядок просвічувало б тло сторінки.
-                  // Підсвітка на наведенні — і в некликабельній таблиці: у
-                  // широкому рядку око губить, до якого запису належить
-                  // комірка праворуч.
-                  selectable && selectedSet.has(item[keyRow] as string | number)
-                    ? 'bg-primary-50'
-                    : 'bg-card hover:bg-hover',
-                  rowClickable ? `cursor-pointer focus:outline-none ${ROW_FOCUS_RING}` : '',
-                  rowClass?.(item),
-                ]"
-                :tabindex="rowClickable ? 0 : undefined"
-                :aria-selected="selectable ? selectedSet.has(item[keyRow] as string | number) : undefined"
-                @click="onRowActivate($event, item)"
-                @keydown="onRowKeydown($event, item)"
-              >
-                <!--
-                  @click.stop обов'язковий: без нього перемикання прапорця
-                  ще й «активує» рядок, і rowClickable-таблиця відкриває
-                  картку щоразу, коли її намагаються лише виділити.
-                -->
-                <td
+            <thead ref="headEl">
+              <tr>
+                <th
                   v-if="selectable"
-                  class="relative bg-inherit"
+                  scope="col"
+                  class="border-b border-line bg-subtle"
                   :class="[
                     densitySelectionClass,
-                    ROW_SEPARATOR,
-                    stickyColumn ? 'sticky left-0 z-10' : '',
+                    canStickHeader ? 'sticky top-0' : '',
+                    stickyColumn ? 'sticky left-0 z-30' : 'z-20',
                   ]"
-                  @click.stop
-                  @keydown.stop
-                  @pointerdown="pendingShift = $event.shiftKey"
-                  @mousedown="onSelectionMousedown"
                 >
                   <UiCheckbox
-                    :model-value="selectedSet.has(item[keyRow] as string | number)"
-                    :disabled="!canSelect(item)"
+                    :model-value="headerSelection === 'all'"
+                    :indeterminate="headerSelection === 'some'"
+                    :disabled="!selectablePageKeys.length"
                     class="w-5"
-                    @update:model-value="toggleRow(item, $event)"
+                    @update:model-value="toggleAll($event)"
                   >
-                    <span class="sr-only">{{ rowSelectionLabel(item) }}</span>
+                    <span class="sr-only">Обрати всі рядки на сторінці</span>
                   </UiCheckbox>
-                </td>
-                <td
-                  v-for="header in visibleHeaders"
+                </th>
+                <th
+                  v-for="(header, index) in visibleHeaders"
                   :key="header.value"
-                  :title="cellTitle(item, header)"
-                  class="relative bg-inherit text-ink"
+                  scope="col"
+                  :aria-sort="ariaSort(header)"
+                  :title="header.title"
+                  class="group/th relative border-b border-line bg-subtle font-medium text-muted"
                   :class="[
                     densityClass,
-                    ROW_SEPARATOR,
                     alignClass(header),
-                    header.align === 'right' ? 'tabular-nums' : '',
-                    isStickyColumn(header) ? 'sticky z-10' : '',
+                    canStickHeader ? 'sticky top-0' : '',
+                    isStickyColumn(header) ? 'sticky z-30' : 'z-20',
                     isStickyColumn(header) && canScrollLeft ? 'ui-table-sticky-edge' : '',
+                    showSettings && index === visibleHeaders.length - 1 ? CORNER_RESERVE[localDensity] : '',
                   ]"
                   :style="isStickyColumn(header) ? stickyColumnStyle : undefined"
                 >
-                  <div :class="clampClass(header)">
-                    <slot :name="`cell-${header.value}`" :item="item" :header="header">
-                      {{ item[header.value] ?? '—' }}
-                    </slot>
-                  </div>
+                  <slot :name="`header-${header.value}`" :header="header">
+                    <button
+                      v-if="header.sortable"
+                      type="button"
+                      class="group relative inline-flex max-w-full items-center gap-1 rounded-control transition-colors hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+                      @click="toggleSort(header)"
+                    >
+                      <!-- Зона дотику — 45px заввишки (h-12), але не ширша за
+                           підпис: праворуч у комірці живе ручка зміни ширини. -->
+                      <span class="truncate">{{ header.text }}</span>
+                      <!-- Привид-шеврон: підказка, що колонка взагалі сортується.
+                           На дотику наведення не буває — там привид видно завжди. -->
+                      <svg
+                        class="h-3 w-3 shrink-0 transition-opacity"
+                        :class="
+                          internalSort?.by === header.value
+                            ? 'opacity-100'
+                            : 'opacity-0 group-hover:opacity-40 group-focus-visible:opacity-40 pointer-coarse:opacity-40'
+                        "
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          :d="
+                            internalSort?.by === header.value && internalSort.dir === 'desc'
+                              ? 'M6 9l6 6 6-6'
+                              : 'M6 15l6-6 6 6'
+                          "
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                        />
+                      </svg>
+                    </button>
+                    <span v-else class="block truncate">{{ header.text }}</span>
+                  </slot>
+
+                  <!-- Хват ресайзу проявляється на наведенні на заголовок:
+                       інакше про можливість тягнути можна дізнатися лише
+                       випадково, наштовхнувшись на невидиму смужку. touch-none
+                       обов'язковий — без нього браузер забирає горизонтальний
+                       жест собі як прокрутку. -->
+                  <span
+                    v-if="isResizable(header)"
+                    class="absolute inset-y-1.5 right-0 w-1 cursor-col-resize touch-none rounded-full bg-line-strong opacity-0 transition-opacity group-hover/th:opacity-100 hover:bg-accent-solid"
+                    :class="resizing?.value === header.value ? 'bg-accent-solid opacity-100' : ''"
+                    @pointerdown="onResizeStart($event, header)"
+                    @pointermove="onResizeMove"
+                    @pointerup="onResizeEnd"
+                    @pointercancel="onResizeEnd"
+                    @dblclick.stop="resetWidth(header)"
+                    @click.stop
+                  />
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <!--
+                v-if і v-for навмисно РОЗНЕСЕНІ по різних вузлах. На одному
+                елементі у Vue 3 v-if має вищий пріоритет і не бачить змінної
+                циклу.
+              -->
+              <template v-if="showSkeleton">
+                <tr v-for="row in skeletonRows" :key="`sk-${row}`" class="bg-card">
+                  <td v-if="selectable" class="relative" :class="[densitySelectionClass, ROW_SEPARATOR]">
+                    <UiSkeleton class="h-4 w-4 rounded-control" />
+                  </td>
+                  <td
+                    v-for="header in visibleHeaders"
+                    :key="header.value"
+                    class="relative"
+                    :class="[densityClass, ROW_SEPARATOR]"
+                  >
+                    <!-- Ширина заглушки детермінована, а не Math.random(): інакше
+                         вона мінялася б на кожному рендері й миготіла. -->
+                    <UiSkeleton
+                      class="h-3"
+                      :style="{ width: `${55 + ((row * 17 + header.value.length * 13) % 40)}%` }"
+                    />
+                  </td>
+                </tr>
+              </template>
+
+              <tr v-else-if="showEmpty">
+                <td :colspan="columnCount" class="p-0">
+                  <slot name="empty">
+                    <p class="px-4 py-10 text-center text-sm text-muted">{{ emptyText }}</p>
+                  </slot>
                 </td>
               </tr>
-            </template>
-          </tbody>
-        </table>
+
+              <template v-else>
+                <!--
+                  Клікабельний рядок лишається рядком: role="button" на <tr>
+                  стирав семантику таблиці (комірки більше не пов'язані із
+                  заголовками) і робив прапорець та кнопки в комірках
+                  вкладеними в кнопку — для скрінрідера їх не існувало.
+                  Фокусований рядок скрінрідер зачитує вмістом, Enter/Space
+                  і клік у режимі читання активують його так само.
+                -->
+                <tr
+                  v-for="item in sortedItems"
+                  :key="String(item[keyRow])"
+                  class="transition-colors"
+                  :class="[
+                    // Тло рядка непрозоре ЗАВЖДИ, а не лише з tableId: під
+                    // закріпленою колонкою й градієнтами прокрутки крізь
+                    // прозорий рядок просвічувало б тло сторінки.
+                    // Підсвітка на наведенні — і в некликабельній таблиці: у
+                    // широкому рядку око губить, до якого запису належить
+                    // комірка праворуч.
+                    selectable && selectedSet.has(item[keyRow] as string | number)
+                      ? 'bg-primary-50'
+                      : 'bg-card hover:bg-hover',
+                    rowClickable ? `cursor-pointer focus:outline-none ${ROW_FOCUS_RING}` : '',
+                    rowClass?.(item),
+                  ]"
+                  :tabindex="rowClickable ? 0 : undefined"
+                  :aria-selected="selectable ? selectedSet.has(item[keyRow] as string | number) : undefined"
+                  @click="onRowActivate($event, item)"
+                  @keydown="onRowKeydown($event, item)"
+                >
+                  <!--
+                    @click.stop обов'язковий: без нього перемикання прапорця
+                    ще й «активує» рядок, і rowClickable-таблиця відкриває
+                    картку щоразу, коли її намагаються лише виділити.
+                  -->
+                  <td
+                    v-if="selectable"
+                    class="relative bg-inherit"
+                    :class="[
+                      densitySelectionClass,
+                      ROW_SEPARATOR,
+                      stickyColumn ? 'sticky left-0 z-10' : '',
+                    ]"
+                    @click.stop
+                    @keydown.stop
+                    @pointerdown="pendingShift = $event.shiftKey"
+                    @mousedown="onSelectionMousedown"
+                  >
+                    <UiCheckbox
+                      :model-value="selectedSet.has(item[keyRow] as string | number)"
+                      :disabled="!canSelect(item)"
+                      class="w-5"
+                      @update:model-value="toggleRow(item, $event)"
+                    >
+                      <span class="sr-only">{{ rowSelectionLabel(item) }}</span>
+                    </UiCheckbox>
+                  </td>
+                  <td
+                    v-for="header in visibleHeaders"
+                    :key="header.value"
+                    :title="cellTitle(item, header)"
+                    class="relative bg-inherit text-ink"
+                    :class="[
+                      densityClass,
+                      ROW_SEPARATOR,
+                      alignClass(header),
+                      header.align === 'right' ? 'tabular-nums' : '',
+                      isStickyColumn(header) ? 'sticky z-10' : '',
+                      isStickyColumn(header) && canScrollLeft ? 'ui-table-sticky-edge' : '',
+                    ]"
+                    :style="isStickyColumn(header) ? stickyColumnStyle : undefined"
+                  >
+                    <div :class="clampClass(header)">
+                      <slot :name="`cell-${header.value}`" :item="item" :header="header">
+                        {{ item[header.value] ?? '—' }}
+                      </slot>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <!--
