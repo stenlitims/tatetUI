@@ -103,6 +103,25 @@
      3:1 для графічних елементів (WCAG 1.4.11). */
   --rating: #d97706;              --rating-rgb: 217, 119, 6;
 
+  /* Палітра аватарів без картинки (UiAvatar tone="auto"): градієнт від → до.
+     Однакова в обох темах; білий текст ≥ 4.5:1 у найсвітлішій точці. */
+  --avatar-0-from: #2563eb;       --avatar-0-from-rgb: 37, 99, 235;
+  --avatar-0-to: #1d4ed8;         --avatar-0-to-rgb: 29, 78, 216;
+  --avatar-1-from: #7c3aed;       --avatar-1-from-rgb: 124, 58, 237;
+  --avatar-1-to: #6d28d9;         --avatar-1-to-rgb: 109, 40, 217;
+  --avatar-2-from: #db2777;       --avatar-2-from-rgb: 219, 39, 119;
+  --avatar-2-to: #be185d;         --avatar-2-to-rgb: 190, 24, 93;
+  --avatar-3-from: #c2410c;       --avatar-3-from-rgb: 194, 65, 12;
+  --avatar-3-to: #9a3412;         --avatar-3-to-rgb: 154, 52, 18;
+  --avatar-4-from: #15803d;       --avatar-4-from-rgb: 21, 128, 61;
+  --avatar-4-to: #166534;         --avatar-4-to-rgb: 22, 101, 52;
+  --avatar-5-from: #0f766e;       --avatar-5-from-rgb: 15, 118, 110;
+  --avatar-5-to: #115e59;         --avatar-5-to-rgb: 17, 94, 89;
+  --avatar-6-from: #0e7490;       --avatar-6-from-rgb: 14, 116, 144;
+  --avatar-6-to: #155e75;         --avatar-6-to-rgb: 21, 94, 117;
+  --avatar-7-from: #dc2626;       --avatar-7-from-rgb: 220, 38, 38;
+  --avatar-7-to: #b91c1c;         --avatar-7-to-rgb: 185, 28, 28;
+
   /* Семантичні радіуси: контрол / картка / оверлей.
      Іменовані за РОЛЛЮ, а не за розміром — інакше «зробимо тут трохи
      кругліше» розповзається по проєкту без жодного правила. */

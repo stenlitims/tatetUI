@@ -328,7 +328,7 @@ defineExpose({ show, close })
         role="menu"
         :aria-label="ariaLabel"
         data-ui-context-menu
-        class="scrollbar-thin origin-top-left fixed max-h-80 overflow-y-auto overscroll-contain rounded-control border border-line bg-dropdown p-1 text-ink shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="scrollbar-thin origin-top-left fixed max-h-[min(30rem,calc(100dvh-1rem))] overflow-y-auto overscroll-contain rounded-control border border-line bg-dropdown p-1 text-ink shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :style="{ ...position, width }"
         tabindex="-1"
         @keydown="onMenuKeydown"

@@ -12,6 +12,8 @@ import UiAvatar from '~/components/ui/UiAvatar.vue'
     <UiAvatar tone="neutral" name="Сервісний акаунт" :size="32" />
     <UiAvatar name="Оксана Литвин" :size="40" status="online" />
     <UiAvatar name="Денис Кравець" :size="40" status="busy" tone="neutral" />
+    <!-- Кольорова палітра: колір стабільний для одного seed -->
+    <UiAvatar v-for="(person, i) in ['Ігор Шевченко', 'Марія Ковалишин', 'Олег Марченко', 'Оксана Литвин', 'Денис Кравець', 'Софія Бондар']" :key="person" tone="auto" :seed="`demo-${i}`" :name="person" :size="40" />
     <!-- Компанія — квадрат; ініціали беруться з букв, а не з лапок: «ТС». -->
     <UiAvatar name="ТОВ «Сігма Трейд»" :size="40" shape="square" />
   </div>

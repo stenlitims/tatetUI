@@ -588,9 +588,16 @@ describe('UiAvatar', () => {
   it('кегль ініціалів росте з розміром, а не впирається в text-sm', async () => {
     mounted = await mountComponent(UiAvatar, { name: 'Ігор Шевченко', size: 64 })
     const span = mounted.host.querySelector<HTMLElement>('[role="img"] span span[aria-hidden="true"]')!
-    expect(span.style.fontSize).toBe('26px')
+    // Пара літер — 36% діаметра (64 → 23px), щоб «МШ» не впиралося в краї кола.
+    expect(span.style.fontSize).toBe('23px')
     await mounted.update({ size: 20 })
     expect(span.style.fontSize).toBe('10px')
+  })
+
+  it('одна літера — 40% діаметра', async () => {
+    mounted = await mountComponent(UiAvatar, { name: 'Дизайн', size: 50 })
+    const span = mounted.host.querySelector<HTMLElement>('[role="img"] span span[aria-hidden="true"]')!
+    expect(span.style.fontSize).toBe('20px')
   })
 
   it('shape="square" — картка замість кола', async () => {

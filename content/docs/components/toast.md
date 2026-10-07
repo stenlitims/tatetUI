@@ -52,7 +52,7 @@ const upload = toast.loading('Завантаження…')
 toast.update(upload, { type: 'success', message: 'Файл завантажено' })
 ```
 
-Контейнер `UiToaster` монтується **рівно один раз**, зазвичай в `app.vue`.
+Контейнер `UiToaster` монтується **рівно один раз**, зазвичай в `app.vue`. Де стоїть стос на екрані від 768px, задає проп `placement` (`top-right` за замовчуванням, `bottom-right`, `bottom-center`): у застосунку з кнопками в шапці знизу сповіщення не перекривають елементи керування. На вужчому екрані стос завжди знизу на всю ширину. Коли знизу екрана стоїть власна панель (плеєр, панель керування), підніміть стос змінною `--toaster-offset-bottom` на `<html>`: `document.documentElement.style.setProperty('--toaster-offset-bottom', '88px')`.
 
 ## API
 

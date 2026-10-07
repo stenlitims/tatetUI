@@ -634,4 +634,20 @@ describe('UiResizablePanels', () => {
     expect(separator.className).toContain('pointer-coarse:after:h-12')
     mounted.unmount()
   })
+
+  it('separatorStyle="line": лише лінія 1px, зона захоплення — невидимий after', async () => {
+    const mounted = await mountComponent(UiResizablePanels, { separatorStyle: 'line' }, { start: () => 'A', end: () => 'B' })
+    const separator = mounted.host.querySelector<HTMLElement>('[role="separator"]')!
+    const tokens = () => new Set(separator.className.split(/\s+/))
+    // Типовий вигляд (смуга 11px із лінією у ::before) для line не діє.
+    expect(tokens().has('w-px')).toBe(true)
+    expect(tokens().has('bg-line')).toBe(true)
+    expect(tokens().has('after:w-3')).toBe(true)
+    expect(tokens().has('w-3')).toBe(false)
+    expect(tokens().has('bg-subtle')).toBe(false)
+    await mounted.update({ separatorStyle: 'band' })
+    expect(tokens().has('bg-subtle')).toBe(true)
+    expect(tokens().has('w-px')).toBe(false)
+    mounted.unmount()
+  })
 })

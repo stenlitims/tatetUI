@@ -31,6 +31,12 @@ const props = withDefaults(
     endClass?: string
     /** Клас роздільника: напр. прибрати його разом із прихованою панеллю. */
     separatorClass?: string
+    /**
+     * Вигляд роздільника. `band` — смуга 11px з лінією посередині (типово).
+     * `line` — лише лінія 1px між панелями, як межа в застосунках-месенджерах;
+     * зона захоплення лишається 12px (48px на дотику) — невидима, навколо лінії.
+     */
+    separatorStyle?: 'band' | 'line'
     /** Доступна назва першої панелі. */
     startLabel?: string
     /** Доступна назва другої панелі. */
@@ -52,6 +58,7 @@ const props = withDefaults(
     startClass: undefined,
     endClass: undefined,
     separatorClass: undefined,
+    separatorStyle: 'band',
     startLabel: 'Перша панель',
     endLabel: 'Друга панель',
     separatorLabel: 'Змінити розмір панелей',
@@ -99,9 +106,31 @@ const rootClass = computed(() => isHorizontal.value ? 'flex-row' : 'flex-col')
 // Видимий роздільник — 11px: пальцем у нього не влучити, і на телефоні
 // панелі фактично не розсувались. На coarse-вказівнику ціль розширює
 // невидима смуга 45px уздовж роздільника (якір — relative на ньому).
-const separatorSizeClass = computed(() => isHorizontal.value
-  ? "w-3 cursor-col-resize before:h-full before:w-px pointer-coarse:after:absolute pointer-coarse:after:inset-y-0 pointer-coarse:after:left-1/2 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:content-['']"
-  : "h-3 cursor-row-resize before:h-px before:w-full pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']")
+const separatorSizeClass = computed(() => {
+  const line = props.separatorStyle === 'line'
+  if (isHorizontal.value) {
+    return line
+      ? "w-px cursor-col-resize after:absolute after:inset-y-0 after:-left-1.5 after:w-3 after:content-[''] pointer-coarse:after:-left-6 pointer-coarse:after:w-12"
+      : "w-3 cursor-col-resize before:h-full before:w-px pointer-coarse:after:absolute pointer-coarse:after:inset-y-0 pointer-coarse:after:left-1/2 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:content-['']"
+  }
+  return line
+    ? "h-px cursor-row-resize after:absolute after:inset-x-0 after:-top-1.5 after:h-3 after:content-[''] pointer-coarse:after:-top-6 pointer-coarse:after:h-12"
+    : "h-3 cursor-row-resize before:h-px before:w-full pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-12 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+})
+// Колір роздільника — одна гілка, один набір класів: у `band` фарбується лінія
+// (`before:`), у `line` — сам елемент. Перетягування й наведення — акцентні.
+const separatorToneClass = computed(() => {
+  if (props.separatorStyle === 'line') {
+    return dragging.value
+      ? 'bg-accent-solid'
+      : 'bg-line transition-colors hover:bg-accent-solid focus-visible:bg-accent-solid'
+  }
+  return [
+    'bg-subtle before:block before:transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
+    dragging.value ? 'before:bg-accent-solid' : 'before:bg-line hover:before:bg-accent-solid',
+  ].join(' ')
+})
+const handleToneClass = computed(() => (dragging.value ? 'opacity-100 bg-accent-solid' : 'bg-line-strong opacity-0'))
 const startStyle = computed(() => ({ flexBasis: `${value.value}%` }))
 
 function commit(nextValue: number, final = false) {
@@ -236,8 +265,8 @@ onBeforeUnmount(() => stopDragging())
       :aria-valuenow="value"
       :aria-disabled="disabled ? 'true' : undefined"
       :tabindex="disabled ? -1 : 0"
-      class="group relative z-10 flex shrink-0 touch-none items-center justify-center bg-subtle outline-none before:block before:bg-line before:transition-colors hover:before:bg-accent-solid focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      :class="[separatorSizeClass, separatorClass, { 'cursor-not-allowed opacity-50': disabled, 'before:bg-accent-solid': dragging }]"
+      class="group relative z-10 flex shrink-0 touch-none items-center justify-center outline-none"
+      :class="[separatorSizeClass, separatorToneClass, separatorClass, { 'cursor-not-allowed opacity-50': disabled }]"
       @pointerdown="startDragging"
       @keydown="onKeydown"
     >
@@ -245,8 +274,8 @@ onBeforeUnmount(() => stopDragging())
            перетягування. Лінія сама по собі не каже, що її можна тягнути. -->
       <span
         aria-hidden="true"
-        class="absolute rounded-full bg-line-strong opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
-        :class="[isHorizontal ? 'h-8 w-1' : 'h-1 w-8', dragging ? 'opacity-100 bg-accent-solid' : '']"
+        class="absolute rounded-full transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+        :class="[isHorizontal ? 'h-8 w-1' : 'h-1 w-8', handleToneClass]"
       />
       <span class="sr-only">{{ Math.round(value) }}%</span>
     </div>

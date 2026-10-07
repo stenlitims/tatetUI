@@ -272,9 +272,9 @@ onBeforeUnmount(() => {
               </slot>
             </div>
             <!--
-              Хрестик лишається дрібним (h-8 = 30px) — це вторинна дія в
-              шапці, збільшувати заливку означало б сперечатися з назвою
-              вікна. Тому точність дотику тримає невидима зона 45×45 через
+              Хрестик — того ж розміру, що й кнопки футера (h-10 → md:h-9), тож
+              шапка й футер однакової висоти і вікно виглядає симетрично.
+              Точність дотику тримає невидима зона 45×45 через
               `pointer-coarse:after:` — той самий патерн, що в UiButton і
               UiSwitch. Без неї на телефоні єдина кнопка закриття була
               нижчою за мінімальну ціль у 44px (W3C 2.5.8 Target Size).
@@ -284,7 +284,7 @@ onBeforeUnmount(() => {
             <button
               v-if="closable"
               type="button"
-              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted md:h-9 md:w-9 transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               aria-label="Закрити"
               @click="requestClose('button')"
             >
@@ -309,7 +309,7 @@ onBeforeUnmount(() => {
 
           <div
             v-if="$slots.footer"
-            class="flex shrink-0 flex-wrap justify-end gap-3 border-t border-line bg-subtle px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-4"
+            class="flex shrink-0 flex-wrap justify-end gap-3 border-t border-line bg-subtle px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-3 [&>*]:justify-center sm:[&>*]:min-w-28 max-sm:[&>*]:flex-1"
           >
             <slot name="footer" />
           </div>

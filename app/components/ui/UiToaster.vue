@@ -5,6 +5,19 @@ import { useToast, type Toast, type ToastType } from '~/composables/useToast'
 /** Глобальний контейнер. Монтується один раз; керування — через useToast(). */
 defineSlots<Record<string, never>>()
 
+withDefaults(
+  defineProps<{
+    /**
+     * Де стоїть стос сповіщень на екрані від 768px: `top-right` (за
+     * замовчуванням), `bottom-right` або `bottom-center`. У застосунках із
+     * кнопками в шапці знизу не перекриває елементи керування. На вужчому
+     * екрані стос завжди знизу на всю ширину.
+     */
+    placement?: 'top-right' | 'bottom-right' | 'bottom-center'
+  }>(),
+  { placement: 'top-right' },
+)
+
 const { toasts, dismiss, dismissAll, pause, resume } = useToast()
 const teleportReady = shallowRef(false)
 const region = shallowRef<HTMLElement | null>(null)
@@ -376,6 +389,7 @@ onBeforeUnmount(() => {
       ref="region"
       data-overlay-ignore
       class="ui-toaster"
+      :data-placement="placement"
       role="region"
       aria-label="Сповіщення"
       aria-keyshortcuts="F8"
@@ -542,7 +556,7 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 9999;
   right: max(8px, env(safe-area-inset-right, 0px));
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(8px + var(--toaster-offset-bottom, 0px) + env(safe-area-inset-bottom, 0px));
   left: max(8px, env(safe-area-inset-left, 0px));
   display: flex;
   flex-direction: column;
@@ -658,7 +672,9 @@ onBeforeUnmount(() => {
   display: grid;
   width: 32px;
   height: 32px;
-  margin: -5px -5px 0 0;
+  /* Центр кнопки — на центрі іконки (34px): у однорядковому тості хрестик
+     не висить вище за текст. */
+  margin: 1px -5px 0 0;
   justify-self: end;
   place-items: center;
 }
@@ -756,6 +772,17 @@ onBeforeUnmount(() => {
     max-height: 70vh;
     max-height: 70dvh;
   }
+  .ui-toaster[data-placement='bottom-right'],
+  .ui-toaster[data-placement='bottom-center'] {
+    --toast-enter-y: 12px;
+    top: auto;
+    bottom: calc(12px + var(--toaster-offset-bottom, 0px) + env(safe-area-inset-bottom, 0px));
+  }
+  .ui-toaster[data-placement='bottom-center'] {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+  }
 }
 
 @media (max-width: 767px), (pointer: coarse) {
@@ -767,7 +794,7 @@ onBeforeUnmount(() => {
   .ui-toast-close {
     width: 44px;
     height: 44px;
-    margin: -8px -8px 0 0;
+    margin: -5px -8px 0 0;
   }
   .ui-toast-action,
   .ui-toaster-clear {

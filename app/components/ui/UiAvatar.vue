@@ -1,12 +1,32 @@
 <script lang="ts">
 /**
- * Кегль ініціалів — частка діаметра, а не сходинки text-xs/text-sm.
+ * Кегль ініціалів — частка діаметра (40% для однієї літери, 36% для пари),
+ * а не сходинки text-xs/text-sm.
  * Сходинки впиралися в text-sm (13px) на будь-якому розмірі, а плитка «+N»
  * в UiAvatarGroup рахувала кегль пропорційно: на 64px ініціали 13px стояли
  * поруч із «+3» у 23px. Одна формула на обидва — і стек читається рівно.
  */
-export function initialsFontSize(size: number): number {
-  return Math.max(10, Math.round(size * 0.4))
+/** Кількість кольорів палітри `tone="auto"` (токени `--avatar-N-from/to`). */
+export const AVATAR_PALETTE_SIZE = 8
+
+/**
+ * Номер кольору за рядком (FNV-1a): той самий рядок завжди дає той самий
+ * колір. Передавайте стабільний ідентифікатор (id), а не ім'я — інакше
+ * перейменування змінює колір.
+ */
+export function avatarPaletteIndex(seed: string): number {
+  let h = 0x811c9dc5
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i)
+    h = Math.imul(h, 0x01000193)
+  }
+  return (h >>> 0) % AVATAR_PALETTE_SIZE
+}
+
+export function initialsFontSize(size: number, letters = 2): number {
+  // Дві широкі літери («МШ», «ЖД») при 40% діаметра впираються в краї кола:
+  // для пари — 36%, для однієї літери лишається 40%.
+  return Math.max(10, Math.round(size * (letters > 1 ? 0.36 : 0.4)))
 }
 </script>
 
@@ -21,8 +41,13 @@ const props = withDefaults(
     name?: string
     /** Розмір у пікселях. */
     size?: number
-    /** Палітра заливки, коли картинки немає. */
-    tone?: 'primary' | 'neutral'
+    /**
+     * Палітра заливки, коли картинки немає. `auto` — один із восьми
+     * кольорів за `seed` (або за іменем): так учасників групи видно одразу.
+     */
+    tone?: 'primary' | 'neutral' | 'auto'
+    /** Стабільний ідентифікатор для `tone="auto"`; за замовчуванням — `name`. */
+    seed?: string
     /**
      * Форма. `square` — для компаній, команд і логотипів: коло підказує
      * «людина», і логотип у колі ще й втрачає кути.
@@ -30,11 +55,13 @@ const props = withDefaults(
     shape?: 'circle' | 'square'
     /**
      * Індикатор присутності у правому нижньому куті. Колір дублюється
-     * словом у доступній назві: «Марія, онлайн».
+     * словом у доступній назві: «Марія, онлайн». Кільце навколо крапки —
+     * колір картки; на іншому тлі (активний рядок списку, hover) задайте
+     * батькові змінну `--avatar-ring`.
      */
     status?: 'online' | 'offline' | 'busy' | 'away'
   }>(),
-  { src: undefined, name: undefined, size: 32, tone: 'primary', shape: 'circle', status: undefined },
+  { src: undefined, name: undefined, size: 32, tone: 'primary', seed: undefined, shape: 'circle', status: undefined },
 )
 
 const STATUS: Record<NonNullable<typeof props.status>, { dot: string; label: string }> = {
@@ -96,15 +123,22 @@ const initials = computed(() =>
  * верхньому куті й 3.6:1 у центрі — нижче 4.5:1 для тексту 11–13px в
  * обох темах. На 600→700 найсвітліша точка дає 5.2:1.
  */
-const toneClass = computed(() =>
-  props.tone === 'neutral'
-    ? 'border border-neutral-line bg-neutral-bg text-neutral'
-    : 'bg-gradient-to-br from-primary-600 to-primary-700 text-accent-contrast',
-)
+const toneClass = computed(() => {
+  if (props.tone === 'neutral') return 'border border-neutral-line bg-neutral-bg text-neutral'
+  if (props.tone === 'auto') return 'text-accent-contrast'
+  return 'bg-gradient-to-br from-primary-600 to-primary-700 text-accent-contrast'
+})
+
+// Колір `auto` — градієнт зі змінних палітри; без ключа — перший (синій).
+const toneStyle = computed(() => {
+  if (props.tone !== 'auto') return undefined
+  const n = avatarPaletteIndex(props.seed ?? props.name ?? '')
+  return { backgroundImage: `linear-gradient(to bottom right, var(--avatar-${n}-from), var(--avatar-${n}-to))` }
+})
 
 const shapeClass = computed(() => (props.shape === 'square' ? 'rounded-card' : 'rounded-full'))
 
-const initialsStyle = computed(() => ({ fontSize: `${initialsFontSize(props.size)}px` }))
+const initialsStyle = computed(() => ({ fontSize: `${initialsFontSize(props.size, initials.value.length)}px` }))
 </script>
 
 <template>
@@ -119,6 +153,7 @@ const initialsStyle = computed(() => ({ fontSize: `${initialsFontSize(props.size
   <span
     class="relative flex h-full w-full items-center justify-center overflow-hidden font-semibold uppercase"
     :class="[toneClass, shapeClass]"
+    :style="toneStyle"
   >
     <!-- Ініціали під картинкою до завантаження: аватар ніколи не порожній,
          а картинка проявляється поверх, а не вмикається стрибком. -->
@@ -146,7 +181,7 @@ const initialsStyle = computed(() => ({ fontSize: `${initialsFontSize(props.size
   <span
     v-if="status"
     aria-hidden="true"
-    class="absolute right-0 bottom-0 rounded-full ring-2 ring-card"
+    class="absolute right-0 bottom-0 rounded-full ring-2 ring-[color:var(--avatar-ring,var(--bg-card))]"
     :class="STATUS[status].dot"
     :style="{ width: `${statusSize}px`, height: `${statusSize}px` }"
   />

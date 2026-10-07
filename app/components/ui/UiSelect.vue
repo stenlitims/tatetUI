@@ -131,7 +131,9 @@ const inputClasses = computed(() =>
     disabled: props.disabled,
     // Очищення додає другу іконку праворуч — місця треба вдвічі більше.
     padRight: props.clearable && selectedOption.value ? 'pr-14' : 'pr-9',
-    extra: 'cursor-default',
+    // text-ellipsis: довга назва обраного пункту (пристрій, компанія) обрізається
+    // «…», а не рубається посеред літери; під час набору фільтра не діє.
+    extra: 'cursor-default text-ellipsis',
   }),
 )
 

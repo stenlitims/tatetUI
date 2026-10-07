@@ -85,7 +85,7 @@ function onKeydown(event: KeyboardEvent) {
     :role="options.input ? 'dialog' : 'alertdialog'"
     :aria-describedby="options.message ? messageId : undefined"
   >
-    <p v-if="options.message" :id="messageId" class="text-muted">{{ options.message }}</p>
+    <p v-if="options.message" :id="messageId" class="text-pretty text-muted">{{ options.message }}</p>
 
     <UiInput
       v-if="options.input"
