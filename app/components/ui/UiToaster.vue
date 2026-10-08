@@ -30,6 +30,16 @@ const TONES: Record<ToastType, string> = {
   loading: 'text-neutral',
 }
 
+/*
+ * Невидима зона дотику 45×45 навколо дрібних кнопок — той самий патерн,
+ * що в UiButton і UiAlert. Видима кнопка лишається компактною, а палець
+ * на телефоні влучає по зоні, а не по 22px хрестику.
+ */
+const TOUCH_TARGET =
+  'pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 ' +
+  'pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 ' +
+  "pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+
 // Причини незалежні: вихід курсора не відновлює таймер, якщо всередині
 // лишився фокус. Нові повідомлення теж стають на паузу в watcher нижче.
 type Interaction = 'hover' | 'focus' | 'pointer' | 'touch'
@@ -411,24 +421,28 @@ onBeforeUnmount(() => {
 
       <div
         v-if="toasts.length >= 3"
-        class="ui-toaster-toolbar rounded-overlay border border-line bg-card shadow-raised"
+        class="ui-toaster-toolbar flex items-center justify-between gap-2 rounded-card border border-line bg-card py-1 pr-1 pl-3 shadow-raised"
       >
-        <span class="ui-toaster-count text-muted"
-          >Сповіщення <span aria-hidden="true">·</span>
-          <strong class="font-semibold text-ink">{{ toasts.length }}</strong></span
-        >
+        <!-- &nbsp; перед числом: Vue викидає пробіл між елементами, якщо в
+             ньому є перенос рядка, і виходило «·4». -->
+        <span class="ui-toaster-count text-xs text-muted">
+          Сповіщення <span aria-hidden="true">·</span>&nbsp;<strong
+            class="font-semibold text-ink"
+            >{{ toasts.length }}</strong
+          >
+        </span>
         <button
           type="button"
-          class="ui-toaster-clear rounded-control text-muted hover:bg-hover hover:text-ink"
+          class="ui-toaster-clear relative flex h-7 items-center gap-1.5 rounded-control px-2 text-xs font-medium text-muted hover:bg-hover hover:text-ink"
+          :class="TOUCH_TARGET"
           @click="dismissAll"
         >
           <svg
-            width="16"
-            height="16"
+            class="h-3.5 w-3.5"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="1.7"
+            stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
             aria-hidden="true"
@@ -455,88 +469,111 @@ onBeforeUnmount(() => {
             role="listitem"
             class="ui-toast-item"
           >
+            <!--
+              Анатомія й метрики — як у UiAlert: іконка h-4.5 без підкладки,
+              text-sm, p-3, rounded-card. Тон несе лише іконка: кольорова
+              смуга збоку і плитка під іконкою робили кожну картку
+              найгучнішим елементом екрана, а стос із чотирьох — тим паче.
+              Поверхня нейтральна, як в інших оверлеїв: тост висить над
+              довільним вмістом, і відділяє його тінь, а не заливка тону.
+            -->
             <div
-              class="ui-toast-card rounded-overlay border border-line bg-card shadow-raised"
-              :class="[
-                TONES[toast.type],
-                { 'is-dragging': drag?.id === toast.id && drag.axis === 'x' },
-              ]"
+              class="ui-toast-card grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-3 rounded-card border border-line bg-card p-3 text-sm shadow-raised"
+              :class="{ 'is-dragging': drag?.id === toast.id && drag.axis === 'x' }"
               :style="dragStyle(toast.id)"
               :aria-busy="toast.type === 'loading' || undefined"
               @pointerdown="onPointerDown(toast.id, $event)"
               @lostpointercapture="onLostPointerCapture"
             >
-              <div class="ui-toast-icon" aria-hidden="true">
-                <svg
-                  width="19"
-                  height="19"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+              <svg
+                class="mt-0.5 h-4.5 w-4.5"
+                :class="TONES[toast.type]"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <template v-if="toast.type === 'success'">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="m8.5 12.5 2.5 2.5 5-5" />
+                </template>
+                <template v-else-if="toast.type === 'warning'">
+                  <path d="M12 3 2.5 20h19L12 3z" />
+                  <path d="M12 9v5" />
+                  <path d="M12 17h.01" />
+                </template>
+                <template v-else-if="toast.type === 'error'">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M15 9l-6 6" />
+                  <path d="M9 9l6 6" />
+                </template>
+                <!-- Обертання гасить глобальний reduced-motion; нерухома дуга
+                     все одно читається як «триває». -->
+                <g v-else-if="toast.type === 'loading'" class="ui-toast-spinner">
+                  <circle cx="12" cy="12" r="9" opacity="0.25" />
+                  <path d="M21 12a9 9 0 0 0-9-9" />
+                </g>
+                <template v-else>
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M12 11v5" />
+                  <path d="M12 8h.01" />
+                </template>
+              </svg>
+              <div class="min-w-0 wrap-anywhere">
+                <p v-if="toast.title" class="font-semibold text-ink">{{ toast.title }}</p>
+                <p
+                  class="whitespace-pre-line"
+                  :class="toast.title ? 'mt-0.5 text-muted' : 'text-ink'"
                 >
-                  <template v-if="toast.type === 'success'">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="m8 12 2.5 2.5L16 9" />
-                  </template>
-                  <template v-else-if="toast.type === 'warning'">
-                    <path
-                      d="M10.3 4.4 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.4a2 2 0 0 0-3.4 0Z"
-                    />
-                    <path d="M12 9v4m0 4h.01" />
-                  </template>
-                  <template v-else-if="toast.type === 'error'">
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="m9 9 6 6m0-6-6 6" />
-                  </template>
-                  <!-- Обертання гасить глобальний reduced-motion; нерухома дуга
-                       все одно читається як «триває». -->
-                  <g v-else-if="toast.type === 'loading'" class="ui-toast-spinner">
-                    <circle cx="12" cy="12" r="9" opacity="0.25" />
-                    <path d="M21 12a9 9 0 0 0-9-9" />
-                  </g>
-                  <template v-else>
-                    <circle cx="12" cy="12" r="9" />
-                    <path d="M12 11v5m0-8h.01" />
-                  </template>
-                </svg>
-              </div>
-              <div class="ui-toast-content">
-                <p v-if="toast.title" class="ui-toast-title font-semibold text-ink">
-                  {{ toast.title }}
-                </p>
-                <p class="ui-toast-message" :class="toast.title ? 'text-muted' : 'text-ink'">
                   {{ toast.message }}
                 </p>
               </div>
+              <!--
+                Хрестик ~22px, як в UiAlert, а на дотику — невидима зона 45×45.
+                У DOM він стоїть ПЕРЕД діями: після закриття фокус переходить
+                на першу кнопку сусіднього тосту, і це має бути «Закрити», а не
+                чиясь дія, яку Enter запустив би випадково. -my-0.5 ставить
+                центр хрестика на центр першого рядка й не роздуває картку.
+              -->
               <button
                 type="button"
-                class="ui-toast-close rounded-control text-muted hover:bg-hover hover:text-ink"
+                class="ui-toast-close relative -my-0.5 -mr-1 rounded-control p-1 text-muted hover:bg-hover hover:text-ink"
+                :class="TOUCH_TARGET"
                 aria-label="Закрити сповіщення"
                 @click="dismiss(toast.id)"
               >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  aria-hidden="true"
-                >
-                  <path d="m18 6-12 12M6 6l12 12" />
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M18 6L6 18M6 6l12 12"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  />
                 </svg>
               </button>
-              <!-- Дії — дані, і не закривають тост автоматично. -->
-              <div v-if="toast.actions?.length" class="ui-toast-actions">
+              <!--
+                Дії — дані, і не закривають тост автоматично. Висота — як у
+                UiButton sm (h-9 → md:h-8), а не окремі 44px-кнопки на
+                телефоні: точність дотику тримає невидима зона, як скрізь у
+                бібліотеці. Шрифт на телефоні — text-sm, як у повідомлення, а
+                не text-base кнопки sm: поруч немає поля, з яким його рівняти,
+                а підпис, більший за текст тосту, перетягував увагу на себе.
+                min-h замість h: довгий підпис переноситься, а не вилазить за
+                картку.
+              -->
+              <div
+                v-if="toast.actions?.length"
+                class="col-start-2 col-end-4 mt-2.5 flex flex-wrap gap-2 wrap-anywhere"
+              >
                 <button
                   v-for="(action, index) in toast.actions"
                   :key="index"
                   type="button"
-                  class="ui-toast-action rounded-control border border-line bg-card font-medium text-ink hover:border-line-strong hover:bg-hover"
+                  class="ui-toast-action relative min-h-9 max-w-full rounded-control border border-line bg-card px-3 py-1 text-start text-sm font-medium text-ink hover:border-line-strong hover:bg-hover md:min-h-8 md:px-2.5 md:text-xs"
+                  :class="TOUCH_TARGET"
                   @click="action.onClick()"
                 >
                   {{ action.label }}
@@ -570,29 +607,21 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+/* Поля панелі = поля списку: від панелі до першої картки той самий
+   крок, що між картками, і краї збігаються з краями карток.
+   z-index: невидима зона «Очистити всі» звисає нижче панелі, а список
+   позиціонований і стоїть пізніше в DOM — без цього він перекривав низ
+   зони, і дотик під кнопкою провалювався в порожнє поле списку. */
 .ui-toaster-toolbar {
-  display: flex;
+  position: relative;
+  z-index: 1;
   flex: none;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px 8px;
-  margin: 4px 4px 8px;
-  padding: 4px 4px 4px 12px;
+  margin: 4px 4px 2px;
   pointer-events: auto;
 }
 
 .ui-toaster-count {
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
-}
-.ui-toaster-clear {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 8px;
-  font-size: 12px;
-  font-weight: 500;
 }
 .ui-toaster-viewport {
   min-height: 0;
@@ -602,11 +631,13 @@ onBeforeUnmount(() => {
   scrollbar-color: var(--scrollbar-thumb) transparent;
   pointer-events: auto;
 }
+/* Поля списку — місце для кільця фокуса (2px + відступ 2px): viewport
+   прокручується, тож кільце біля краю інакше обрізалось би. */
 .ui-toaster-list {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   padding: 4px;
 }
 .ui-toaster-list:empty {
@@ -617,83 +648,14 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+/* Вигляд картки — утилітами в шаблоні; тут лише свайп. */
 .ui-toast-card {
-  position: relative;
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 32px;
-  align-items: start;
-  gap: 0 12px;
-  padding: 16px;
-  overflow: hidden;
   touch-action: pan-y pinch-zoom;
   transform: translateX(var(--toast-drag-x, 0px));
   opacity: var(--toast-drag-opacity, 1);
   transition:
     transform var(--duration-slow) var(--ease-emphasized),
     opacity var(--duration-base) var(--ease-out);
-}
-
-.ui-toast-card::before {
-  content: '';
-  position: absolute;
-  inset: 16px auto 16px 0;
-  width: 3px;
-  border-radius: 0 var(--radius-control) var(--radius-control) 0;
-  background: currentColor;
-  opacity: 0.75;
-}
-.ui-toast-icon {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, currentColor 9%, var(--bg-card));
-}
-.ui-toast-content {
-  min-width: 0;
-  align-self: center;
-}
-.ui-toast-title {
-  margin: 0 0 3px;
-  font-size: 14px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-.ui-toast-message {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.5;
-  white-space: pre-line;
-  overflow-wrap: anywhere;
-}
-.ui-toast-close {
-  display: grid;
-  width: 32px;
-  height: 32px;
-  /* Центр кнопки — на центрі іконки (34px): у однорядковому тості хрестик
-     не висить вище за текст. */
-  margin: 1px -5px 0 0;
-  justify-self: end;
-  place-items: center;
-}
-.ui-toast-actions {
-  grid-column: 2 / -1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  margin-top: 12px;
-}
-.ui-toast-action {
-  max-width: 100%;
-  min-height: 32px;
-  padding: 6px 12px;
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  text-align: start;
 }
 .ui-toast-close,
 .ui-toast-action,
@@ -768,7 +730,11 @@ onBeforeUnmount(() => {
     right: 12px;
     bottom: auto;
     left: auto;
-    width: 408px;
+    /* Картка 25rem (375px за кореня 15px) + поля списку. Виміряно на
+       типових повідомленнях: на 360px фраза на 39–42 знаки («Перевірте
+       підключення та спробуйте ще раз.») переносила одне слово, і картка
+       ставала на рядок вищою — вужча картка давала ВИЩИЙ стос. */
+    width: calc(25rem + 8px);
     max-height: 70vh;
     max-height: 70dvh;
   }
@@ -782,27 +748,6 @@ onBeforeUnmount(() => {
     right: auto;
     left: 50%;
     transform: translateX(-50%);
-  }
-}
-
-@media (max-width: 767px), (pointer: coarse) {
-  .ui-toast-card {
-    grid-template-columns: 34px minmax(0, 1fr) 36px;
-    gap: 0 8px;
-    padding: 14px;
-  }
-  .ui-toast-close {
-    width: 44px;
-    height: 44px;
-    margin: -5px -8px 0 0;
-  }
-  .ui-toast-action,
-  .ui-toaster-clear {
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .ui-toast-actions {
-    grid-column: 1 / -1;
   }
 }
 
