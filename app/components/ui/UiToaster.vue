@@ -263,7 +263,36 @@ function dragStyle(id: number) {
   }
 }
 
+/*
+ * Скрол-бар під час анімації. Вхід і вихід зсувають картку на
+ * --toast-enter-y, а transform входить в область прокрутки: біля нижнього
+ * краю (телефон, bottom-*) картка на 12px нижча за список із відступом 4px,
+ * і viewport «прокручується» на ~8px — з'являється смужка. Вона звужує
+ * клієнтську ширину, а картка, що виходить, має зафіксовану width, тож
+ * додається ще й горизонтальна. Поки триває анімація, а стос вміщається,
+ * вимикаємо вертикальну прокрутку; якщо стос прокручується й так — не
+ * чіпаємо, інакше смужка блимала б. Лічильник, бо входи й виходи
+ * перекриваються; вирішує перший, коли розкладка ще без зсувів.
+ */
+let animating = 0
+
+function lockOverflow() {
+  const list = viewport.value
+  if (!list) return
+  // Висота розкладки (offsetHeight), а не scrollHeight: той уже враховує
+  // transform картки, що саме заходить чи виходить, — і перевірка збігалась би
+  // з тим, від чого ми захищаємось.
+  const fits = (list.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0
+  if (!animating++ && fits <= list.clientHeight) list.setAttribute('data-animating', '')
+}
+
+function unlockOverflow() {
+  animating = Math.max(0, animating - 1)
+  if (!animating) viewport.value?.removeAttribute('data-animating')
+}
+
 function beforeLeave(element: Element) {
+  lockOverflow()
   const item = element as HTMLElement
   const list = item.parentElement
   // Скрол-контейнер не має схлопнутися й обрізати вихід останньої картки.
@@ -290,6 +319,7 @@ function beforeLeave(element: Element) {
 }
 
 function afterLeave(element: Element) {
+  unlockOverflow()
   exits.delete(Number((element as HTMLElement).dataset.toastId))
   leaving.delete(element)
   const list = viewport.value?.firstElementChild as HTMLElement | null
@@ -389,6 +419,7 @@ onBeforeUnmount(() => {
   exits.clear()
   leaving.clear()
   announced.clear()
+  animating = 0
 })
 </script>
 
@@ -459,8 +490,12 @@ onBeforeUnmount(() => {
           tag="div"
           role="list"
           class="ui-toaster-list"
+          @before-enter="lockOverflow"
+          @after-enter="unlockOverflow"
+          @enter-cancelled="unlockOverflow"
           @before-leave="beforeLeave"
           @after-leave="afterLeave"
+          @leave-cancelled="unlockOverflow"
         >
           <div
             v-for="toast in toasts"
@@ -625,11 +660,18 @@ onBeforeUnmount(() => {
 }
 .ui-toaster-viewport {
   min-height: 0;
+  /* Горизонтально картки ніколи не прокручуються: свайп вбік чи вихід
+     із transform — не привід для смужки. */
   overflow: auto;
+  overflow-x: hidden;
   overscroll-behavior-y: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) transparent;
   pointer-events: auto;
+}
+/* Атрибут ставить lockOverflow() — див. коментар у скрипті. */
+.ui-toaster-viewport[data-animating] {
+  overflow-y: hidden;
 }
 /* Поля списку — місце для кільця фокуса (2px + відступ 2px): viewport
    прокручується, тож кільце біля краю інакше обрізалось би. */

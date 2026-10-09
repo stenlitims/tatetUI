@@ -184,6 +184,49 @@ describe('UiToaster — список і доступність', () => {
   })
 })
 
+describe('UiToaster — смужки прокрутки під час анімації', () => {
+  const viewport = () => region().querySelector<HTMLElement>('.ui-toaster-viewport')!
+  const locked = () => viewport().hasAttribute('data-animating')
+
+  it('вимикає вертикальну прокрутку на вході й виході, поки стос вміщається', async () => {
+    await mount()
+    const id = toast.info('Привіт', { duration: 0 })
+    await nextTick()
+    // Вхід зсуває картку за межі списку; без блокування це смужка прокрутки.
+    expect(locked()).toBe(true)
+    await vi.waitFor(() => expect(locked()).toBe(false))
+
+    toast.dismiss(id)
+    await nextTick()
+    expect(locked()).toBe(true)
+    await vi.waitFor(() => expect(document.querySelector('[data-toast-id]')).toBeNull())
+    expect(locked()).toBe(false)
+  })
+
+  it('знімає блокування, коли тост закрито посеред входу', async () => {
+    await mount()
+    const id = toast.info('Швидко', { duration: 0 })
+    await nextTick()
+    toast.dismiss(id)
+    await settle()
+    await vi.waitFor(() => expect(document.querySelector('[data-toast-id]')).toBeNull())
+    expect(locked()).toBe(false)
+  })
+
+  it('не чіпає прокрутку, якщо стос і так довший за видиму область', async () => {
+    await mount()
+    toast.info('Перший', { duration: 0 })
+    await settle()
+    await vi.waitFor(() => expect(locked()).toBe(false))
+    // Справжнє переповнення: смужка потрібна й під час анімації, інакше блимала б.
+    Object.defineProperty(viewport(), 'clientHeight', { value: 100, configurable: true })
+    Object.defineProperty(viewport().firstElementChild!, 'offsetHeight', { value: 400, configurable: true })
+    toast.info('Другий', { duration: 0 })
+    await settle()
+    expect(locked()).toBe(false)
+  })
+})
+
 describe('UiToaster — свайпи', () => {
   it.each([-48, 48])('закриває лише вибрану картку при зсуві %i px', async (dx) => {
     await mount()
