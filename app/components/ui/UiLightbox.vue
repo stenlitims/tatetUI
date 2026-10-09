@@ -95,6 +95,15 @@ const props = withDefaults(
     /** Показувати стрічку мініатюр при відкритті. Сама ховається, коли слайд один. */
     thumbnails?: boolean
     /**
+     * Список слайдів ще дотягується — наприклад, чат відкрив одне фото і
+     * підвантажує сусідні. Поки так, стрічка мініатюр і кнопки слайдшоу та
+     * мініатюр займають місце навіть для одного слайда: інакше, коли решта
+     * з'явиться, стрічка відніме висоту в сцени, і фото стрибне. Вимкніть
+     * прапорець, щойно список дотягнувся (або не дотягнувся): одиночний
+     * слайд знову ховає стрічку.
+     */
+    loadingMore?: boolean
+    /**
      * Збільшення зображень: клік, подвійний дотик, щипок, колесо, `+`/`−`.
      * Збільшене фото рухається перетягуванням — з інерцією, як на телефоні.
      */
@@ -151,6 +160,7 @@ const props = withDefaults(
     index: 0,
     loop: false,
     thumbnails: true,
+    loadingMore: false,
     zoomable: true,
     maxZoom: 4,
     toolbar: () => ['zoom', 'slideshow', 'fullscreen', 'thumbnails'],
@@ -325,10 +335,35 @@ function next() {
   if (count.value > 1 && !atEnd.value) moveTo(lightboxIndex(current.value + 1, count.value, props.loop), 1)
 }
 
+// Стрічку мініатюр після стрибка нумерації не гортаємо плавно: див. watch нижче.
+let instantStrip = false
+
+function sameSources(a: LightboxItem[], b: LightboxItem[]): boolean {
+  return a.length === b.length && a.every((item, at) => item.src === b[at]?.src)
+}
+
+/*
+ * Індекс і список змінюються разом, коли батько підмінює набір слайдів під
+ * відкритою галереєю: чат відкрив альбом, а потім дотягнув усі фото чату, і
+ * відкрите фото стоїть уже під іншим номером. Слайд на екрані той самий, тож
+ * стаємо на новий номер на місці. Анімований перехід (moveTo) тут шкодить
+ * тричі: виїжджав би слайд зі старого номера — а там у новому списку чужа
+ * картинка; нове фото монтувалося б заново, і між заглушкою та фото були б
+ * порожні кадри; стрічка мініатюр їхала б через десятки кнопок.
+ */
 watch(
-  () => props.index,
-  (value) => {
-    const target = lightboxIndex(value, count.value)
+  [() => props.images, () => props.index],
+  ([list, value], [previousList, previousValue]) => {
+    const target = lightboxIndex(value, list.length)
+    if (props.modelValue && trackEl.value && value !== previousValue && list !== previousList) {
+      const shown = previousList[current.value]
+      if (shown && target !== current.value && list[target]?.src === shown.src && !sameSources(list, previousList)) {
+        instantStrip = true
+        outgoing.value = null
+        current.value = target
+        return
+      }
+    }
     if (target === current.value) return
     // Галерею щойно відкривають уже з новим індексом (трек ще не
     // відрендерено) — стаємо на місце одразу, без проїзду від старого.
@@ -379,12 +414,45 @@ function retry() {
 const imgEls = new Map<number, HTMLImageElement>()
 const boxEls = new Map<number, HTMLElement>()
 
+/*
+ * «Готове» — це розкодоване, а не лише завантажене. Зображення має
+ * decoding="async": подія load приходить, коли файл дійшов, а розкодування
+ * ще йде поза потоком, і на екрані до першої відмальовки порожньо. Заглушку-
+ * мініатюру за load уже прибрали б — і між нею та фото лишалося б кілька
+ * порожніх кадрів. Тому слайд вважаємо готовим після decode(). Там, де його
+ * немає (тестове середовище), — одразу.
+ */
+const decodeQueue = new WeakMap<HTMLImageElement, Array<() => void>>()
+
+function whenDecoded(element: HTMLImageElement, done: () => void) {
+  if (typeof element.decode !== 'function') {
+    done()
+    return
+  }
+  const queue = decodeQueue.get(element)
+  if (queue) {
+    queue.push(done)
+    return
+  }
+  decodeQueue.set(element, [done])
+  // Відмова decode() (пошкоджене зображення, яке все ж завантажилось) — не
+  // привід тримати слайд «неготовим»: показуємо, як є.
+  const settle = () => {
+    const callbacks = decodeQueue.get(element) ?? []
+    decodeQueue.delete(element)
+    for (const callback of callbacks) callback()
+  }
+  element.decode().then(settle, settle)
+}
+
 // Зображення з кешу вже `complete` на момент монтування — події load для
 // нього може не бути, і без цієї перевірки спінер крутився б над готовим фото.
 function setImgEl(panel: Panel, element: unknown) {
   if (element instanceof HTMLImageElement) {
     imgEls.set(panel.vpos, element)
-    if (element.complete && element.naturalWidth > 0) markLoaded(panel.item)
+    if (element.complete && element.naturalWidth > 0 && !stateOf(panel.item)) {
+      whenDecoded(element, () => markLoaded(panel.item))
+    }
   } else {
     imgEls.delete(panel.vpos)
   }
@@ -396,13 +464,19 @@ function setBoxEl(vpos: number, element: unknown) {
 }
 
 function onImageLoad(panel: Panel) {
-  markLoaded(panel.item)
-  if (panel.offset === 0 && pendingZoomIn) {
-    const inTime = performance.now() < pendingZoomIn
-    pendingZoomIn = 0
-    awaitingZoom.value = false
-    if (inTime) void nextTick(runZoomIn)
+  const ready = () => {
+    markLoaded(panel.item)
+    // Слайд міг стати сусідом, поки розкодовувався: політ — лише для поточного.
+    if (panel.vpos === position.value && pendingZoomIn) {
+      const inTime = performance.now() < pendingZoomIn
+      pendingZoomIn = 0
+      awaitingZoom.value = false
+      if (inTime) void nextTick(runZoomIn)
+    }
   }
+  const element = imgEls.get(panel.vpos)
+  if (element) whenDecoded(element, ready)
+  else ready()
 }
 
 /** Мініатюра як заглушка — лише коли вона справді інша, ніж саме фото. */
@@ -419,6 +493,20 @@ function naturalBox(item: LightboxItem) {
 function posterFor(item: LightboxItem, kind: LightboxKind): string | null {
   return item.poster ?? item.thumbnail ?? (kind === 'youtube' ? youtubeThumbnail(item.src) : null)
 }
+
+/*
+ * Ключ мініатюри — адреса (з лічильником для однакових), а не позиція. Коли
+ * чат дотягує сусідні фото й нумерація зсувається, наявні кнопки лишаються
+ * тими самими вузлами; з позицією в ключі перемонтовувалась би вся стрічка.
+ */
+const thumbKeys = computed(() => {
+  const seen = new Map<string, number>()
+  return props.images.map((item) => {
+    const times = seen.get(item.src) ?? 0
+    seen.set(item.src, times + 1)
+    return times ? `${item.src}#${times}` : item.src
+  })
+})
 
 function thumbnailFor(item: LightboxItem, index: number): string | null {
   const kind = kindAt(index)
@@ -1200,7 +1288,9 @@ function onStripFocusIn(event: FocusEvent) {
 
 const fullscreen = useFullscreen()
 const thumbnailsVisible = shallowRef(props.thumbnails)
-const showThumbnails = computed(() => thumbnailsVisible.value && count.value > 1)
+// Один слайд, але решта ще їде (loadingMore): стрічка вже на місці.
+const growing = computed(() => props.loadingMore && count.value > 0)
+const showThumbnails = computed(() => thumbnailsVisible.value && (count.value > 1 || growing.value))
 
 const toolbarItems = computed<Tool[]>(() => {
   const list = [...new Set(props.toolbar)]
@@ -1208,7 +1298,7 @@ const toolbarItems = computed<Tool[]>(() => {
   if (props.autoplay && !list.includes('slideshow')) list.push('slideshow')
   return list.filter((tool) => {
     if (tool === 'zoom' || tool === 'zoomIn' || tool === 'zoomOut') return props.zoomable
-    if (tool === 'slideshow' || tool === 'thumbnails') return count.value > 1
+    if (tool === 'slideshow' || tool === 'thumbnails') return count.value > 1 || growing.value
     if (tool === 'fullscreen') return fullscreen.supported.value
     return true
   })
@@ -1642,7 +1732,10 @@ function scrollThumbIntoView(smooth = true) {
 }
 
 watch(current, () => {
-  if (props.modelValue) scrollThumbIntoView()
+  if (!props.modelValue) return
+  const smooth = !instantStrip
+  instantStrip = false
+  scrollThumbIntoView(smooth)
 })
 
 const PAN_STEP = 80
@@ -1940,6 +2033,7 @@ defineExpose({
                     type="button"
                     class="relative flex"
                     :class="chromeButton"
+                    :disabled="count < 2"
                     :aria-label="playing ? text.slideshowPause : text.slideshowPlay"
                     @click="toggleSlideshow"
                   >
@@ -2226,7 +2320,7 @@ defineExpose({
             >
               <button
                 v-for="(item, index) in images"
-                :key="`${item.src}-${index}`"
+                :key="thumbKeys[index]"
                 :ref="(element) => (thumbEls[index] = element as HTMLElement | null)"
                 type="button"
                 class="relative h-14 w-14 shrink-0 overflow-clip rounded-control border-2 bg-card transition-[border-color,opacity] focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-backdrop"

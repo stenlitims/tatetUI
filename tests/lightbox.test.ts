@@ -290,9 +290,14 @@ const currentImage = () => currentSlide().querySelector<HTMLImageElement>('img:n
 const button = (label: string) => document.body.querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)
 const stage = () => currentSlide().parentElement!.parentElement!
 
-/** happy-dom не вантажить зображень — подію load віддаємо самі. */
+/**
+ * happy-dom не вантажить зображень — подію load віддаємо самі. «Готове» настає
+ * після decode() (див. whenDecoded в компоненті): перший тік — це проміс decode,
+ * другий — рендер після markLoaded.
+ */
 async function markCurrentLoaded() {
   currentImage().dispatchEvent(new Event('load'))
+  await nextTick()
   await nextTick()
 }
 
@@ -821,6 +826,145 @@ describe('UiLightbox — фокус', () => {
     expect(document.activeElement).toBe(opener)
     mounted.unmount()
     opener.remove()
+  })
+})
+
+describe('UiLightbox — відкриття без стрибків', () => {
+  const strip = () => document.body.querySelector<HTMLElement>('[role="group"]')
+  const stripButtons = () => [...(strip()?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+  const photo = (name: string) => ({ src: `/${name}.jpg`, alt: name, thumbnail: `/${name}-t.jpg` })
+
+  it('чат дотягнув сусідні фото й переставив index на те саме: слайд лишається вузлом, трек не їде', async () => {
+    const album = [photo('a'), photo('b'), photo('c')]
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images: album, index: 1 })
+    await nextTick()
+    await markCurrentLoaded()
+    const before = currentSlide()
+    expect(currentImage().getAttribute('src')).toBe('/b.jpg')
+
+    // Те саме фото b, але в списку з двома старшими й одним новішим.
+    await mounted.update({ images: [photo('x'), photo('y'), ...album, photo('z')], index: 3 })
+    await nextTick()
+
+    expect(currentSlide()).toBe(before)
+    expect(currentImage().getAttribute('src')).toBe('/b.jpg')
+    // Трек не зрушив: поточний слайд лишився на віртуальній позиції 0, а не 1.
+    expect(currentSlide().style.transform).toContain('translate3d(0%')
+    expect(document.body.textContent).toContain('4 / 6')
+    // Старий слайд не лишився «виїжджати» з чужою картинкою зі старого номера.
+    const sources = [...document.body.querySelectorAll<HTMLImageElement>('[data-lightbox-slide] img:not([aria-hidden])')].map((img) =>
+      img.getAttribute('src'),
+    )
+    expect(sources).toEqual(['/a.jpg', '/b.jpg', '/c.jpg'])
+    expect(sources).not.toContain('/y.jpg')
+    mounted.unmount()
+  })
+
+  it('інший index на інше фото після підміни списку — звичайний перехід', async () => {
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images, index: 0 })
+    await nextTick()
+    await mounted.update({ images: [{ src: '/n1.jpg', alt: 'N1' }, { src: '/n2.jpg', alt: 'N2' }], index: 1 })
+    await nextTick()
+    expect(currentImage().getAttribute('src')).toBe('/n2.jpg')
+    mounted.unmount()
+  })
+
+  it('loadingMore: для одного слайда стрічка й кнопки на місці; без нього — ні', async () => {
+    const one = [photo('a')]
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images: one, loadingMore: true })
+    await nextTick()
+    expect(strip()).not.toBeNull()
+    expect(stripButtons()).toHaveLength(1)
+    const slideshow = button('Запустити слайдшоу')!
+    expect(slideshow.disabled).toBe(true)
+    expect(button('Сховати мініатюри')).not.toBeNull()
+
+    await mounted.update({ loadingMore: false })
+    expect(strip()).toBeNull()
+    expect(button('Запустити слайдшоу')).toBeNull()
+    mounted.unmount()
+
+    const plain = await mountComponent(UiLightbox, { modelValue: true, images: one })
+    await nextTick()
+    expect(strip()).toBeNull()
+    plain.unmount()
+  })
+
+  it('loadingMore: коли решта прийшла, кнопка слайдшоу оживає, а стрічка не перемонтовується', async () => {
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images: [photo('a')], loadingMore: true })
+    await nextTick()
+    const [first] = stripButtons()
+    await mounted.update({ images: [photo('a'), photo('b'), photo('c')], loadingMore: false })
+    expect(stripButtons()).toHaveLength(3)
+    expect(stripButtons()[0]).toBe(first)
+    expect(button('Запустити слайдшоу')!.disabled).toBe(false)
+    mounted.unmount()
+  })
+
+  it('мініатюри — ті самі вузли, коли список подовжили спереду', async () => {
+    const album = [photo('a'), photo('b'), photo('c')]
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images: album, index: 0 })
+    await nextTick()
+    const before = stripButtons()
+    await mounted.update({ images: [photo('x'), photo('y'), ...album], index: 2 })
+    const after = stripButtons()
+    expect(after).toHaveLength(5)
+    expect(after.slice(2)).toEqual(before)
+    mounted.unmount()
+  })
+
+  it('однакові адреси в списку не ламають ключі стрічки', async () => {
+    const same = [photo('a'), photo('a'), photo('b')]
+    const mounted = await mountComponent(UiLightbox, { modelValue: true, images: same })
+    await nextTick()
+    expect(stripButtons()).toHaveLength(3)
+    mounted.unmount()
+  })
+
+  it('заглушка лишається, доки фото не розкодоване: між load і відмальовкою немає порожніх кадрів', async () => {
+    let finish!: () => void
+    const decode = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)))
+    const original = HTMLImageElement.prototype.decode
+    HTMLImageElement.prototype.decode = decode
+    try {
+      const mounted = await mountComponent(UiLightbox, { modelValue: true, images: [photo('a'), photo('b')] })
+      await nextTick()
+      const placeholder = () => currentSlide().querySelector('img[aria-hidden="true"]')
+      expect(placeholder()).not.toBeNull()
+
+      currentImage().dispatchEvent(new Event('load'))
+      await nextTick()
+      await nextTick()
+      expect(decode).toHaveBeenCalledTimes(1)
+      // Файл дійшов, але ще не розкодований: заглушка на місці, фото невидиме.
+      expect(placeholder()).not.toBeNull()
+      expect(currentImage().className).toContain('opacity-0')
+
+      finish()
+      await nextTick()
+      await nextTick()
+      expect(placeholder()).toBeNull()
+      expect(currentImage().className).not.toContain('opacity-0')
+      mounted.unmount()
+    } finally {
+      HTMLImageElement.prototype.decode = original
+    }
+  })
+
+  it('відмова decode() не лишає слайд «неготовим»', async () => {
+    const original = HTMLImageElement.prototype.decode
+    HTMLImageElement.prototype.decode = () => Promise.reject(new Error('EncodingError'))
+    try {
+      const mounted = await mountComponent(UiLightbox, { modelValue: true, images: [photo('a')] })
+      await nextTick()
+      currentImage().dispatchEvent(new Event('load'))
+      await nextTick()
+      await nextTick()
+      expect(currentImage().className).not.toContain('opacity-0')
+      mounted.unmount()
+    } finally {
+      HTMLImageElement.prototype.decode = original
+    }
   })
 })
 
