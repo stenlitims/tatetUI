@@ -5,6 +5,9 @@ component: UiMultiSelect
 dependsOn:
   - app/utils/uiFieldStyles.ts
   - app/utils/overlayPosition.ts
+  - app/utils/selectSheet.ts
+  - app/components/ui/UiDrawer.vue
+  - app/components/ui/UiButton.vue
 emitDescriptions:
   update:modelValue: Масив обраних значень у порядку, заданому в `options`.
 status: stable
@@ -38,6 +41,16 @@ order: 22
 
 Для 2–3 взаємновиключних варіантів беріть чекбокси просто в формі: вони
 показують усі варіанти одразу, без кліку.
+
+## На мобільному
+
+До 768px список відкривається нижнім sheet'ом, як у [Select](/components/select#на-мобільному):
+рядки по 48px із чекбоксом 20px, «Вибрати все» і «Зняти все» — текстом, а не
+значками (на дотику підказка `title` не з'являється), внизу — «Готово».
+
+Пункти перемикаються одразу, як і у випадайці, тож «Готово» лише закриває:
+окремого «Застосувати» немає, і закриття свайпом нічого не губить. Пошук —
+від 11 пунктів і без автофокуса. Вимикається через `:mobile-sheet="false"`.
 
 ## Доступність
 

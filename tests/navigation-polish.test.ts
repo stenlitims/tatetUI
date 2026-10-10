@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { createSSRApp, h, nextTick } from 'vue'
+import { createSSRApp, defineComponent, h, nextTick, onMounted } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import UiAccordion from '~/components/ui/UiAccordion.vue'
@@ -648,6 +648,37 @@ describe('UiResizablePanels', () => {
     await mounted.update({ separatorStyle: 'band' })
     expect(tokens().has('bg-subtle')).toBe(true)
     expect(tokens().has('w-px')).toBe(false)
+    mounted.unmount()
+  })
+
+  it('collapsed ховає панель і роздільник, не перемонтовуючи вміст і не скидаючи розмір', async () => {
+    let mounts = 0
+    const Stage = defineComponent({
+      setup: () => {
+        onMounted(() => mounts++)
+        return () => h('p', 'Сцена')
+      },
+    })
+    const mounted = await mountComponent(UiResizablePanels, { modelValue: 70 }, { start: () => h(Stage), end: () => 'Чат' })
+    const [start, end] = mounted.host.querySelectorAll<HTMLElement>('section')
+    const separator = mounted.host.querySelector<HTMLElement>('[role="separator"]')!
+    expect(start!.style.flexBasis).toBe('70%')
+
+    await mounted.update({ collapsed: 'end' })
+    expect(end!.style.display).toBe('none')
+    expect(separator.style.display).toBe('none')
+    expect(start!.style.display).toBe('')
+    expect(start!.style.flexBasis).toBe('100%')
+
+    await mounted.update({ collapsed: 'start' })
+    expect(start!.style.display).toBe('none')
+    expect(end!.style.display).toBe('')
+
+    await mounted.update({ collapsed: undefined })
+    expect(start!.style.flexBasis).toBe('70%')
+    expect(separator.style.display).toBe('')
+    expect(separator.getAttribute('aria-valuenow')).toBe('70')
+    expect(mounts).toBe(1)
     mounted.unmount()
   })
 })

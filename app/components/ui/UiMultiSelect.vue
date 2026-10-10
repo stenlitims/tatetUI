@@ -27,8 +27,21 @@ import {
   splitFieldAttrs,
   type FieldSize,
 } from '~/utils/uiFieldStyles'
+import UiButton from './UiButton.vue'
+import UiDrawer from './UiDrawer.vue'
 import { orderSelection } from '~/utils/multiSelect'
 import { dropdownPanelStyle, listenViewportChanges, observePanelSize } from '~/utils/overlayPosition'
+import {
+  revealSheetItem,
+  SHEET_SEARCH_MIN_OPTIONS,
+  sheetEmptyClass,
+  sheetItemClass,
+  sheetItemHighlighted,
+  sheetListClass,
+  sheetSearchInputClass,
+  sheetTitleFor,
+  watchSelectSheet,
+} from '~/utils/selectSheet'
 
 // class/style — на обгортку, решта атрибутів (aria-label, data-*) — на тригер.
 defineOptions({ inheritAttrs: false })
@@ -73,6 +86,11 @@ const props = withDefaults(
     /** Стабільний DOM id. `name` використовується лише для форми. */
     id?: string
     name?: string
+    /**
+     * На вузькому екрані (до 768px) список відкривається нижнім sheet'ом на
+     * всю ширину з кнопкою «Готово» замість випадайки під полем.
+     */
+    mobileSheet?: boolean
   }>(),
   {
     placeholder: 'Оберіть',
@@ -81,6 +99,7 @@ const props = withDefaults(
     required: false,
     searchable: true,
     maxDisplay: 3,
+    mobileSheet: true,
   },
 )
 
@@ -117,6 +136,12 @@ const isOpen = ref(false)
 const query = ref('')
 const highlightedIndex = ref(-1)
 const teleportReady = shallowRef(false)
+
+// Sheet-режим (вузький екран) — як в UiSelect.
+const narrowScreen = shallowRef(false)
+const sheetMode = computed(() => props.mobileSheet && narrowScreen.value)
+const sheetTitle = ref('')
+const sheetKeyboard = ref(false)
 
 const hasError = computed(() => !!props.error)
 
@@ -165,6 +190,10 @@ const filteredOptions = computed(() => {
 })
 
 const showSearch = computed(() => props.searchable && props.options.length > 5)
+// На телефоні десяток рядків і так видно цілком — пошук лише відсунув би їх.
+const showSheetSearch = computed(
+  () => props.searchable && props.options.length > SHEET_SEARCH_MIN_OPTIONS,
+)
 
 const triggerClasses = computed(() =>
   fieldClass(props.size, {
@@ -216,11 +245,18 @@ watch(dropdownEl, (panel) => {
 /*  Відкриття / закриття                                            */
 /* ---------------------------------------------------------------- */
 
-async function open() {
+async function open(fromKeyboard = false) {
   if (props.disabled || isOpen.value) return
   isOpen.value = true
   query.value = ''
   highlightedIndex.value = firstEnabledIndex(props.options)
+  if (sheetMode.value) {
+    sheetKeyboard.value = fromKeyboard
+    sheetTitle.value = sheetTitleFor(triggerEl.value, props.label, attrs['aria-label'], props.placeholder)
+    // Пошук у sheet'і фокус НЕ отримує: клавіатура накрила б половину
+    // списку ще до того, як людина вирішила, чи їй узагалі треба шукати.
+    return
+  }
   attachReposition()
   await nextTick()
   updatePosition()
@@ -237,6 +273,9 @@ function close() {
   highlightedIndex.value = -1
   detachReposition()
 }
+
+// Поворот екрана чи ресайз із відкритим списком — закриваємо (див. UiSelect).
+watch(sheetMode, () => close())
 
 function toggle() {
   if (props.disabled) return
@@ -285,7 +324,9 @@ function clearAll() {
 /* ---------------------------------------------------------------- */
 
 function scrollHighlightedIntoView() {
-  optionEls.value[highlightedIndex.value]?.scrollIntoView({ block: 'nearest' })
+  const el = optionEls.value[highlightedIndex.value]
+  if (sheetMode.value) revealSheetItem(el, 'nearest')
+  else el?.scrollIntoView({ block: 'nearest' })
 }
 
 function moveHighlight(step: 1 | -1) {
@@ -311,6 +352,14 @@ function firstEnabledIndex(list: MultiSelectOption[], fromEnd = false) {
 }
 
 function onTriggerKeydown(event: KeyboardEvent) {
+  // У sheet-режимі тригер лише відкриває: далі клавіатуру слухає sheet.
+  if (sheetMode.value) {
+    if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+      event.preventDefault()
+      void open(true)
+    }
+    return
+  }
   if (event.key === 'Enter' || event.key === ' ') {
     event.preventDefault()
     if (!isOpen.value) return void open()
@@ -417,7 +466,8 @@ function onPanelKeydown(event: KeyboardEvent) {
  * бере, закривав би панель раніше за сам вибір.
  */
 function onFocusOut(event: FocusEvent) {
-  if (!isOpen.value) return
+  // Sheet забирає фокус у власну пастку — це не «фокус пішов геть».
+  if (!isOpen.value || sheetMode.value) return
   const next = event.relatedTarget as Node | null
   if (!next) return
   if (rootEl.value?.contains(next) || dropdownEl.value?.contains(next)) return
@@ -429,23 +479,63 @@ function onFocusOut(event: FocusEvent) {
 /* ---------------------------------------------------------------- */
 
 function onDocumentPointerDown(event: PointerEvent) {
-  if (!isOpen.value) return
+  // Sheet закривається сам: тапом по фону, свайпом, хрестиком чи «Готово».
+  if (!isOpen.value || sheetMode.value) return
   const target = event.target as Node
   if (rootEl.value?.contains(target)) return
   if (dropdownEl.value?.contains(target)) return
   close()
 }
 
+/*
+ * Клавіатура в sheet'і: фокус на пошуку або на самому списку
+ * (aria-activedescendant). Escape лишаємо стеку оверлеїв UiDrawer.
+ */
+function onSheetKeydown(event: KeyboardEvent) {
+  const inSearch = event.target instanceof HTMLInputElement
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp':
+      event.preventDefault()
+      sheetKeyboard.value = true
+      return moveHighlight(event.key === 'ArrowDown' ? 1 : -1)
+    case 'Home':
+    case 'End':
+      if (inSearch) return
+      event.preventDefault()
+      sheetKeyboard.value = true
+      highlightedIndex.value = firstEnabledIndex(filteredOptions.value, event.key === 'End')
+      return void nextTick(scrollHighlightedIntoView)
+    case 'Enter':
+    case ' ': {
+      if (event.key === ' ' && inSearch) return
+      event.preventDefault()
+      const option = filteredOptions.value[highlightedIndex.value]
+      if (option && !option.disabled) toggleOption(option)
+    }
+  }
+}
+
+function onSheetToggle(value: boolean) {
+  if (!value) close()
+}
+
 watch(query, () => {
   highlightedIndex.value = firstEnabledIndex(filteredOptions.value)
 })
 
+let stopSheetWatch: (() => void) | null = null
+
 onMounted(() => {
   teleportReady.value = true
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
+  stopSheetWatch = watchSelectSheet((sheet) => {
+    narrowScreen.value = sheet
+  })
 })
 
 onBeforeUnmount(() => {
+  stopSheetWatch?.()
   detachReposition()
   if (typeof document !== 'undefined') {
     document.removeEventListener('pointerdown', onDocumentPointerDown, true)
@@ -474,11 +564,11 @@ defineExpose({
         role="combobox"
         :disabled="disabled"
         :class="triggerClasses"
-        aria-haspopup="listbox"
+        :aria-haspopup="sheetMode ? 'dialog' : 'listbox'"
         :aria-expanded="isOpen"
         :aria-controls="isOpen ? listboxId : undefined"
         :aria-activedescendant="
-          isOpen && !showSearch && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
+          isOpen && !sheetMode && !showSearch && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined
         "
         :aria-required="required || undefined"
         :aria-invalid="hasError || undefined"
@@ -528,7 +618,7 @@ defineExpose({
     <Teleport to="body" :disabled="!teleportReady">
       <Transition v-bind="dropdownTransitionProps">
         <div
-          v-if="isOpen"
+          v-if="isOpen && !sheetMode"
           ref="dropdownEl"
           :class="dropdownPanelClass"
           :style="panelStyle"
@@ -664,6 +754,158 @@ defineExpose({
         </div>
       </Transition>
     </Teleport>
+
+    <!--
+      Мобільний режим: нижній sheet. Пункти перемикаються одразу (як і у
+      випадайці), «Готово» лише закриває — окремого «Застосувати» немає,
+      тож закриття свайпом нічого не губить.
+    -->
+    <UiDrawer
+      v-if="sheetMode"
+      :model-value="isOpen"
+      position="bottom"
+      :size="showSheetSearch ? 'xl' : 'auto'"
+      :title="sheetTitle"
+      :initial-focus="showSheetSearch ? undefined : '[data-select-sheet-list]'"
+      close-on-backdrop
+      no-padding
+      @update:model-value="onSheetToggle"
+    >
+      <div data-sheet-sticky class="sticky top-0 z-10 border-b border-line bg-card">
+        <div v-if="showSheetSearch" class="px-4 pt-3">
+          <div class="relative">
+            <svg
+              class="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-muted"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+            >
+              <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" />
+              <path d="M20 20l-3.5-3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            </svg>
+            <input
+              v-model="query"
+              type="text"
+              role="combobox"
+              aria-expanded="true"
+              aria-autocomplete="list"
+              :aria-controls="listboxId"
+              :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
+              aria-label="Пошук опцій"
+              placeholder="Пошук…"
+              enterkeyhint="search"
+              autocomplete="off"
+              :class="sheetSearchInputClass"
+              @keydown="onSheetKeydown"
+            />
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-2 px-2 py-1">
+          <div class="flex items-center">
+            <!-- Текстом, а не іконками, як у випадайці: на дотику підказка
+                 title не з'являється, і значок «галочка в колі» нічого не
+                 пояснює. -->
+            <button
+              type="button"
+              class="rounded-control px-2 py-3 text-sm font-medium text-accent transition-colors active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="selectAll"
+            >
+              Вибрати все
+            </button>
+            <button
+              type="button"
+              class="rounded-control px-2 py-3 text-sm font-medium text-accent transition-colors active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              @click="clearAll"
+            >
+              Зняти все
+            </button>
+          </div>
+          <span class="px-2 text-sm tabular-nums text-muted">
+            {{ selectedOptions.length }}/{{ options.length }}
+          </span>
+        </div>
+      </div>
+
+      <ul
+        :id="listboxId"
+        role="listbox"
+        aria-multiselectable="true"
+        data-select-sheet-list
+        :tabindex="showSheetSearch ? undefined : 0"
+        :aria-activedescendant="!showSheetSearch && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
+        :aria-label="sheetTitle || undefined"
+        :class="sheetListClass"
+        @keydown="onSheetKeydown"
+      >
+        <li
+          v-if="filteredOptions.length === 0"
+          role="option"
+          aria-disabled="true"
+          :class="sheetEmptyClass"
+        >
+          Нічого не знайдено
+        </li>
+        <template v-else>
+          <li
+            v-for="(option, index) in filteredOptions"
+            :id="optionId(index)"
+            :key="option.value"
+            :ref="(el) => (optionEls[index] = el as HTMLElement)"
+            role="option"
+            :aria-selected="selectedSet.has(option.value)"
+            :aria-disabled="option.disabled || undefined"
+            :class="[
+              sheetItemClass,
+              sheetKeyboard && index === highlightedIndex ? sheetItemHighlighted : '',
+              option.disabled ? 'pointer-events-none opacity-50' : '',
+            ]"
+            @click="!option.disabled && toggleOption(option)"
+          >
+            <div class="min-w-0 flex-1">
+              <slot
+                name="option"
+                :option="option"
+                :highlighted="sheetKeyboard && index === highlightedIndex"
+                :selected="selectedSet.has(option.value)"
+              >
+                <div class="flex items-center gap-3">
+                  <div
+                    class="flex h-5 w-5 shrink-0 items-center justify-center rounded-[0.3rem] border transition-colors"
+                    :class="
+                      selectedSet.has(option.value)
+                        ? 'border-accent-solid bg-accent-solid'
+                        : 'border-line-strong bg-input'
+                    "
+                  >
+                    <svg
+                      v-if="selectedSet.has(option.value)"
+                      class="h-3.5 w-3.5 text-accent-contrast"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M5 13l4 4L19 7"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                      />
+                    </svg>
+                  </div>
+                  <span class="truncate">{{ option.label }}</span>
+                </div>
+              </slot>
+            </div>
+          </li>
+        </template>
+      </ul>
+
+      <template #footer>
+        <UiButton block @click="close">
+          Готово
+        </UiButton>
+      </template>
+    </UiDrawer>
 
     <template v-if="name">
       <input

@@ -37,6 +37,14 @@ const props = withDefaults(
      * зона захоплення лишається 12px (48px на дотику) — невидима, навколо лінії.
      */
     separatorStyle?: 'band' | 'line'
+    /**
+     * Згорнути одну з панелей: вона й роздільник ховаються (`display: none`),
+     * інша займає все місце. Вміст згорнутої панелі й сусідньої лишається
+     * змонтованим — відео чи прокрутка в основній панелі не перезапускаються,
+     * коли бічна відкривається й закривається. Розмір (`modelValue`, storage)
+     * не змінюється: розгорнута панель повертається до попередньої ширини.
+     */
+    collapsed?: 'start' | 'end'
     /** Доступна назва першої панелі. */
     startLabel?: string
     /** Доступна назва другої панелі. */
@@ -59,6 +67,7 @@ const props = withDefaults(
     endClass: undefined,
     separatorClass: undefined,
     separatorStyle: 'band',
+    collapsed: undefined,
     startLabel: 'Перша панель',
     endLabel: 'Друга панель',
     separatorLabel: 'Змінити розмір панелей',
@@ -131,7 +140,9 @@ const separatorToneClass = computed(() => {
   ].join(' ')
 })
 const handleToneClass = computed(() => (dragging.value ? 'opacity-100 bg-accent-solid' : 'bg-line-strong opacity-0'))
-const startStyle = computed(() => ({ flexBasis: `${value.value}%` }))
+// Друга панель згорнута — перша забирає все місце; згорнута перша ховається
+// сама, а друга й так `flex-1`.
+const startStyle = computed(() => ({ flexBasis: props.collapsed === 'end' ? '100%' : `${value.value}%` }))
 
 function commit(nextValue: number, final = false) {
   const normalized = Math.round(Math.max(bounds.value.min, Math.min(bounds.value.max, nextValue)) * 100) / 100
@@ -236,6 +247,11 @@ function onKeydown(event: KeyboardEvent) {
   commit(next, true)
 }
 
+// Згортання посеред перетягування: роздільника вже не видно — відпускаємо.
+watch(() => props.collapsed, (next) => {
+  if (next) stopDragging()
+})
+
 // Значення поза межами підтягується назад — баунди можуть змінитись пропсами.
 watch([bounds, () => props.modelValue], () => {
   if (props.modelValue === undefined) return
@@ -252,11 +268,12 @@ onBeforeUnmount(() => stopDragging())
     а без висоти — рендерився «стиснуто» в обгортці з фіксованою висотою.
   -->
   <div ref="rootEl" class="flex h-full w-full min-h-0 min-w-0 overflow-hidden" :class="rootClass">
-    <section :aria-label="startLabel" class="min-h-0 min-w-0 overflow-auto" :class="startClass" :style="startStyle">
+    <section v-show="collapsed !== 'start'" :aria-label="startLabel" class="min-h-0 min-w-0 overflow-auto" :class="startClass" :style="startStyle">
       <slot name="start" :size="value" />
     </section>
 
     <div
+      v-show="!collapsed"
       role="separator"
       :aria-label="separatorLabel"
       :aria-orientation="isHorizontal ? 'vertical' : 'horizontal'"
@@ -280,7 +297,7 @@ onBeforeUnmount(() => stopDragging())
       <span class="sr-only">{{ Math.round(value) }}%</span>
     </div>
 
-    <section :aria-label="endLabel" class="min-h-0 min-w-0 flex-1 overflow-auto" :class="endClass">
+    <section v-show="collapsed !== 'end'" :aria-label="endLabel" class="min-h-0 min-w-0 flex-1 overflow-auto" :class="endClass">
       <slot name="end" :size="100 - value" />
     </section>
   </div>
