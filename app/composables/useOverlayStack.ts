@@ -63,6 +63,17 @@ interface LayerEntry {
 
 const layerEntries = new Map<string, LayerEntry>()
 
+/*
+ * Скільки відкрито шарів, які людина закриває сама: модальні й плаваючі
+ * панелі, без пасивних (підказка, hover-картка). Записи шару стають у
+ * layerEntries до push у стек, тож пасивність відома з першого перерахунку.
+ * Потрібно, наприклад, щоб системне «назад» на телефоні закривало верхній
+ * шар, а не йшло з екрана під ним.
+ */
+const blockingLayerCount = computed(
+  () => overlayStack.value.filter((id) => !layerEntries.get(id)?.passive).length,
+)
+
 export function useOverlayStack() {
   const push = (id: string): void => {
     if (!isClient || overlayStack.value.includes(id)) return
@@ -100,7 +111,7 @@ export function useOverlayStack() {
     return OVERLAY_BASE_Z_INDEX + modalIndex * OVERLAY_Z_STEP
   }
 
-  return { stack: readonly(overlayStack), push, remove, indexOf, isTopmost, zIndexFor }
+  return { stack: readonly(overlayStack), blockingCount: blockingLayerCount, push, remove, indexOf, isTopmost, zIndexFor }
 }
 
 /* ------------------------------------------------------------------ */

@@ -15,7 +15,7 @@ import UiSplitButton from '~/components/ui/UiSplitButton.vue'
 import UiToaster from '~/components/ui/UiToaster.vue'
 import UiTooltip from '~/components/ui/UiTooltip.vue'
 import { useConfirm } from '~/composables/useConfirm'
-import { useFloatingLayer, useOverlayLayer } from '~/composables/useOverlayStack'
+import { useFloatingLayer, useOverlayLayer, useOverlayStack } from '~/composables/useOverlayStack'
 import { useToast } from '~/composables/useToast'
 import { mountComponent } from './helpers/mountComponent'
 
@@ -285,6 +285,27 @@ describe('спільний стек: Escape і клік «повз»', () => {
     })
     scope.stop()
   })
+
+  it('blockingCount рахує модальні й плаваючі шари, але не підказки', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const { blockingCount } = useOverlayStack()
+      const modal = useOverlayLayer(undefined, { onEscape: () => undefined })
+      const tooltip = useFloatingLayer({ elements: () => [], passive: true })
+      const menu = useFloatingLayer({ elements: () => [] })
+      expect(blockingCount.value).toBe(0)
+      modal.activate()
+      tooltip.activate()
+      expect(blockingCount.value).toBe(1)
+      menu.activate()
+      expect(blockingCount.value).toBe(2)
+      menu.deactivate()
+      modal.deactivate()
+      expect(blockingCount.value).toBe(0)
+      tooltip.deactivate()
+    })
+    scope.stop()
+  })
 })
 
 /* ------------------------------------------------------------------ */
@@ -384,6 +405,75 @@ describe('UiDrawer', () => {
     const dialog = document.querySelector('[role="dialog"]')!
     expect(dialog.getAttribute('aria-label')).toBe('Фільтри')
     expect(dialog.hasAttribute('aria-labelledby')).toBe(false)
+  })
+})
+
+/* ------------------------------------------------------------------ */
+
+describe('UiModal: свайп у режимі bottom sheet', () => {
+  const sheet = (matches: boolean) =>
+    vi.spyOn(window, 'matchMedia').mockImplementation((query: string) => ({
+      matches, media: query, onchange: null,
+      addEventListener: () => undefined, removeEventListener: () => undefined,
+      addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
+    }) as unknown as MediaQueryList)
+
+  async function swipe(distance: number, opts: { matches?: boolean; props?: Record<string, unknown> } = {}) {
+    sheet(opts.matches ?? true)
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(400)
+    const state = reactive({ open: true })
+    await mount(() =>
+      h(UiModal, {
+        modelValue: state.open, title: 'Форма', swipeToClose: true, ...opts.props,
+        'onUpdate:modelValue': (v: boolean) => (state.open = v),
+      }, { default: () => 'Вміст' }),
+    )
+    await flush()
+    const handle = document.querySelector<HTMLElement>('.cursor-grab')
+    if (handle) {
+      handle.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, clientY: 100, button: 0, pointerType: 'touch' }))
+      window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientY: 100 + distance }))
+      // Пауза: без неї 40px за 0 мс — це «кидок», а не повільне перетягування.
+      await new Promise((r) => setTimeout(r, 120))
+      window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientY: 100 + distance }))
+    }
+    await flush()
+    return { state, handle }
+  }
+
+  it('без swipeToClose ручки немає — поведінка як раніше', async () => {
+    sheet(true)
+    await mount(() => h(UiModal, { modelValue: true, title: 'Форма' }, { default: () => 'Вміст' }))
+    await flush()
+    expect(document.querySelector('.cursor-grab')).toBeNull()
+  })
+
+  it('свайп далі чверті висоти закриває вікно', async () => {
+    const { state, handle } = await swipe(150)
+    expect(handle).not.toBeNull()
+    expect(state.open).toBe(false)
+  })
+
+  it('короткий повільний свайп повертає панель на місце', async () => {
+    const { state } = await swipe(40)
+    expect(state.open).toBe(true)
+    expect(document.querySelector<HTMLElement>('[role="dialog"]')!.style.transform).toBe('')
+  })
+
+  it('центроване вікно (ширше sm) за шапку не тягнеться', async () => {
+    const { state } = await swipe(200, { matches: false })
+    expect(state.open).toBe(true)
+  })
+
+  it('persistent не заважає: свайп — явна дія, як хрестик', async () => {
+    const { state } = await swipe(200, { props: { persistent: true } })
+    expect(state.open).toBe(false)
+  })
+
+  it('closable=false вимикає і ручку, і жест', async () => {
+    const { state, handle } = await swipe(200, { props: { closable: false } })
+    expect(handle).toBeNull()
+    expect(state.open).toBe(true)
   })
 })
 

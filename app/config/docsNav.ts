@@ -96,6 +96,7 @@ export const docsNav: NavGroup[] = [
     items: [
       { title: 'Table', to: '/docs/components/table' },
       { title: 'Menu', to: '/docs/components/menu' },
+      { title: 'SwipeActions', to: '/docs/components/swipe-actions', fresh: true },
       { title: 'Pagination', to: '/docs/components/pagination' },
       { title: 'Avatar', to: '/docs/components/avatar' },
       { title: 'AvatarGroup', to: '/docs/components/avatar-group' },
@@ -116,6 +117,7 @@ export const docsNav: NavGroup[] = [
       { title: 'Sidebar', to: '/docs/components/sidebar' },
       { title: 'ScrollArea', to: '/docs/components/scroll-area' },
       { title: 'ResizablePanels', to: '/docs/components/resizable-panels' },
+      { title: 'SwipeStack', to: '/docs/components/swipe-stack', fresh: true },
       { title: 'Carousel', to: '/docs/components/carousel' },
       { title: 'Tabs', to: '/docs/components/tabs' },
       { title: 'Breadcrumb', to: '/docs/components/breadcrumb' },

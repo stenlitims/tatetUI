@@ -75,6 +75,13 @@ const props = withDefaults(
      * сам текст повідомлення.
      */
     ariaDescribedby?: string
+    /**
+     * Свайп униз закриває вікно, поки воно bottom sheet (до `sm`): над
+     * шапкою з'являється ручка, тягнути можна за неї й за шапку. Як і
+     * хрестик, свайп — явна дія: працює з `closable`, навіть якщо вікно
+     * `persistent`. Ширше `sm` вікно центроване, і жест вимкнено.
+     */
+    swipeToClose?: boolean
   }>(),
   {
     modelValue: false,
@@ -86,6 +93,7 @@ const props = withDefaults(
     closeOnBackdrop: true,
     persistent: false,
     noPadding: false,
+    swipeToClose: false,
   },
 )
 
@@ -166,11 +174,11 @@ function closeModal() {
   emit('close')
 }
 
-type CloseReason = 'button' | 'escape' | 'backdrop'
+type CloseReason = 'button' | 'escape' | 'backdrop' | 'swipe'
 
 function requestClose(reason: CloseReason) {
   if (!props.closable) return
-  if (reason !== 'button' && props.persistent) return
+  if (reason !== 'button' && reason !== 'swipe' && props.persistent) return
   if (reason === 'backdrop' && !props.closeOnBackdrop) return
   closeModal()
 }
@@ -192,6 +200,100 @@ function onRootClick(event: MouseEvent) {
   pressedOnBackdrop = false
   if (event.target !== backdropEl.value) return
   requestClose('backdrop')
+}
+
+/* ---------------------------------------------------------------- */
+/*  Свайп для закриття (bottom sheet до sm)                           */
+/* ---------------------------------------------------------------- */
+
+/*
+ * Той самий жест, що в нижньому UiDrawer: тягнеться лише вниз, закриває за
+ * чвертю висоти або різким кидком. Лише поки вікно — sheet: центроване
+ * вікно від `sm` за шапку не тягають. Межа — та сама, що в класах `sm:`.
+ */
+const SHEET_QUERY = '(max-width: 39.99rem)'
+
+const dragOffset = ref(0)
+const isDragging = ref(false)
+
+const showDragHandle = computed(() => props.swipeToClose && props.closable)
+
+const panelStyle = computed(() => {
+  if (!isDragging.value && dragOffset.value === 0) return undefined
+  return {
+    transform: `translateY(${dragOffset.value}px)`,
+    transition: isDragging.value ? 'none' : 'transform var(--duration-base) var(--ease-out)',
+  }
+})
+
+let dragStartY = 0
+let dragStartTime = 0
+let activePointerId: number | null = null
+
+function isSheet() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(SHEET_QUERY).matches
+}
+
+function stopDragListeners() {
+  window.removeEventListener('pointermove', onDragMove)
+  window.removeEventListener('pointerup', onDragEnd)
+  window.removeEventListener('pointercancel', onDragEnd)
+}
+
+function onDragMove(event: PointerEvent) {
+  if (activePointerId !== event.pointerId) return
+  // Тягнути можна лише вниз — угору панель не «відлипає».
+  dragOffset.value = Math.max(0, event.clientY - dragStartY)
+}
+
+function onDragEnd(event: PointerEvent) {
+  if (activePointerId !== event.pointerId) return
+  stopDragListeners()
+  activePointerId = null
+  isDragging.value = false
+
+  const distance = dragOffset.value
+  const elapsed = performance.now() - dragStartTime
+  const velocity = elapsed > 0 ? distance / elapsed : 0
+  const panelHeight = panelEl.value?.offsetHeight ?? 0
+
+  if (event.type === 'pointerup' && (distance > panelHeight * 0.25 || velocity > 0.5)) {
+    // Доводимо панель донизу, а не скидаємо в 0: інакше вона стрибнула б
+    // на місце й лише потім поїхала б закриватися.
+    dragOffset.value = panelHeight
+    requestClose('swipe')
+    // Батько може відмовити (керований v-model з питанням «Відкинути
+    // зміни?») — тоді панель мусить повернутися, а не висіти за краєм.
+    void nextTick(() => {
+      if (props.modelValue) dragOffset.value = 0
+    })
+    return
+  }
+  dragOffset.value = 0
+}
+
+function onDragStart(event: PointerEvent) {
+  if (!showDragHandle.value || !isSheet() || activePointerId !== null) return
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  activePointerId = event.pointerId
+  dragStartY = event.clientY
+  dragStartTime = performance.now()
+  isDragging.value = true
+  window.addEventListener('pointermove', onDragMove)
+  window.addEventListener('pointerup', onDragEnd)
+  window.addEventListener('pointercancel', onDragEnd)
+}
+
+/** Шапка теж тягне, але не з її кнопок і полів: там палець натискає й друкує. */
+function onHeaderPointerDown(event: PointerEvent) {
+  const target = event.target as Element | null
+  if (target?.closest('button, a, input, textarea, select, [contenteditable="true"]')) return
+  onDragStart(event)
+}
+
+function onAfterLeave() {
+  layer.settle()
+  dragOffset.value = 0
 }
 
 async function handleOpen() {
@@ -223,6 +325,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  stopDragListeners()
   // Компонент могли знищити відкритим (навігація) — handleClose знімає і
   // лок прокрутки, і пастку фокуса, і шар зі стеку.
   handleClose()
@@ -231,7 +334,7 @@ onBeforeUnmount(() => {
 
 <template>
   <Teleport to="body" :disabled="!teleportReady">
-    <Transition name="ui-modal" :duration="transitionDuration" @after-leave="layer.settle()">
+    <Transition name="ui-modal" :duration="transitionDuration" @after-leave="onAfterLeave">
       <div
         v-if="modelValue"
         data-ui-overlay
@@ -250,6 +353,7 @@ onBeforeUnmount(() => {
           ref="panelEl"
           class="ui-modal-panel relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-overlay border border-line bg-card shadow-overlay outline-none sm:max-h-[85dvh] sm:rounded-overlay"
           :class="[SIZE_CLASSES[size], panelClass]"
+          :style="panelStyle"
           :role="role"
           aria-modal="true"
           tabindex="-1"
@@ -257,9 +361,24 @@ onBeforeUnmount(() => {
           :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : 'Діалогове вікно')"
           :aria-describedby="ariaDescribedby"
         >
+          <!-- Ручка свайпу — лише в режимі sheet. Тло шапки, щоб ручка
+               читалася її частиною. touch-none обов'язковий: без нього
+               браузер забирає вертикальний жест собі як прокрутку. -->
+          <div
+            v-if="showDragHandle"
+            class="flex shrink-0 cursor-grab touch-none justify-center pt-2 pb-0.5 active:cursor-grabbing sm:hidden"
+            :class="hasHeader ? 'bg-subtle' : ''"
+            aria-hidden="true"
+            @pointerdown="onDragStart"
+          >
+            <span class="h-1 w-10 rounded-full bg-line-strong" />
+          </div>
+
           <div
             v-if="hasHeader"
             class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-subtle px-4 py-3 sm:px-5"
+            :class="showDragHandle ? 'touch-none sm:touch-auto' : ''"
+            @pointerdown="onHeaderPointerDown"
           >
             <div
               :id="hasAccessibleHeader ? titleId : undefined"

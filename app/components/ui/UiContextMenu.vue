@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId,
 import { focusNextAfter } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import { getOverlayChildZIndex, getVisibleViewport, viewportMaxWidth } from '~/utils/overlayPosition'
+import { haptic as vibrate } from '~/utils/touch'
 
 const props = withDefaults(
   defineProps<{
@@ -13,8 +14,14 @@ const props = withDefaults(
     disabled?: boolean
     /** Доступна назва меню. */
     ariaLabel?: string
+    /**
+     * Короткий тактильний відгук, коли меню відкрило довге натискання
+     * пальцем, — як у нативних застосунках (Android; iOS вібрації не має).
+     * Правий клік мишею і клавіатура відгуку не дають.
+     */
+    haptic?: boolean
   }>(),
-  { modelValue: false, width: '14rem', disabled: false, ariaLabel: 'Контекстне меню' },
+  { modelValue: false, width: '14rem', disabled: false, ariaLabel: 'Контекстне меню', haptic: false },
 )
 
 const emit = defineEmits<{
@@ -69,7 +76,7 @@ const targetAttrs = computed(() => ({
   onPointerdown: onTargetPointerdown,
   onPointermove: onTargetPointermove,
   onPointerup: onTargetPointerup,
-  onPointercancel: cancelLongPress,
+  onPointercancel: onTargetPointercancel,
 }))
 
 /*
@@ -138,7 +145,9 @@ function close(restoreFocus = true) {
 function onContextMenu(event: MouseEvent) {
   event.preventDefault()
   // Android сам шле contextmenu на довгому натисканні — власний таймер
-  // тоді зайвий, інакше меню відкрилося б двічі.
+  // тоді зайвий, інакше меню відкрилося б двічі. Палець ще на екрані —
+  // отже це довге натискання, а не правий клік.
+  if (touchDown && props.haptic && !props.modelValue) vibrate()
   cancelLongPress()
   targetEl.value = event.currentTarget as HTMLElement
   void show(event.clientX, event.clientY, targetEl.value)
@@ -166,6 +175,8 @@ const LONG_PRESS_SLOP = 10
 
 let longPress: { timer: number; x: number; y: number; pointerId: number } | null = null
 let longPressFired = false
+/** Палець чи перо зараз на цілі — contextmenu від Android тоді є довгим натисканням. */
+let touchDown = false
 
 function cancelLongPress() {
   if (!longPress) return
@@ -175,6 +186,7 @@ function cancelLongPress() {
 
 function onTargetPointerdown(event: PointerEvent) {
   if (event.pointerType === 'mouse' || props.disabled) return
+  touchDown = true
   cancelLongPress()
   longPressFired = false
   const target = event.currentTarget as HTMLElement
@@ -186,6 +198,7 @@ function onTargetPointerdown(event: PointerEvent) {
     timer: window.setTimeout(() => {
       longPress = null
       longPressFired = true
+      if (props.haptic && !props.modelValue) vibrate()
       void show(x, y, target)
     }, LONG_PRESS_MS),
   }
@@ -203,7 +216,13 @@ function onTargetPointermove(event: PointerEvent) {
  * або сам рядок. Такий click гасимо, щоб довге натискання не спрацювало ще
  * й як звичайне.
  */
+function onTargetPointercancel() {
+  touchDown = false
+  cancelLongPress()
+}
+
 function onTargetPointerup() {
+  touchDown = false
   cancelLongPress()
   if (!longPressFired) return
   longPressFired = false

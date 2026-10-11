@@ -18,8 +18,8 @@ defineSlots<Record<string, never>>()
  * шукає перевірка.
  */
 const stats = [
-  { value: '72', label: 'компонентів' },
-  { value: '71', label: 'сторінок документації' },
+  { value: '74', label: 'компонентів' },
+  { value: '73', label: 'сторінок документації' },
   { value: '0', label: 'runtime-залежностей', note: 'крім редактора на TipTap' },
   { value: 'AA', label: 'контраст у двох темах', note: 'перевіряється при кожній збірці' },
 ]
