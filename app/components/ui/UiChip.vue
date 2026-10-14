@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { Comment, computed, useSlots, type VNode } from 'vue'
 
 const props = withDefaults(
@@ -73,7 +74,7 @@ function textOf(nodes: VNode[] | undefined): string {
  */
 function removeLabel(): string {
   const text = props.label || textOf(slots.default?.() as VNode[] | undefined).replace(/\s+/g, ' ').trim()
-  return text ? `Видалити ${text}` : 'Видалити'
+  return text ? uiText("Видалити {0}", { 0: text }) : uiText("Видалити")
 }
 
 /*

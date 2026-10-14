@@ -97,3 +97,19 @@ python3 scripts/gen-icons.py
 ```bash
 NUXT_PUBLIC_SITE_URL=https://example.com bun run build
 ```
+
+## Мова вбудованих підписів
+
+Підписи кнопок, пошуку, діалогів і галереї типово українські. Застосунок
+може підключити власний перекладач без залежності бібліотеки від i18n-пакета:
+
+```ts
+import { setUiTextTranslator } from '~/composables/useUiText'
+setUiTextTranslator((message, values) => i18n.t(message, values))
+```
+
+Викликайте перед монтуванням застосунку. Якщо перекладач читає реактивну
+мову, відкриті компоненти оновлюють підписи при перемиканні. Аргументи
+підстановки — звичайний текст. `setUiTextTranslator()` повертає типову
+поведінку. Під час копіювання компонентів переносіть також
+`app/composables/useUiText.ts` (зазначено в `dependsOn`).

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { uiText } from '~/composables/useUiText'
 /**
  * Кегль ініціалів — частка діаметра (40% для однієї літери, 36% для пари),
  * а не сходинки text-xs/text-sm.
@@ -65,14 +66,14 @@ const props = withDefaults(
 )
 
 const STATUS: Record<NonNullable<typeof props.status>, { dot: string; label: string }> = {
-  online: { dot: 'bg-success', label: 'онлайн' },
-  offline: { dot: 'bg-line-strong', label: 'офлайн' },
-  busy: { dot: 'bg-danger', label: 'зайнятий' },
-  away: { dot: 'bg-warning', label: 'відійшов' },
+  online: { dot: 'bg-success', get label() { return uiText("онлайн") } },
+  offline: { dot: 'bg-line-strong', get label() { return uiText("офлайн") } },
+  busy: { dot: 'bg-danger', get label() { return uiText("зайнятий") } },
+  away: { dot: 'bg-warning', get label() { return uiText("відійшов") } },
 }
 
 const accessibleName = computed(() => {
-  const base = props.name ?? 'Аватар'
+  const base = props.name ?? uiText("Аватар")
   return props.status ? `${base}, ${STATUS[props.status].label}` : base
 })
 

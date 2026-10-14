@@ -4,10 +4,10 @@ import {
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
   useId,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import { computeTooltipPosition } from '~/utils/tooltip'
 import { getOverlayChildZIndex } from '~/utils/overlayPosition'
@@ -55,7 +55,8 @@ const style = ref<Record<string, string>>({})
 
 const tooltipId = `${useId()}-tooltip`
 const describedBy = ref<string | undefined>(undefined)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => visible.value)
 
 let showTimer: ReturnType<typeof setTimeout> | undefined
 let hideTimer: ReturnType<typeof setTimeout> | undefined
@@ -276,12 +277,15 @@ function onScrollOrResize() {
   if (visible.value) updatePosition()
 }
 
-// Панель у body — слухаємо вікно, а не корінь.
-onMounted(() => {
-  teleportReady.value = true
-  window.addEventListener('scroll', onScrollOrResize, { passive: true, capture: true })
-  window.addEventListener('resize', onScrollOrResize, { passive: true })
-})
+// Панель у body — слухаємо вікно, а не корінь. Лише поки підказку видно:
+// підказки на кожній кнопці інакше ловили б кожну подію прокрутки сторінки.
+function listenWindow(on: boolean) {
+  if (typeof window === 'undefined') return
+  const method = on ? 'addEventListener' : 'removeEventListener'
+  window[method]('scroll', onScrollOrResize, { passive: true, capture: true })
+  window[method]('resize', onScrollOrResize, { passive: true })
+}
+watch(visible, listenWindow)
 
 watch(
   () => props.disabled,
@@ -293,10 +297,7 @@ watch(
 onBeforeUnmount(() => {
   clearTouchTimers()
   hide()
-  if (typeof document !== 'undefined') {
-    window.removeEventListener('scroll', onScrollOrResize, true)
-    window.removeEventListener('resize', onScrollOrResize)
-  }
+  listenWindow(false)
 })
 
 // Перерахунок, коли панель нарешті має реальні габарити.

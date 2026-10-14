@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 /**
@@ -138,8 +139,8 @@ const classes = computed(() => [
  * кнопка копіювала мовчки.
  */
 const announcement = computed(() => {
-  if (state.value === 'copied') return props.copiedLabel
-  if (state.value === 'failed') return 'Не вдалося скопіювати'
+  if (state.value === 'copied') return uiText(props.copiedLabel)
+  if (state.value === 'failed') return uiText("Не вдалося скопіювати")
   return ''
 })
 </script>
@@ -163,7 +164,7 @@ const announcement = computed(() => {
         <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" />
         <path d="M15 9l-6 6M9 9l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
       </svg>
-      <span v-if="label">{{ state === 'copied' ? copiedLabel : 'Помилка' }}</span>
+      <span v-if="label">{{ state === 'copied' ? copiedLabel : uiText("Помилка") }}</span>
     </span>
 
     <span

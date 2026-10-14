@@ -1,3 +1,4 @@
+import { uiText } from '~/composables/useUiText'
 /**
  * Чиста логіка UiLightbox — поза компонентом, щоб покривати тестами без
  * рендеру (правило дому: поведінка → utils → тести). Жести свайпу беруться
@@ -498,30 +499,30 @@ export interface LightboxLabels {
   thumbnail: (position: number, title: string, kind: LightboxSlideKind) => string
 }
 
-const KIND_NOUN: Record<LightboxSlideKind, string> = { image: 'Зображення', video: 'Відео', other: 'Слайд' }
+const KIND_NOUN: Record<LightboxSlideKind, string> = { get image() { return uiText("Зображення") }, get video() { return uiText("Відео") }, get other() { return uiText("Слайд") } }
 
 export const LIGHTBOX_LABELS_UK: LightboxLabels = {
-  close: 'Закрити',
-  previous: 'Попередній слайд',
-  next: 'Наступний слайд',
-  zoomIn: 'Збільшити',
-  zoomOut: 'Зменшити',
-  rotateLeft: 'Повернути ліворуч',
-  rotateRight: 'Повернути праворуч',
-  flipHorizontal: 'Віддзеркалити по горизонталі',
-  flipVertical: 'Віддзеркалити по вертикалі',
-  slideshowPlay: 'Запустити слайдшоу',
-  slideshowPause: 'Зупинити слайдшоу',
-  fullscreenEnter: 'На весь екран',
-  fullscreenExit: 'Вийти з повного екрана',
-  thumbnailsShow: 'Показати мініатюри',
-  thumbnailsHide: 'Сховати мініатюри',
-  download: 'Завантажити',
-  thumbnails: 'Мініатюри',
-  loading: 'Завантаження',
-  error: 'Не вдалося завантажити',
-  retry: 'Спробувати ще раз',
-  empty: 'Немає зображень',
-  slide: (position, total, title, kind) => `${KIND_NOUN[kind]} ${position} з ${total}: ${title}`,
+  get close() { return uiText("Закрити") },
+  get previous() { return uiText("Попередній слайд") },
+  get next() { return uiText("Наступний слайд") },
+  get zoomIn() { return uiText("Збільшити") },
+  get zoomOut() { return uiText("Зменшити") },
+  get rotateLeft() { return uiText("Повернути ліворуч") },
+  get rotateRight() { return uiText("Повернути праворуч") },
+  get flipHorizontal() { return uiText("Віддзеркалити по горизонталі") },
+  get flipVertical() { return uiText("Віддзеркалити по вертикалі") },
+  get slideshowPlay() { return uiText("Запустити слайдшоу") },
+  get slideshowPause() { return uiText("Зупинити слайдшоу") },
+  get fullscreenEnter() { return uiText("На весь екран") },
+  get fullscreenExit() { return uiText("Вийти з повного екрана") },
+  get thumbnailsShow() { return uiText("Показати мініатюри") },
+  get thumbnailsHide() { return uiText("Сховати мініатюри") },
+  get download() { return uiText("Завантажити") },
+  get thumbnails() { return uiText("Мініатюри") },
+  get loading() { return uiText("Завантаження") },
+  get error() { return uiText("Не вдалося завантажити") },
+  get retry() { return uiText("Спробувати ще раз") },
+  get empty() { return uiText("Немає зображень") },
+  slide: (position, total, title, kind) => uiText("{0} {1} з {2}: {3}", { 0: KIND_NOUN[kind], 1: position, 2: total, 3: title }),
   thumbnail: (position, title, kind) => `${KIND_NOUN[kind]} ${position}: ${title}`,
 }

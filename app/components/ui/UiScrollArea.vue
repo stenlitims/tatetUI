@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 const props = withDefaults(
@@ -154,7 +155,7 @@ defineExpose({ viewportEl, atStart, atEnd, scrollTo, scrollToStart, scrollToEnd 
     <div
       ref="viewportEl"
       role="region"
-      :aria-label="ariaLabel"
+      :aria-label="uiText(ariaLabel)"
       :tabindex="tabindex"
       class="scrollbar-thin min-h-0 min-w-0 rounded-control focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       :class="overflowClass"

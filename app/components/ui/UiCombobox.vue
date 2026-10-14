@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import {
   computed,
   nextTick,
@@ -11,6 +12,7 @@ import {
   useId,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import UiDrawer from './UiDrawer.vue'
 import { dropdownPanelStyle, listenViewportChanges, observePanelSize } from '~/utils/overlayPosition'
 import {
@@ -140,7 +142,8 @@ const query = ref('')
 // modelValue не має права переписати його запит.
 const isTyping = ref(false)
 const highlightedIndex = ref(-1)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => isOpen.value)
 
 /*
  * Sheet-режим (вузький екран). Поле в ньому — кнопка без клавіатури, запит
@@ -506,9 +509,15 @@ onBeforeUpdate(() => {
 
 let stopSheetWatch: (() => void) | null = null
 
+// Клік повз список — лише поки він відкритий: закриті поля форми не
+// перехоплюють кожен дотик до сторінки.
+watch(isOpen, (open) => {
+  if (typeof document === 'undefined') return
+  if (open) document.addEventListener('pointerdown', onDocumentPointerDown, true)
+  else document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+})
+
 onMounted(() => {
-  teleportReady.value = true
-  document.addEventListener('pointerdown', onDocumentPointerDown, true)
   stopSheetWatch = watchSelectSheet((sheet) => {
     narrowScreen.value = sheet
   })
@@ -541,7 +550,7 @@ defineExpose({
         :id="inputId"
         ref="inputEl"
         :value="query"
-        :placeholder="placeholder"
+        :uiText(placeholder)="uiText(placeholder)"
         :disabled="disabled"
         :required="required"
         :readonly="sheetMode"
@@ -573,7 +582,7 @@ defineExpose({
         :class="['absolute top-1/2 right-8 -translate-y-1/2', clearButtonClass]"
         @click="clear"
       >
-        <span class="sr-only">Очистити вибір</span>
+        <span class="sr-only">{{ uiText("Очистити вибір") }}</span>
         <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
         </svg>
@@ -615,10 +624,10 @@ defineExpose({
         >
           <ul :id="listboxId" role="listbox" class="py-1">
             <li v-if="loading" role="option" aria-disabled="true" :class="dropdownEmptyClass">
-              Завантаження…
+              {{ uiText("Завантаження…") }}
             </li>
             <li v-else-if="!options.length" role="option" aria-disabled="true" :class="dropdownEmptyClass">
-              Нічого не знайдено
+              {{ uiText("Нічого не знайдено") }}
             </li>
             <li
               v-for="(option, index) in loading ? [] : options"
@@ -699,8 +708,8 @@ defineExpose({
             aria-autocomplete="list"
             :aria-controls="listboxId"
             :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
-            :aria-label="sheetTitle || placeholder"
-            :placeholder="placeholder"
+            :aria-label="sheetTitle || uiText(placeholder)"
+            :uiText(placeholder)="uiText(placeholder)"
             enterkeyhint="search"
             autocomplete="off"
             :class="sheetSearchInputClass"
@@ -718,7 +727,7 @@ defineExpose({
       <ul :id="listboxId" role="listbox" :aria-label="sheetTitle || undefined" :class="sheetListClass">
         <template v-if="!sheetQueryTooShort">
           <li v-if="loading && !options.length" role="option" aria-disabled="true" :class="sheetEmptyClass">
-            Завантаження…
+            {{ uiText("Завантаження…") }}
           </li>
           <li
             v-else-if="!options.length && sheetQuery"
@@ -726,7 +735,7 @@ defineExpose({
             aria-disabled="true"
             :class="sheetEmptyClass"
           >
-            Нічого не знайдено
+            {{ uiText("Нічого не знайдено") }}
           </li>
           <li
             v-for="(option, index) in options"

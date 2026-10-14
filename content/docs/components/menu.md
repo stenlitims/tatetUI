@@ -3,6 +3,7 @@ title: Menu
 description: Випадне меню, телепортоване в body, з фліпом і притисканням до вікна.
 component: UiMenu
 dependsOn:
+  - app/composables/useLazyTeleport.ts
   - app/utils/overlayPosition.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useFocusTrap.ts

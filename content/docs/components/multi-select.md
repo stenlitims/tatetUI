@@ -3,6 +3,8 @@ title: MultiSelect
 description: Мультивибір із чекбоксами, пошуком, діями «вибрати все / зняти все» та лічильником у тригері.
 component: UiMultiSelect
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/utils/uiFieldStyles.ts
   - app/utils/overlayPosition.ts
   - app/utils/selectSheet.ts

@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import {
@@ -74,7 +76,8 @@ defineSlots<{
 const rootEl = ref<HTMLElement | null>(null)
 const triggerEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => props.modelValue)
 const panelHovered = shallowRef(false)
 const triggerFocused = shallowRef(false)
 const position = shallowRef<Record<string, string>>({ top: '0px', left: '0px', zIndex: '1100' })
@@ -287,9 +290,13 @@ watch(() => props.modelValue, async (visible) => {
   updatePosition()
 })
 
+// Слухачі вікна — лише поки картку видно.
+watch(() => props.modelValue, (visible) => {
+  stopViewport?.()
+  stopViewport = visible ? listenViewportChanges(onViewportChange) : null
+}, { immediate: true })
+
 onMounted(() => {
-  teleportReady.value = true
-  stopViewport = listenViewportChanges(onViewportChange)
   if (props.modelValue) layer.activate()
 })
 
@@ -318,7 +325,7 @@ defineExpose({ open, close })
         :id="panelId"
         ref="panelEl"
         role="dialog"
-        :aria-label="ariaLabel"
+        :aria-label="uiText(ariaLabel)"
         class="fixed rounded-overlay border border-line bg-dropdown p-4 text-ink shadow-overlay"
         :class="placement.startsWith('top') ? 'origin-bottom' : 'origin-top'"
         :style="{ ...position, width }"

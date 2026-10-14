@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, useId } from 'vue'
 import { errorTextClass, helperTextClass, labelClass } from '~/utils/uiFieldStyles'
 
@@ -120,7 +121,7 @@ const slotProps = computed<FormFieldSlotProps>(() => ({
       поруч дублює її для ока (aria-hidden, щоб не звучало двічі).
     -->
     <legend v-if="as === 'fieldset' && label" :id="labelId" class="sr-only">
-      {{ label }}{{ required ? ' (обов\'язково)' : '' }}
+      {{ label }}{{ required ? uiText(" (обов'язково)") : '' }}
     </legend>
 
     <div v-if="label || $slots['label-aside']" class="mb-1 flex items-baseline justify-between gap-3">

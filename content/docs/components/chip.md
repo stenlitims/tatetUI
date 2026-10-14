@@ -2,6 +2,8 @@
 title: Chip
 description: Компактна позначка статусу з шістьма смисловими тонами.
 component: UiChip
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
   click: Клік. Спрацьовує лише коли задано `clickable`.
   remove: Натиснуто хрестик `removable` (або Delete на клікабельному чипі). Список тримає батько.

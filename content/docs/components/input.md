@@ -3,6 +3,7 @@ title: Input
 description: Текстове поле з лейблом, підказкою та станом помилки.
 component: UiInput
 dependsOn:
+  - app/composables/useUiText.ts
   - app/utils/uiFieldStyles.ts
 emitDescriptions:
   update:modelValue: Зміна значення. Для `type="number"` порожнє поле віддає `null`, а не `NaN`.

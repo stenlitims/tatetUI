@@ -2,6 +2,8 @@
 title: Tabs
 description: Вкладки з клавіатурною навігацією, слотами панелей і опційною синхронізацією з URL.
 component: UiTabs
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
   update:modelValue: Новий активний id — зокрема відновлений з URL чи виправлений замість вимкненої вкладки. Використовуйте через `v-model`.
   change: Користувач перемкнув вкладку — клік, клавіатура або «Назад/Вперед» у браузері. Відновлення з URL і зміна v-model згори його не викликають.

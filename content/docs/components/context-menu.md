@@ -3,12 +3,14 @@ title: ContextMenu
 description: Меню дій у координатах pointer із підтримкою Shift+F10 та клавіші Context Menu.
 component: UiContextMenu
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/utils/overlayPosition.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useFocusTrap.ts
 emitDescriptions:
   update:modelValue: Меню відкрито або закрито.
-  open: Меню відкрилося.
+  open: Меню відкрилося. Аргумент — елемент, для якого його відкрили (з `targetSelector` — рядок списку).
   close: Меню закрилося.
 status: stable
 order: 45
@@ -34,6 +36,25 @@ order: 45
 
 Не ховайте тут єдиний шлях до важливої дії. Context menu доповнює видимі
 кнопки або `UiMenu`, а не замінює їх.
+
+## Довгі списки: одне меню на список
+
+Меню в кожному рядку — це екземпляр компонента, обробники й Teleport на
+рядок. У переписці чи списку чатів на сотню рядків воно коштує більше, ніж
+самі рядки. Для таких списків передайте `targetAttrs` **контейнеру**, а
+рядки позначте селектором `targetSelector`: меню відкривається для
+найближчого до події рядка, а сам рядок приходить у слот `content` як
+`target` і в подію `open`. Права кнопка, Shift+F10 на сфокусованому рядку й
+довге натискання працюють так само; подія повз рядки меню не відкриває й
+системного меню не гасить.
+
+::component-preview{name="context-menu-delegated" stage="min-h-64"}
+::
+
+Контейнер aria-атрибутів меню не отримує — позначте рядки самі:
+`aria-haspopup="menu"` і `tabindex="0"`, щоб Shift+F10 і повернення фокуса
+після закриття працювали з клавіатури. Фокус після закриття повертається на
+рядок, для якого меню відкрили.
 
 ## Доступність
 

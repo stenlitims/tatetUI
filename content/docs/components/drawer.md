@@ -3,6 +3,8 @@ title: Drawer
 description: Бічна панель, що виїжджає з будь-якого краю, зі свайпом для закриття знизу.
 component: UiDrawer
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useScrollLock.ts
   - app/composables/useFocusTrap.ts

@@ -4,6 +4,7 @@
   'string' is missing»). Те саме рішення, що в UiTable.
 -->
 <script setup lang="ts" generic="T extends Record<string, any>">
+import { uiText } from '~/composables/useUiText'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useReducedMotion } from '~/composables/useReducedMotion'
 
@@ -61,8 +62,13 @@ const normalizedOverscan = computed(() =>
   Number.isFinite(props.overscan) ? Math.max(0, Math.floor(props.overscan)) : 0,
 )
 
-const visible = computed(() => {
-  if (props.items.length === 0) return []
+/*
+ * Межі вікна — окремо від самих рядків і стабільним об'єктом: подія
+ * прокрутки, що не вводить у зону нового рядка, лишає той самий діапазон, і
+ * список не перерендерюється (раніше — на кожну подію scroll, з новим
+ * масивом рядків і повторним рендером кожного слота).
+ */
+const range = computed<{ start: number; end: number }>((previous) => {
   const start = Math.max(
     0,
     Math.floor(scrollTop.value / normalizedItemHeight.value) - normalizedOverscan.value,
@@ -72,6 +78,12 @@ const visible = computed(() => {
     Math.ceil((scrollTop.value + clientHeight.value) / normalizedItemHeight.value) +
       normalizedOverscan.value,
   )
+  return previous && previous.start === start && previous.end === end ? previous : { start, end }
+})
+
+const visible = computed(() => {
+  if (props.items.length === 0) return []
+  const { start, end } = range.value
   const rows: { item: T; index: number }[] = []
   for (let index = start; index <= end; index++) {
     const item = props.items[index]!
@@ -206,7 +218,7 @@ const itemKey = (item: T, index: number) =>
     ref="scrollEl"
     role="list"
     tabindex="0"
-    :aria-label="ariaLabel"
+    :aria-label="uiText(ariaLabel)"
     class="w-full overflow-y-auto overscroll-contain rounded-card border border-line bg-card"
     :style="{ height }"
     @scroll.passive="onScroll"

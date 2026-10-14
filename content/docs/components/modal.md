@@ -3,6 +3,8 @@ title: Modal
 description: Модальне вікно зі стеком шарів, пасткою фокуса й блокуванням прокрутки.
 component: UiModal
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useScrollLock.ts
   - app/composables/useFocusTrap.ts

@@ -3,6 +3,7 @@ title: Tooltip
 description: Підказка навколо тригера — чотири позиції, затримка показу, показ по фокусу.
 component: UiTooltip
 dependsOn:
+  - app/composables/useLazyTeleport.ts
   - app/utils/tooltip.ts
   - app/utils/overlayPosition.ts
   - app/composables/useOverlayStack.ts

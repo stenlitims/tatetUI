@@ -3,6 +3,7 @@ title: FormField
 description: Лейбл, опис, підказка й помилка для будь-якого контрола — з тими самими ARIA-зв'язками, що у вбудованих полях.
 component: UiFormField
 dependsOn:
+  - app/composables/useUiText.ts
   - app/utils/uiFieldStyles.ts
 emitDescriptions:
 status: stable

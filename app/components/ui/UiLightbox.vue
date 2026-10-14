@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, nextTick, onBeforeUnmount, onBeforeUpdate, onMounted, reactive, ref, shallowRef, useId, watch } from 'vue'
 import UiSpinner from './UiSpinner.vue'
 import { useFocusTrap } from '~/composables/useFocusTrap'
@@ -1899,7 +1900,7 @@ defineExpose({
           ref="panelEl"
           role="dialog"
           aria-modal="true"
-          :aria-label="ariaLabel"
+          :aria-label="uiText(ariaLabel)"
           :aria-describedby="image ? titleId : undefined"
           tabindex="-1"
           class="ui-lightbox-panel relative flex h-full flex-col outline-none"

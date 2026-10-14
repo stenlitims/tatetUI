@@ -3,6 +3,8 @@ title: Select
 description: Випадний список із фільтрацією, повною клавіатурною навігацією та ARIA-combobox.
 component: UiSelect
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/utils/uiFieldStyles.ts
   - app/utils/overlayPosition.ts
   - app/utils/selectSheet.ts

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { nextTick, onBeforeUnmount, onMounted, shallowRef, watch } from 'vue'
 import { useToast, type Toast, type ToastType } from '~/composables/useToast'
 
@@ -432,7 +433,7 @@ onBeforeUnmount(() => {
       class="ui-toaster"
       :data-placement="placement"
       role="region"
-      aria-label="Сповіщення"
+      :aria-label="uiText('Сповіщення')"
       aria-keyshortcuts="F8"
       @keydown="onRegionKeydown"
       @pointerenter="onPointerEnter"
@@ -457,7 +458,7 @@ onBeforeUnmount(() => {
         <!-- &nbsp; перед числом: Vue викидає пробіл між елементами, якщо в
              ньому є перенос рядка, і виходило «·4». -->
         <span class="ui-toaster-count text-xs text-muted">
-          Сповіщення <span aria-hidden="true">·</span>&nbsp;<strong
+          {{ uiText("Сповіщення") }} <span aria-hidden="true">·</span>&nbsp;<strong
             class="font-semibold text-ink"
             >{{ toasts.length }}</strong
           >
@@ -480,7 +481,7 @@ onBeforeUnmount(() => {
           >
             <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3" />
           </svg>
-          Очистити всі
+          {{ uiText("Очистити всі") }}
         </button>
       </div>
 
@@ -577,7 +578,7 @@ onBeforeUnmount(() => {
                 type="button"
                 class="ui-toast-close relative -my-0.5 -mr-1 rounded-control p-1 text-muted hover:bg-hover hover:text-ink"
                 :class="TOUCH_TARGET"
-                aria-label="Закрити сповіщення"
+                :aria-label="uiText('Закрити сповіщення')"
                 @click="dismiss(toast.id)"
               >
                 <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">

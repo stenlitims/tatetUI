@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, shallowRef, useId, watch } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import {
@@ -85,7 +86,8 @@ const originClass = computed(() => {
 const rootEl = shallowRef<HTMLElement | null>(null)
 const triggerEl = shallowRef<HTMLElement | null>(null)
 const panelEl = shallowRef<HTMLElement | null>(null)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => props.modelValue)
 const panelStyle = shallowRef<Record<string, string>>({})
 
 /*
@@ -248,12 +250,15 @@ watch(() => props.modelValue, (openValue) => {
 })
 
 // visualViewport теж: поле всередині поповера відкриває клавіатуру, і
-// панель мусить піднятися над нею, а не лишитися під нею.
+// панель мусить піднятися над нею, а не лишитися під нею. Лише поки панель
+// відкрита: закритий поповер не тримає чотирьох слухачів вікна.
 let stopViewport: (() => void) | null = null
+watch(() => props.modelValue, (openValue) => {
+  stopViewport?.()
+  stopViewport = openValue ? listenViewportChanges(onViewportChange) : null
+}, { immediate: true })
 
 onMounted(() => {
-  teleportReady.value = true
-  stopViewport = listenViewportChanges(onViewportChange)
   // Відкритий із першого рендеру: watch не спрацьовує на початкове значення.
   if (props.modelValue) {
     layer.activate()

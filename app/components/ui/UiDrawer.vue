@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import {
   computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
   useAttrs,
   useId,
   useSlots,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
@@ -106,7 +107,8 @@ const wrapperAttrs = computed(() => {
 const hasCustomHeader = computed(() => !!slots.header)
 const hasHeader = computed(() => hasCustomHeader.value || !!props.title || props.closable)
 const hasAccessibleHeader = computed(() => hasCustomHeader.value || !!props.title)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => props.modelValue)
 
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
@@ -197,10 +199,10 @@ const sizeClass = computed(() =>
  * скрінрідер в оману щодо того, де шукати панель на екрані.
  */
 const FALLBACK_LABEL: Record<NonNullable<typeof props.position>, string> = {
-  left: 'Бічна панель',
-  right: 'Бічна панель',
-  top: 'Верхня панель',
-  bottom: 'Нижня панель',
+  get left() { return uiText("Бічна панель") },
+  get right() { return uiText("Бічна панель") },
+  get top() { return uiText("Верхня панель") },
+  get bottom() { return uiText("Нижня панель") },
 }
 
 // Escape — через спільний стек: підказка чи меню в панелі отримують його
@@ -362,7 +364,6 @@ watch(
 )
 
 onMounted(() => {
-  teleportReady.value = true
   if (props.modelValue) void handleOpen()
 })
 
@@ -450,7 +451,7 @@ onBeforeUnmount(() => {
               v-if="closable"
               type="button"
               class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
-              aria-label="Закрити"
+              :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">

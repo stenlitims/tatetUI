@@ -1,3 +1,4 @@
+import { uiText } from '~/composables/useUiText'
 import { ref, shallowRef } from 'vue'
 
 export interface ConfirmInputOptions {
@@ -22,10 +23,10 @@ export interface ConfirmOptions {
 }
 
 const DEFAULTS: Required<Omit<ConfirmOptions, 'input'>> & { input: ConfirmInputOptions | null } = {
-  title: 'Підтвердіть дію',
+  get title() { return uiText("Підтвердіть дію") },
   message: '',
-  confirmText: 'Підтвердити',
-  cancelText: 'Скасувати',
+  get confirmText() { return uiText("Підтвердити") },
+  get cancelText() { return uiText("Скасувати") },
   danger: false,
   hideCancel: false,
   input: null,
@@ -108,7 +109,7 @@ export function useConfirm() {
       typeof messageOrOptions === 'string' ? { message: messageOrOptions } : messageOrOptions
     return new Promise<boolean>((resolve) => {
       open(
-        { confirmText: 'Зрозуміло', ...next, hideCancel: true, input: null },
+        { get confirmText() { return uiText("Зрозуміло") }, ...next, hideCancel: true, input: null },
         resolve as (value: never) => void,
       )
     })

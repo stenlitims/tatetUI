@@ -1,6 +1,8 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, useId, watch } from 'vue'
 import { focusNextAfter } from '~/composables/useFocusTrap'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import { getOverlayChildZIndex, getVisibleViewport, viewportMaxWidth } from '~/utils/overlayPosition'
 import { haptic as vibrate } from '~/utils/touch'
@@ -20,13 +22,24 @@ const props = withDefaults(
      * Правий клік мишею і клавіатура відгуку не дають.
      */
     haptic?: boolean
+    /**
+     * Делегування для довгих списків: `targetAttrs` віддають контейнеру
+     * списку, а меню відкривається для найближчого до події елемента за цим
+     * CSS-селектором (рядка). Один екземпляр меню на весь список замість
+     * меню в кожному рядку. Події поза такими елементами меню не відкривають.
+     * Елемент, для якого відкрили меню, — `target` у слоті `content` і в
+     * події `open`; йому ж повертається фокус. Позначте рядки самі
+     * (`aria-haspopup="menu"`, `tabindex`): контейнер aria-атрибутів меню не
+     * отримує.
+     */
+    targetSelector?: string
   }>(),
-  { modelValue: false, width: '14rem', disabled: false, ariaLabel: 'Контекстне меню', haptic: false },
+  { modelValue: false, width: '14rem', disabled: false, ariaLabel: 'Контекстне меню', haptic: false, targetSelector: undefined },
 )
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  open: []
+  open: [target: HTMLElement | null]
   close: []
 }>()
 
@@ -38,10 +51,11 @@ defineSlots<{
   default: (props: {
     open: boolean
     targetAttrs: {
-      'aria-haspopup': 'menu'
-      'aria-expanded': boolean
-      'aria-controls': string | undefined
-      'aria-disabled': 'true' | undefined
+      /** Без `targetSelector`: атрибути меню стоять на самій цілі. */
+      'aria-haspopup'?: 'menu'
+      'aria-expanded'?: boolean
+      'aria-controls'?: string
+      'aria-disabled'?: 'true'
       style: Record<string, string>
       onContextmenu: (event: MouseEvent) => void
       onKeydown: (event: KeyboardEvent) => void
@@ -51,33 +65,59 @@ defineSlots<{
       onPointercancel: () => void
     }
   }) => unknown
-  /** Пункти з `role="menuitem"`. */
-  content: (props: { close: () => void }) => unknown
+  /**
+   * Пункти з `role="menuitem"`. `target` — елемент, для якого відкрили меню
+   * (з `targetSelector` — рядок списку).
+   */
+  content: (props: { close: () => void; target: HTMLElement | null }) => unknown
 }>()
 
 const rootEl = ref<HTMLElement | null>(null)
-const targetEl = ref<HTMLElement | null>(null)
+const targetEl = shallowRef<HTMLElement | null>(null)
 const menuEl = ref<HTMLElement | null>(null)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => props.modelValue)
 const point = shallowRef({ x: 0, y: 0 })
 const position = shallowRef<Record<string, string>>({ top: '0px', left: '0px', zIndex: '1100' })
 const menuId = `${useId()}-context-menu`
 
-const targetAttrs = computed(() => ({
-  'aria-haspopup': 'menu' as const,
-  'aria-expanded': props.modelValue,
-  'aria-controls': props.modelValue ? menuId : undefined,
-  'aria-disabled': props.disabled ? ('true' as const) : undefined,
-  // iOS на довгому натисканні показує власну виноску «Копіювати/Поділитися»
-  // поверх нашого меню. Ключ у kebab-case — так його однаково пише і SSR.
-  style: { '-webkit-touch-callout': 'none' },
+// Обробники — одні й ті самі об'єкти: без зміни пропсів ціль не перерендерюється.
+const handlers = {
   onContextmenu: onContextMenu,
   onKeydown: onTargetKeydown,
   onPointerdown: onTargetPointerdown,
   onPointermove: onTargetPointermove,
   onPointerup: onTargetPointerup,
   onPointercancel: onTargetPointercancel,
-}))
+}
+// iOS на довгому натисканні показує власну виноску «Копіювати/Поділитися»
+// поверх нашого меню. Ключ у kebab-case — так його однаково пише і SSR.
+const calloutStyle = { '-webkit-touch-callout': 'none' }
+
+const targetAttrs = computed(() =>
+  props.targetSelector
+    ? { style: calloutStyle, ...handlers }
+    : {
+        'aria-haspopup': 'menu' as const,
+        'aria-expanded': props.modelValue,
+        'aria-controls': props.modelValue ? menuId : undefined,
+        'aria-disabled': props.disabled ? ('true' as const) : undefined,
+        style: calloutStyle,
+        ...handlers,
+      },
+)
+
+/**
+ * Ціль події: сам елемент з `targetAttrs` або — з `targetSelector` — рядок
+ * усередині нього, до якого належить подія (null — подія повз рядки).
+ */
+function resolveTarget(event: Event): HTMLElement | null {
+  const host = event.currentTarget as HTMLElement | null
+  if (!props.targetSelector) return host
+  const from = event.target instanceof Element ? event.target : null
+  const row = from?.closest<HTMLElement>(props.targetSelector) ?? null
+  return row && host?.contains(row) ? row : null
+}
 
 /*
  * Escape і клік «повз» — через спільний стек шарів, як в інших плаваючих
@@ -125,7 +165,7 @@ async function show(x: number, y: number, source?: HTMLElement | null) {
   point.value = { x, y }
   if (!props.modelValue) {
     emit('update:modelValue', true)
-    emit('open')
+    emit('open', targetEl.value)
   }
   await nextTick()
   updatePosition()
@@ -143,20 +183,23 @@ function close(restoreFocus = true) {
 }
 
 function onContextMenu(event: MouseEvent) {
+  const target = resolveTarget(event)
+  if (!target) return
   event.preventDefault()
   // Android сам шле contextmenu на довгому натисканні — власний таймер
   // тоді зайвий, інакше меню відкрилося б двічі. Палець ще на екрані —
   // отже це довге натискання, а не правий клік.
   if (touchDown && props.haptic && !props.modelValue) vibrate()
   cancelLongPress()
-  targetEl.value = event.currentTarget as HTMLElement
-  void show(event.clientX, event.clientY, targetEl.value)
+  targetEl.value = target
+  void show(event.clientX, event.clientY, target)
 }
 
 function onTargetKeydown(event: KeyboardEvent) {
   if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+  const target = resolveTarget(event)
+  if (!target) return
   event.preventDefault()
-  const target = event.currentTarget as HTMLElement
   const rect = target.getBoundingClientRect()
   void show(rect.left + 12, rect.top + 12, target)
 }
@@ -186,10 +229,11 @@ function cancelLongPress() {
 
 function onTargetPointerdown(event: PointerEvent) {
   if (event.pointerType === 'mouse' || props.disabled) return
+  const target = resolveTarget(event)
+  if (!target) return
   touchDown = true
   cancelLongPress()
   longPressFired = false
-  const target = event.currentTarget as HTMLElement
   const { clientX: x, clientY: y, pointerId } = event
   longPress = {
     x,
@@ -304,19 +348,23 @@ function onMenuKeydown(event: KeyboardEvent) {
   items[next]?.focus()
 }
 
+// Поворот екрана й зміна вікна — лише поки меню відкрите: закрите меню в
+// кожному рядку списку не тримає власного слухача.
 watch(() => props.modelValue, async (open) => {
   if (!open) {
     layer.deactivate()
+    window.removeEventListener('resize', updatePosition)
     return
   }
   layer.activate()
+  window.addEventListener('resize', updatePosition, { passive: true })
   await nextTick()
   updatePosition()
 })
 
 onMounted(() => {
-  teleportReady.value = true
-  window.addEventListener('resize', updatePosition, { passive: true })
+  // Меню, відкрите вже під час серверного рендеру.
+  if (props.modelValue) window.addEventListener('resize', updatePosition, { passive: true })
 })
 
 onBeforeUnmount(() => {
@@ -345,14 +393,14 @@ defineExpose({ show, close })
         :id="menuId"
         ref="menuEl"
         role="menu"
-        :aria-label="ariaLabel"
+        :aria-label="uiText(ariaLabel)"
         data-ui-context-menu
         class="scrollbar-thin origin-top-left fixed max-h-[min(30rem,calc(100dvh-1rem))] overflow-y-auto overscroll-contain rounded-control border border-line bg-dropdown p-1 text-ink shadow-overlay outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :style="{ ...position, width }"
         tabindex="-1"
         @keydown="onMenuKeydown"
       >
-        <slot name="content" :close="close" />
+        <slot name="content" :close="close" :target="targetEl" />
       </div>
     </Transition>
   </Teleport>

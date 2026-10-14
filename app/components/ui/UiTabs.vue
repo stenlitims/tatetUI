@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, getCurrentInstance, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 
 export interface TabItem {
@@ -386,7 +387,7 @@ function tabClass(tab: TabItem) {
       <div
         ref="tablistEl"
         role="tablist"
-        :aria-label="ariaLabel"
+        :aria-label="uiText(ariaLabel)"
         :aria-orientation="orientation"
         :class="tablistClass"
       >

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 const props = withDefaults(
@@ -268,14 +269,14 @@ onBeforeUnmount(() => stopDragging())
     а без висоти — рендерився «стиснуто» в обгортці з фіксованою висотою.
   -->
   <div ref="rootEl" class="flex h-full w-full min-h-0 min-w-0 overflow-hidden" :class="rootClass">
-    <section v-show="collapsed !== 'start'" :aria-label="startLabel" class="min-h-0 min-w-0 overflow-auto" :class="startClass" :style="startStyle">
+    <section v-show="collapsed !== 'start'" :aria-label="uiText(startLabel)" class="min-h-0 min-w-0 overflow-auto" :class="startClass" :style="startStyle">
       <slot name="start" :size="value" />
     </section>
 
     <div
       v-show="!collapsed"
       role="separator"
-      :aria-label="separatorLabel"
+      :aria-label="uiText(separatorLabel)"
       :aria-orientation="isHorizontal ? 'vertical' : 'horizontal'"
       :aria-valuemin="bounds.min"
       :aria-valuemax="bounds.max"
@@ -297,7 +298,7 @@ onBeforeUnmount(() => stopDragging())
       <span class="sr-only">{{ Math.round(value) }}%</span>
     </div>
 
-    <section v-show="collapsed !== 'end'" :aria-label="endLabel" class="min-h-0 min-w-0 flex-1 overflow-auto" :class="endClass">
+    <section v-show="collapsed !== 'end'" :aria-label="uiText(endLabel)" class="min-h-0 min-w-0 flex-1 overflow-auto" :class="endClass">
       <slot name="end" :size="100 - value" />
     </section>
   </div>

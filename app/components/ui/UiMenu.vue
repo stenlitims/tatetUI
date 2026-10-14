@@ -9,6 +9,7 @@ import {
   useId,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { focusNextAfter, getTabbable } from '~/composables/useFocusTrap'
 import { useFloatingLayer } from '~/composables/useOverlayStack'
 import {
@@ -63,7 +64,8 @@ const isOpen = ref(false)
 const containerEl = ref<HTMLElement | null>(null)
 const triggerEl = ref<HTMLElement | null>(null)
 const menuEl = ref<HTMLElement | null>(null)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => isOpen.value)
 
 const panelId = `${useId()}-menu`
 const position = ref<Record<string, string>>({ top: '0px', left: '0px' })
@@ -339,12 +341,13 @@ watch(menuEl, (el) => {
 
 // Прокрутка контейнерів, resize і visualViewport (клавіатура, pinch-zoom):
 // без цього відкрита панель лишалася б висіти на місці, поки якір від'їжджає.
+// Лише поки меню відкрите: закрите меню в кожному рядку списку не тримає
+// чотирьох слухачів вікна.
 let stopViewport: (() => void) | null = null
-
-onMounted(() => {
-  teleportReady.value = true
-  stopViewport = listenViewportChanges(onScrollOrResize)
-})
+watch(isOpen, (open) => {
+  stopViewport?.()
+  stopViewport = open ? listenViewportChanges(onScrollOrResize) : null
+}, { immediate: true })
 
 onBeforeUnmount(() => {
   resetTypeahead()

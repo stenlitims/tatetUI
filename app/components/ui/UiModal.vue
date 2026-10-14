@@ -1,16 +1,17 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import {
   computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
   ref,
-  shallowRef,
   useAttrs,
   useId,
   useSlots,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
@@ -129,7 +130,8 @@ const wrapperAttrs = computed(() => {
 const hasCustomHeader = computed(() => !!slots.header)
 const hasHeader = computed(() => hasCustomHeader.value || !!props.title || props.closable)
 const hasAccessibleHeader = computed(() => hasCustomHeader.value || !!props.title)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => props.modelValue)
 
 const SIZE_CLASSES: Record<NonNullable<typeof props.size>, string> = {
   sm: 'max-w-md',
@@ -320,7 +322,6 @@ watch(
 )
 
 onMounted(() => {
-  teleportReady.value = true
   if (props.modelValue) void handleOpen()
 })
 
@@ -358,7 +359,7 @@ onBeforeUnmount(() => {
           aria-modal="true"
           tabindex="-1"
           :aria-labelledby="!ariaLabel && hasAccessibleHeader ? titleId : undefined"
-          :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : 'Діалогове вікно')"
+          :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : uiText('Діалогове вікно'))"
           :aria-describedby="ariaDescribedby"
         >
           <!-- Ручка свайпу — лише в режимі sheet. Тло шапки, щоб ручка
@@ -404,7 +405,7 @@ onBeforeUnmount(() => {
               v-if="closable"
               type="button"
               class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted md:h-9 md:w-9 transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
-              aria-label="Закрити"
+              :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">

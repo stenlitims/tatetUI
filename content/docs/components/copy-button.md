@@ -3,6 +3,7 @@ title: CopyButton
 description: Кнопка «копіювати в буфер» зі станом успіху й резервним шляхом копіювання.
 component: UiCopyButton
 dependsOn:
+  - app/composables/useUiText.ts
   - app/utils/uiFieldStyles.ts
 emitDescriptions:
   copied: Копіювання вдалося; в payload — скопійований текст.

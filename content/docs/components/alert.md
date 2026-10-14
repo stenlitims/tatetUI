@@ -2,6 +2,8 @@
 title: Alert
 description: Інлайн-повідомлення з п'ятьма тонами, стандартною іконкою та опційним закриттям.
 component: UiAlert
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
   dismiss: Натиснуто хрестик. Компонент не ховається сам — ховає батьківський стан.
 status: stable

@@ -3,6 +3,7 @@ title: Lightbox
 description: Повноекранна галерея — фото, відео, YouTube, iframe і власні слайди; щипок, збільшення з інерцією, поворот, слайдшоу, повний екран, політ із мініатюри.
 component: UiLightbox
 dependsOn:
+  - app/composables/useUiText.ts
   - app/components/ui/UiSpinner.vue
   - app/composables/useOverlayStack.ts
   - app/composables/useScrollLock.ts

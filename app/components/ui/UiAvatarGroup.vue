@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed } from 'vue'
 import UiAvatar, { initialsFontSize } from '~/components/ui/UiAvatar.vue'
 
@@ -58,8 +59,8 @@ const hidden = computed(() => props.items.slice(Math.max(0, props.max)))
 
 const overflowLabel = computed(() => {
   const names = hidden.value.map((item) => item.name).filter(Boolean)
-  if (!names.length) return `Ще ${hidden.value.length}`
-  return `Ще ${hidden.value.length}: ${names.join(', ')}`
+  if (!names.length) return uiText("Ще {0}", { 0: hidden.value.length })
+  return uiText("Ще {0}: {1}", { 0: hidden.value.length, 1: names.join(', ') })
 })
 
 const ringStyle = { boxShadow: '0 0 0 2px var(--bg-card)' }

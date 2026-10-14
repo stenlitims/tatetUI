@@ -3,6 +3,7 @@ title: VirtualList
 description: Віртуалізований список із фіксованою висотою рядка — рендерить лише видиме вікно діапазону з overscan-запасом.
 component: UiVirtualList
 dependsOn:
+  - app/composables/useUiText.ts
   - app/composables/useReducedMotion.ts
 emitDescriptions:
 status: stable

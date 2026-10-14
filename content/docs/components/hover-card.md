@@ -3,6 +3,8 @@ title: HoverCard
 description: Немодальний preview із delay, hover-focus parity та SSR-безпечним Teleport.
 component: UiHoverCard
 dependsOn:
+  - app/composables/useLazyTeleport.ts
+  - app/composables/useUiText.ts
   - app/utils/overlayPosition.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useFocusTrap.ts

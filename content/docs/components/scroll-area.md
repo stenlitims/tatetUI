@@ -2,6 +2,8 @@
 title: ScrollArea
 description: Нативна scroll-область із edge affordance, подіями меж і програмним API.
 component: UiScrollArea
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
   scroll: Нативна подія прокрутки.
   reachStart: Прокрутка вперше досягла початку.

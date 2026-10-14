@@ -3,6 +3,7 @@ title: AvatarGroup
 description: Стек аватарів із переповненням «+N», де приховані учасники лишаються названими.
 component: UiAvatarGroup
 dependsOn:
+  - app/composables/useUiText.ts
   - app/components/ui/UiAvatar.vue
 emitDescriptions:
 status: stable

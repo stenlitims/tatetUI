@@ -3,6 +3,7 @@ title: Popover
 description: SSR-безпечна немодальна панель біля trigger з фліпом, focus return і outside click.
 component: UiPopover
 dependsOn:
+  - app/composables/useLazyTeleport.ts
   - app/utils/overlayPosition.ts
   - app/composables/useOverlayStack.ts
   - app/composables/useFocusTrap.ts

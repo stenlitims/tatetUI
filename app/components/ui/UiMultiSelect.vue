@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import {
   computed,
   nextTick,
@@ -11,6 +12,7 @@ import {
   useId,
   watch,
 } from 'vue'
+import { useLazyTeleport } from '~/composables/useLazyTeleport'
 import {
   clearButtonClass,
   dropdownEmptyClass,
@@ -135,7 +137,8 @@ const optionEls = ref<(HTMLElement | null)[]>([])
 const isOpen = ref(false)
 const query = ref('')
 const highlightedIndex = ref(-1)
-const teleportReady = shallowRef(false)
+// Teleport — з першим відкриттям, без повторного рендеру після монтування.
+const teleportReady = useLazyTeleport(() => isOpen.value)
 
 // Sheet-режим (вузький екран) — як в UiSelect.
 const narrowScreen = shallowRef(false)
@@ -178,7 +181,7 @@ const selectedOptions = computed(() =>
 
 const displayText = computed(() => {
   const labels = selectedOptions.value.map((option) => option.label)
-  if (labels.length === 0) return props.placeholder
+  if (labels.length === 0) return uiText(props.placeholder)
   const head = labels.slice(0, props.maxDisplay).join(', ')
   return labels.length > props.maxDisplay ? `${head} +${labels.length - props.maxDisplay}` : head
 })
@@ -252,7 +255,7 @@ async function open(fromKeyboard = false) {
   highlightedIndex.value = firstEnabledIndex(props.options)
   if (sheetMode.value) {
     sheetKeyboard.value = fromKeyboard
-    sheetTitle.value = sheetTitleFor(triggerEl.value, props.label, attrs['aria-label'], props.placeholder)
+    sheetTitle.value = sheetTitleFor(triggerEl.value, props.label, attrs['aria-label'], uiText(props.placeholder))
     // Пошук у sheet'і фокус НЕ отримує: клавіатура накрила б половину
     // списку ще до того, як людина вирішила, чи їй узагалі треба шукати.
     return
@@ -526,9 +529,15 @@ watch(query, () => {
 
 let stopSheetWatch: (() => void) | null = null
 
+// Клік повз список — лише поки він відкритий: закриті поля форми не
+// перехоплюють кожен дотик до сторінки.
+watch(isOpen, (open) => {
+  if (typeof document === 'undefined') return
+  if (open) document.addEventListener('pointerdown', onDocumentPointerDown, true)
+  else document.removeEventListener('pointerdown', onDocumentPointerDown, true)
+})
+
 onMounted(() => {
-  teleportReady.value = true
-  document.addEventListener('pointerdown', onDocumentPointerDown, true)
   stopSheetWatch = watchSelectSheet((sheet) => {
     narrowScreen.value = sheet
   })
@@ -578,7 +587,7 @@ defineExpose({
         @keydown="onTriggerKeydown"
       >
         <span class="min-w-0 flex-1 truncate">
-          <span v-if="selectedOptions.length === 0" class="text-muted">{{ placeholder }}</span>
+          <span v-if="selectedOptions.length === 0" class="text-muted">{{ uiText(placeholder) }}</span>
           <template v-else>{{ displayText }}</template>
         </span>
         <span
@@ -635,8 +644,8 @@ defineExpose({
               aria-autocomplete="list"
               :aria-controls="listboxId"
               :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
-              aria-label="Пошук опцій"
-              placeholder="Пошук…"
+              :aria-label="uiText('Пошук опцій')"
+              :uiText(placeholder)="uiText('Пошук…')"
               :class="dropdownSearchInputClass"
               @keydown="onSearchKeydown"
             />
@@ -646,7 +655,7 @@ defineExpose({
             <div class="flex items-center gap-0.5">
               <button
                 type="button"
-                aria-label="Вибрати все"
+                :aria-label="uiText('Вибрати все')"
                 :class="['relative', clearButtonClass]"
                 @click="selectAll"
               >
@@ -662,7 +671,7 @@ defineExpose({
               </button>
               <button
                 type="button"
-                aria-label="Зняти все"
+                :aria-label="uiText('Зняти все')"
                 :class="['relative', clearButtonClass]"
                 @click="clearAll"
               >
@@ -693,7 +702,7 @@ defineExpose({
               aria-disabled="true"
               :class="dropdownEmptyClass"
             >
-              Нічого не знайдено
+              {{ uiText("Нічого не знайдено") }}
             </li>
             <template v-else>
               <!-- mousedown.prevent: клік по пункту не забирає фокус із
@@ -791,8 +800,8 @@ defineExpose({
               aria-autocomplete="list"
               :aria-controls="listboxId"
               :aria-activedescendant="highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined"
-              aria-label="Пошук опцій"
-              placeholder="Пошук…"
+              :aria-label="uiText('Пошук опцій')"
+              :uiText(placeholder)="uiText('Пошук…')"
               enterkeyhint="search"
               autocomplete="off"
               :class="sheetSearchInputClass"
@@ -810,14 +819,14 @@ defineExpose({
               class="rounded-control px-2 py-3 text-sm font-medium text-accent transition-colors active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               @click="selectAll"
             >
-              Вибрати все
+              {{ uiText("Вибрати все") }}
             </button>
             <button
               type="button"
               class="rounded-control px-2 py-3 text-sm font-medium text-accent transition-colors active:bg-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               @click="clearAll"
             >
-              Зняти все
+              {{ uiText("Зняти все") }}
             </button>
           </div>
           <span class="px-2 text-sm tabular-nums text-muted">
@@ -843,7 +852,7 @@ defineExpose({
           aria-disabled="true"
           :class="sheetEmptyClass"
         >
-          Нічого не знайдено
+          {{ uiText("Нічого не знайдено") }}
         </li>
         <template v-else>
           <li
@@ -902,7 +911,7 @@ defineExpose({
 
       <template #footer>
         <UiButton block @click="close">
-          Готово
+          {{ uiText("Готово") }}
         </UiButton>
       </template>
     </UiDrawer>

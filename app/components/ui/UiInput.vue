@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed, ref, useAttrs, useId, useSlots } from 'vue'
 import {
   clearButtonClass,
@@ -286,7 +287,7 @@ defineExpose({
               type="button"
               tabindex="-1"
               :class="trailingButtonClass"
-              aria-label="Очистити поле"
+              :aria-label="uiText('Очистити поле')"
               @click="clear"
             >
               <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -299,7 +300,7 @@ defineExpose({
             v-if="showPasswordToggle"
             type="button"
             :class="trailingButtonClass"
-            :aria-label="revealed ? 'Сховати пароль' : 'Показати пароль'"
+            :aria-label="revealed ? uiText('Сховати пароль') : uiText('Показати пароль')"
             :aria-pressed="revealed"
             @click="revealed = !revealed"
           >

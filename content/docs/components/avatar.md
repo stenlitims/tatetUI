@@ -2,6 +2,8 @@
 title: Avatar
 description: Аватар із ініціалами, градієнтом бренду й падінням на ініціали, якщо картинка не завантажилась.
 component: UiAvatar
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
 status: stable
 order: 27

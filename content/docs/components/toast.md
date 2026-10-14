@@ -3,6 +3,7 @@ title: Toast
 description: Черга сповіщень, доступна з будь-якого місця без прокидання пропсів.
 component: UiToaster
 dependsOn:
+  - app/composables/useUiText.ts
   - app/composables/useToast.ts
 status: stable
 order: 20

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { uiText } from '~/composables/useUiText'
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -95,7 +96,7 @@ const role = computed(() => (props.tone === 'danger' ? 'alert' : undefined))
     <button
       v-if="dismissible"
       type="button"
-      aria-label="Закрити"
+      :aria-label="uiText('Закрити')"
       class="relative -m-1 shrink-0 self-start rounded-control p-1 text-muted transition-colors hover:bg-ink/5 hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:left-1/2 pointer-coarse:after:top-1/2 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-[''] pointer-coarse:after:h-12 pointer-coarse:after:w-12"
       @click="emit('dismiss')"
     >

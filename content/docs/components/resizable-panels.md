@@ -2,6 +2,8 @@
 title: ResizablePanels
 description: Дві панелі з pointer resize, збереженням ширини в localStorage та доступним separator-контролем.
 component: UiResizablePanels
+dependsOn:
+  - app/composables/useUiText.ts
 emitDescriptions:
   update:modelValue: Частка першої панелі у відсотках. Емітується після drag, клавіатури та при відновленні збереженого розміру.
   change: Фінальне значення після keyboard або pointer дії.
