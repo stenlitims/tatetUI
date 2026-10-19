@@ -50,6 +50,11 @@ const props = withDefaults(
     /** Стабільний ідентифікатор для `tone="auto"`; за замовчуванням — `name`. */
     seed?: string
     /**
+     * Номер кольору палітри `tone="auto"` (0…7), обраний людиною, — замість
+     * обчисленого за `seed`. Поза межами палітри — колір за `seed`.
+     */
+    colorIndex?: number
+    /**
      * Форма. `square` — для компаній, команд і логотипів: коло підказує
      * «людина», і логотип у колі ще й втрачає кути.
      */
@@ -62,7 +67,7 @@ const props = withDefaults(
      */
     status?: 'online' | 'offline' | 'busy' | 'away'
   }>(),
-  { src: undefined, name: undefined, size: 32, tone: 'primary', seed: undefined, shape: 'circle', status: undefined },
+  { src: undefined, name: undefined, size: 32, tone: 'primary', seed: undefined, colorIndex: undefined, shape: 'circle', status: undefined },
 )
 
 const STATUS: Record<NonNullable<typeof props.status>, { dot: string; label: string }> = {
@@ -130,10 +135,14 @@ const toneClass = computed(() => {
   return 'bg-gradient-to-br from-primary-600 to-primary-700 text-accent-contrast'
 })
 
-// Колір `auto` — градієнт зі змінних палітри; без ключа — перший (синій).
+// Колір `auto` — градієнт зі змінних палітри: обраний номер, інакше за
+// ключем; без ключа — перший (синій).
 const toneStyle = computed(() => {
   if (props.tone !== 'auto') return undefined
-  const n = avatarPaletteIndex(props.seed ?? props.name ?? '')
+  const picked = props.colorIndex
+  const n = picked !== undefined && Number.isInteger(picked) && picked >= 0 && picked < AVATAR_PALETTE_SIZE
+    ? picked
+    : avatarPaletteIndex(props.seed ?? props.name ?? '')
   return { backgroundImage: `linear-gradient(to bottom right, var(--avatar-${n}-from), var(--avatar-${n}-to))` }
 })
 

@@ -10,7 +10,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick, ref } from 'vue'
 import UiAlert from '~/components/ui/UiAlert.vue'
-import UiAvatar from '~/components/ui/UiAvatar.vue'
+import UiAvatar, { AVATAR_PALETTE_SIZE, avatarPaletteIndex } from '~/components/ui/UiAvatar.vue'
 import UiAvatarGroup from '~/components/ui/UiAvatarGroup.vue'
 import UiButton from '~/components/ui/UiButton.vue'
 import UiCard from '~/components/ui/UiCard.vue'
@@ -583,6 +583,21 @@ describe('UiAvatar', () => {
     expect(circle.className).toContain('from-primary-600')
     expect(circle.className).toContain('to-primary-700')
     expect(circle.className).not.toContain('from-primary-400')
+  })
+
+  it('color-index обирає колір палітри замість seed; поза палітрою — за seed', async () => {
+    const seed = 'space-1'
+    const auto = avatarPaletteIndex(seed)
+    const picked = (auto + 3) % AVATAR_PALETTE_SIZE
+    mounted = await mountComponent(UiAvatar, { name: 'Простір', tone: 'auto', seed })
+    const circle = () => mounted!.host.querySelector<HTMLElement>('[role="img"] > span')!
+    expect(circle().style.backgroundImage).toContain(`--avatar-${auto}-from`)
+    await mounted.update({ colorIndex: picked })
+    expect(circle().style.backgroundImage).toContain(`--avatar-${picked}-from`)
+    for (const bad of [AVATAR_PALETTE_SIZE, -1, 1.5]) {
+      await mounted.update({ colorIndex: bad })
+      expect(circle().style.backgroundImage).toContain(`--avatar-${auto}-from`)
+    }
   })
 
   it('кегль ініціалів росте з розміром, а не впирається в text-sm', async () => {
