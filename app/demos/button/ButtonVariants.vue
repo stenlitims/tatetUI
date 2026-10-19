@@ -6,6 +6,7 @@ import UiButton from '~/components/ui/UiButton.vue'
   <div class="flex flex-wrap items-center gap-3">
     <UiButton variant="solid">solid</UiButton>
     <UiButton variant="soft">soft</UiButton>
+    <UiButton variant="tonal">tonal</UiButton>
     <UiButton variant="outline">outline</UiButton>
     <UiButton variant="ghost">ghost</UiButton>
     <UiButton variant="danger">danger</UiButton>

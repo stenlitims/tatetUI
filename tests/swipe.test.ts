@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { bindSwipe, rubberBand, swipeBackCommits, swipeIgnored, swipeLock, type SwipeEnd } from '~/utils/swipe'
+import { bindSwipe, inHorizontalScroll, rubberBand, swipeBackCommits, swipeIgnored, swipeLock, type SwipeEnd } from '~/utils/swipe'
 
 describe('swipeLock', () => {
   it('до люфту — ще не жест (тап, тремтіння пальця)', () => {
@@ -39,6 +39,10 @@ describe('swipeBackCommits', () => {
   it('дрібний смик не рахується кидком', () => {
     expect(swipeBackCommits(12, 1.2, 390)).toBe(false)
   })
+  it('частка ширини задається: бічна шторка закривається з третини', () => {
+    expect(swipeBackCommits(110, 0, 300, 1 / 3)).toBe(true)
+    expect(swipeBackCommits(90, 0, 300, 1 / 3)).toBe(false)
+  })
 })
 
 describe('rubberBand', () => {
@@ -63,6 +67,23 @@ describe('swipeIgnored', () => {
     expect(swipeIgnored(document.getElementById('opt'))).toBe(true)
     // Шар малювання дошки: touch-action: none інлайн-стилем, без класу.
     expect(swipeIgnored(document.getElementById('draw'))).toBe(true)
+  })
+})
+
+describe('inHorizontalScroll', () => {
+  it('лише область overflow-x, якій справді є куди прокручуватися', () => {
+    document.body.innerHTML = `
+      <div id="root">
+        <div id="strip" style="overflow-x: auto"><span id="chip">чип</span></div>
+        <div id="fits" style="overflow-x: auto"><span id="short">коротко</span></div>
+        <div id="clip" style="overflow-x: hidden"><span id="hidden">обрізано</span></div>
+      </div>`
+    Object.defineProperty(document.getElementById('strip')!, 'scrollWidth', { value: 600 })
+    Object.defineProperty(document.getElementById('clip')!, 'scrollWidth', { value: 600 })
+    const root = document.getElementById('root')!
+    expect(inHorizontalScroll(document.getElementById('chip'), root)).toBe(true)
+    expect(inHorizontalScroll(document.getElementById('short'), root)).toBe(false)
+    expect(inHorizontalScroll(document.getElementById('hidden'), root)).toBe(false)
   })
 })
 

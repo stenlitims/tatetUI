@@ -16,6 +16,8 @@ import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
 import { readDurationToken, useReducedMotion } from '~/composables/useReducedMotion'
+import { useScrollEdges } from '~/composables/useScrollEdges'
+import { bindSwipe, inHorizontalScroll, swipeBackCommits } from '~/utils/swipe'
 
 defineOptions({ inheritAttrs: false })
 
@@ -54,6 +56,15 @@ const props = withDefaults(
     /** Свайп вниз закриває нижній drawer. Вимикається, якщо заважає. */
     swipeToClose?: boolean
     /**
+     * Свайп до краю закриває бічний drawer: лівий — ліворуч, правий —
+     * праворуч. Панель іде за пальцем із будь-якого місця; вертикальна
+     * прокрутка вмісту й області `overflow-x-auto` лишаються пальцю.
+     *
+     * Типово ВИМКНЕНО: у бічній панелі буває вміст, що сам слухає
+     * горизонтальні рухи пальця (повзунки, полотно, карта).
+     */
+    swipeToCloseSide?: boolean
+    /**
      * Доступне ім'я панелі, коли слот `header` не є заголовком.
      *
      * Без нього aria-labelledby вказує на контейнер слота, і якщо там
@@ -73,6 +84,7 @@ const props = withDefaults(
     closeOnBackdrop: false,
     persistent: false,
     swipeToClose: true,
+    swipeToCloseSide: false,
   },
 )
 
@@ -98,6 +110,10 @@ const titleId = `${generatedId}-title`
 
 const backdropEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
+const bodyEl = ref<HTMLElement | null>(null)
+
+// Лінії під шапкою й над футером — лише коли вміст справді ховається за ними.
+const { scrolledFromTop, moreBelow } = useScrollEdges(() => bodyEl.value)
 
 const wrapperAttrs = computed(() => {
   const { class: _class, ...rest } = attrs
@@ -110,9 +126,13 @@ const hasAccessibleHeader = computed(() => hasCustomHeader.value || !!props.titl
 // Teleport — з першим відкриттям, без повторного рендеру після монтування.
 const teleportReady = useLazyTeleport(() => props.modelValue)
 
+// По одному класу на бік. Під пласкою шапкою відступ над текстом дає вона
+// сама — як у UiModal; без футера знизу враховуємо home indicator на iOS.
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
-  return slots.footer ? 'p-4 sm:p-5' : 'p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5'
+  const top = hasHeader.value ? 'pt-1' : 'pt-4 sm:pt-5'
+  const bottom = slots.footer ? 'pb-4 sm:pb-5' : 'pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5'
+  return `px-4 sm:px-5 ${top} ${bottom}`
 })
 
 const POSITION_CLASSES: Record<NonNullable<typeof props.position>, string> = {
@@ -254,23 +274,80 @@ function onRootClick(event: MouseEvent) {
 }
 
 /* ---------------------------------------------------------------- */
-/*  Свайп для закриття (нижній drawer)                              */
+/*  Свайп для закриття                                              */
 /* ---------------------------------------------------------------- */
 
+/** Зсув панелі за пальцем, px: униз — для нижньої, до краю — для бічних. */
 const dragOffset = ref(0)
 const isDragging = ref(false)
+/** Палець відпущено без закриття: панель плавно повертається на місце. */
+const isSettling = ref(false)
+/** Ширина бічної панелі на початку жесту: від неї частка й затемнення. */
+const dragExtent = ref(0)
 
 const showDragHandle = computed(
   () => props.position === 'bottom' && props.swipeToClose && props.closable,
 )
 
+const sideSwipe = computed(() => isHorizontal.value && props.swipeToCloseSide && props.closable)
+
 const panelStyle = computed(() => {
-  if (!isDragging.value && dragOffset.value === 0) return undefined
+  if (!isDragging.value && !isSettling.value && dragOffset.value === 0) return undefined
   return {
-    transform: `translateY(${dragOffset.value}px)`,
+    transform: isHorizontal.value ? `translateX(${dragOffset.value}px)` : `translateY(${dragOffset.value}px)`,
     transition: isDragging.value ? 'none' : 'transform var(--duration-base) var(--ease-out)',
   }
 })
+
+// Фон бічного drawer'а світлішає разом із жестом — як у мобільних
+// застосунках, видно, що панель відпускає сторінку. Нижній фон не чіпаємо.
+const backdropStyle = computed(() => {
+  if (!isHorizontal.value || !dragExtent.value) return undefined
+  if (!isDragging.value && !isSettling.value && dragOffset.value === 0) return undefined
+  return {
+    opacity: 1 - Math.min(1, Math.abs(dragOffset.value) / dragExtent.value),
+    transition: isDragging.value ? 'none' : 'opacity var(--duration-base) var(--ease-out)',
+  }
+})
+
+/*
+ * Повернення на місце — з анімацією. Скинути offset у 0 й одразу прибрати
+ * інлайн-стиль означало б прибрати разом із ним і transition: панель
+ * стрибала б на місце. Таймер, а не transitionend: у фоновій вкладці
+ * подія може не прийти.
+ */
+let settleTimer: ReturnType<typeof setTimeout> | null = null
+
+function settleBack() {
+  isSettling.value = true
+  dragOffset.value = 0
+  if (settleTimer) clearTimeout(settleTimer)
+  settleTimer = setTimeout(() => {
+    settleTimer = null
+    isSettling.value = false
+  }, readDurationToken('--duration-base', 180) + 80)
+}
+
+/**
+ * Палець відпущено: або доводимо панель за край і просимо закрити, або
+ * повертаємо на місце. `edge` — зсув, за яким панель уже поза екраном.
+ */
+function finishSwipe(commit: boolean, edge: number) {
+  isDragging.value = false
+  if (!commit) return settleBack()
+  // Не скидаємо offset у 0, а доводимо панель за край — інакше вона
+  // стрибнула б назад на місце й лише потім поїхала закриватися.
+  dragOffset.value = edge
+  requestClose('swipe')
+  // Батько може відмовити в закритті (керований v-model з питанням
+  // «Відкинути незбережені зміни?»). Тоді панель лишалася зсунутою за
+  // край: невидима, але з фоном, блоком прокрутки й інертною сторінкою.
+  void nextTick(() => {
+    if (props.modelValue) settleBack()
+  })
+}
+
+/* Нижній: ручка й шапка, вертикальний рух. */
 
 let dragStartY = 0
 let dragStartTime = 0
@@ -289,7 +366,6 @@ function onDragEnd(event: PointerEvent) {
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
   activePointerId = null
-  isDragging.value = false
 
   const distance = dragOffset.value
   const elapsed = performance.now() - dragStartTime
@@ -298,20 +374,7 @@ function onDragEnd(event: PointerEvent) {
 
   // Закриваємо або за пройденою чвертю висоти, або за різким флінгом:
   // короткий швидкий рух — теж однозначний намір закрити.
-  if (props.closable && (distance > panelHeight * 0.25 || velocity > 0.5)) {
-    // Не скидаємо offset у 0, а доводимо панель донизу — інакше вона
-    // стрибнула б назад на місце й лише потім поїхала закриватися.
-    dragOffset.value = panelHeight
-    requestClose('swipe')
-    // Батько може відмовити в закритті (керований v-model з питанням
-    // «Відкинути незбережені зміни?»). Тоді панель лишалася зсунутою за
-    // край: невидима, але з фоном, блоком прокрутки й інертною сторінкою.
-    void nextTick(() => {
-      if (props.modelValue) dragOffset.value = 0
-    })
-    return
-  }
-  dragOffset.value = 0
+  finishSwipe(props.closable && (distance > panelHeight * 0.25 || velocity > 0.5), panelHeight)
 }
 
 function onDragStart(event: PointerEvent) {
@@ -321,6 +384,7 @@ function onDragStart(event: PointerEvent) {
   activePointerId = event.pointerId
   dragStartY = event.clientY
   dragStartTime = performance.now()
+  isSettling.value = false
   isDragging.value = true
 
   window.addEventListener('pointermove', onDragMove)
@@ -332,6 +396,45 @@ function onHeaderPointerDown(event: PointerEvent) {
   if (!showDragHandle.value) return
   onDragStart(event)
 }
+
+/*
+ * Бічний: з будь-якого місця панелі, горизонтальний рух до краю. Спільне
+ * ядро свайпів бере жест лише за явно горизонтального руху (вертикальний
+ * лишається прокрутці), не починає його з полів, повзунків і полотна, гасить
+ * клік, що прийшов слідом за свайпом, і не реагує на мишу.
+ */
+let unbindSideSwipe: (() => void) | null = null
+
+watch(
+  [panelEl, sideSwipe, () => props.position] as const,
+  ([el, enabled, position]) => {
+    unbindSideSwipe?.()
+    unbindSideSwipe = null
+    if (!el || !enabled) return
+    // Знак руху до краю, біля якого стоїть панель.
+    const toEdge = position === 'left' ? -1 : 1
+    unbindSideSwipe = bindSwipe(el, {
+      direction: position === 'left' ? 'left' : 'right',
+      // Область, що прокручується вбік, лишається пальцю.
+      canStart: (event) => props.modelValue && !inHorizontalScroll(event.target, el),
+      onStart: () => {
+        dragExtent.value = el.offsetWidth
+        isSettling.value = false
+        isDragging.value = true
+      },
+      onMove: (dx) => {
+        dragOffset.value = dx
+      },
+      // Далі ~третини ширини або кидок до краю; кидок назад — скасування.
+      onEnd: ({ dx, velocity, cancelled }) => {
+        const commit =
+          !cancelled && props.closable && swipeBackCommits(dx * toEdge, velocity * toEdge, dragExtent.value, 1 / 3)
+        finishSwipe(commit, toEdge * dragExtent.value)
+      },
+    })
+  },
+  { flush: 'post' },
+)
 
 /* ---------------------------------------------------------------- */
 /*  Життєвий цикл                                                   */
@@ -353,6 +456,7 @@ function handleClose() {
 function onAfterLeave() {
   layer.settle()
   dragOffset.value = 0
+  isSettling.value = false
 }
 
 watch(
@@ -371,6 +475,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', onDragMove)
   window.removeEventListener('pointerup', onDragEnd)
   window.removeEventListener('pointercancel', onDragEnd)
+  unbindSideSwipe?.()
+  if (settleTimer) clearTimeout(settleTimer)
   handleClose()
 })
 </script>
@@ -382,13 +488,17 @@ onBeforeUnmount(() => {
         v-if="modelValue"
         data-ui-overlay
         class="ui-drawer fixed inset-0 flex"
-        :class="[POSITION_CLASSES[position], positionModifierClass, attrs.class]"
+        :class="[POSITION_CLASSES[position], positionModifierClass, sideSwipe ? 'ui-drawer--swipe' : '', attrs.class]"
         :style="{ zIndex: layer.zIndex.value }"
         v-bind="wrapperAttrs"
         @pointerdown="onRootPointerDown"
         @click="onRootClick"
       >
-        <div ref="backdropEl" class="ui-drawer-backdrop absolute inset-0 bg-backdrop/50 backdrop-blur-sm" />
+        <div
+          ref="backdropEl"
+          class="ui-drawer-backdrop absolute inset-0 bg-backdrop/50 backdrop-blur-sm"
+          :style="backdropStyle"
+        />
 
         <div
           ref="panelEl"
@@ -421,10 +531,17 @@ onBeforeUnmount(() => {
             <span class="h-1 w-10 rounded-full bg-line-strong" />
           </div>
 
+          <!--
+            Шапка пласка, як у UiModal і діалогах GNOME: те саме тло, що й
+            вміст, а лінія під нею з'являється лише тоді, коли вміст
+            прокручено під шапку. Колір межі обирається в JS, а не
+            дописується поверх: два класи кольору межі на одному вузлі
+            вирішував би порядок у згенерованому CSS.
+          -->
           <div
             v-if="hasHeader"
-            class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-subtle px-4 py-3"
-            :class="showDragHandle ? 'touch-none' : ''"
+            class="flex shrink-0 items-center justify-between gap-3 border-b py-3 pr-3 pl-4 transition-[border-color] sm:pl-5"
+            :class="[scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none' : '']"
             @pointerdown="onHeaderPointerDown"
           >
             <div
@@ -438,23 +555,24 @@ onBeforeUnmount(() => {
               </slot>
             </div>
             <!--
-              Хрестик лишається дрібним (h-8 = 30px) — це вторинна дія в
-              шапці, збільшувати заливку означало б сперечатися з назвою
-              панелі. Тому точність дотику тримає невидима зона 45×45 через
-              `pointer-coarse:after:` — той самий патерн, що в UiButton і
-              UiSwitch. Без неї на телефоні єдина кнопка закриття була
-              нижчою за мінімальну ціль у 44px (W3C 2.5.8 Target Size).
-              `relative` тут не декор: без нього `::after` рахував би
-              зміщення від шапки, а не від кнопки.
+              Хрестик — велике кругле тло без рамки, розмітка однакова з
+              UiModal. Раніше він був дрібним квадратом у рамці (30px), щоб не
+              сперечатися з назвою панелі; але сперечалася саме рамка, а не
+              розмір: м'яка підкладка кольору `ink` під 10% альфи лишає
+              хрестик тихим, і водночас у нього легко влучити.
+
+              Точність дотику на телефоні тримає невидима зона 45×45 через
+              `pointer-coarse:after:` (W3C 2.5.8 Target Size). `relative` тут
+              не декор: без нього `::after` рахував би зміщення від шапки.
             -->
             <button
               v-if="closable"
               type="button"
-              class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M18 6L6 18M6 6L18 18"
                   stroke="currentColor"
@@ -467,15 +585,19 @@ onBeforeUnmount(() => {
           </div>
 
           <div
+            ref="bodyEl"
             class="scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
             :class="contentPaddingClass"
           >
             <slot />
           </div>
 
+          <!-- Футер теж плаский: лінія над ним — лише коли під кнопками
+               лишився непрокручений вміст. -->
           <div
             v-if="$slots.footer"
-            class="flex shrink-0 flex-wrap justify-end gap-3 border-t border-line bg-subtle px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-4"
+            class="flex shrink-0 flex-wrap justify-end gap-3 border-t px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] transition-[border-color] sm:px-5 sm:pb-5"
+            :class="moreBelow ? 'border-line' : 'border-transparent'"
           >
             <slot name="footer" />
           </div>
@@ -539,6 +661,19 @@ onBeforeUnmount(() => {
 .ui-drawer--bottom.ui-drawer-enter-from .ui-drawer-panel,
 .ui-drawer--bottom.ui-drawer-leave-to .ui-drawer-panel {
   transform: translateY(100%);
+}
+
+/*
+ * Бічний свайп. Панель і кожна вертикальна область прокрутки в ній лишають
+ * браузеру лише вертикальне панорамування, інакше він забирав би
+ * горизонтальний рух собі й слав pointercancel. Область прокрутки знову
+ * вмикає панорамування для своїх дітей, тож значення з панелі до них не
+ * доходить — звідси :deep. Прокрутку вбік (`overflow-x-auto`) не чіпаємо:
+ * там палець прокручує вміст (див. utils/swipe.ts).
+ */
+.ui-drawer--swipe .ui-drawer-panel,
+.ui-drawer--swipe .ui-drawer-panel :deep(.overflow-y-auto:not(.overflow-x-auto)) {
+  touch-action: pan-y pinch-zoom;
 }
 
 @media (prefers-reduced-motion: reduce) {

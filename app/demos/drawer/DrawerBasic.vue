@@ -19,7 +19,7 @@ const open = ref(false)
     </div>
 
     <template #footer>
-      <UiButton variant="outline" @click="open = false">Скасувати</UiButton>
+      <UiButton variant="tonal" @click="open = false">Скасувати</UiButton>
       <UiButton @click="open = false">Зберегти</UiButton>
     </template>
   </UiDrawer>

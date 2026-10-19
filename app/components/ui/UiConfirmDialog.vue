@@ -99,7 +99,7 @@ function onKeydown(event: KeyboardEvent) {
     />
 
     <template #footer>
-      <UiButton v-if="!options.hideCancel" variant="outline" data-confirm-cancel @click="_cancel()">
+      <UiButton v-if="!options.hideCancel" variant="tonal" data-confirm-cancel @click="_cancel()">
         {{ options.cancelText }}
       </UiButton>
       <UiButton

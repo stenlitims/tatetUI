@@ -26,7 +26,7 @@ const props = withDefaults(
 /*
  * accent — `bg-accent`, а не `bg-accent-solid`. Смуга — графічний об'єкт, і
  * від доріжки `bg-line` вона мусить відрізнятися на 3:1 (WCAG 1.4.11). У
- * темній темі accent-solid (#2563eb) на доріжці #2a2f38 давав 2.6:1 —
+ * темній темі accent-solid (#2563eb) на доріжці #262a31 дає 2.8:1 —
  * заповнену частину ледве видно; accent тримає 5.3:1 в обох темах.
  */
 const BAR_TONE: Record<NonNullable<typeof props.tone>, string> = {

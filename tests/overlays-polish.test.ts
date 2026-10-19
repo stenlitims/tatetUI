@@ -385,7 +385,11 @@ describe('UiDrawer', () => {
     window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientY: 300 }))
     await flush()
     expect(asked).toBe(1)
-    expect(document.querySelector<HTMLElement>('[role="dialog"]')!.style.transform).toBe('')
+    // Повертається з анімацією, а коли доїде — без інлайн-зсуву взагалі.
+    const panel = document.querySelector<HTMLElement>('[role="dialog"]')!
+    expect(panel.style.transform).toBe('translateY(0px)')
+    await new Promise((r) => setTimeout(r, 300))
+    expect(panel.style.transform).toBe('')
   })
 
   it('ім’я панелі — з ariaLabel або за краєм, а не «Бічна панель» для нижньої', async () => {

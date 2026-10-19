@@ -9,6 +9,7 @@ dependsOn:
   - app/composables/useScrollLock.ts
   - app/composables/useFocusTrap.ts
   - app/composables/useReducedMotion.ts
+  - app/composables/useScrollEdges.ts
 status: stable
 order: 21
 ---

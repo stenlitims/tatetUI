@@ -33,14 +33,15 @@ export function swipeLock(dx: number, dy: number, direction: SwipeDirection): 'p
 }
 
 /**
- * Довести «назад» до кінця чи повернути екран: пройдено ~40% ширини або
- * різкий кидок у той самий бік (px/мс). Кидок назад скасовує навіть далекий
- * рух — як у iOS.
+ * Довести «назад» до кінця чи повернути екран: пройдено частку ширини
+ * (`share`, типово ~40%) або різкий кидок у той самий бік (px/мс). Кидок
+ * назад скасовує навіть далекий рух — як у iOS. dx і швидкість — додатні в
+ * напрямку жесту.
  */
-export function swipeBackCommits(dx: number, velocity: number, width: number): boolean {
+export function swipeBackCommits(dx: number, velocity: number, width: number, share = 0.4): boolean {
   if (velocity < -0.3) return false
   if (velocity > 0.45 && dx > 24) return true
-  return dx > width * 0.4
+  return dx > width * share
 }
 
 /** Опір після межі: що далі тягнеш, то повільніше рухається. */
@@ -86,6 +87,21 @@ export function swipeIgnored(target: EventTarget | null, root?: Element): boolea
   if (target.closest(OWN_GESTURES)) return true
   for (let el: Element | null = target; el && el !== root; el = el.parentElement) {
     if (getComputedStyle(el).touchAction === 'none') return true
+  }
+  return false
+}
+
+/**
+ * Палець лежить на області, що сама прокручується вбік (`overflow-x-auto`
+ * зі вмістом, ширшим за неї): горизонтальний рух — її прокрутка, а не жест.
+ * Інакше жест встигав би зсунути екран на кілька пікселів, перш ніж браузер
+ * забере дотик собі й надішле pointercancel.
+ */
+export function inHorizontalScroll(target: EventTarget | null, root?: Element): boolean {
+  for (let el = target instanceof Element ? target : null; el && el !== root; el = el.parentElement) {
+    if (el.scrollWidth <= el.clientWidth) continue
+    const overflow = getComputedStyle(el).overflowX
+    if (overflow === 'auto' || overflow === 'scroll') return true
   }
   return false
 }

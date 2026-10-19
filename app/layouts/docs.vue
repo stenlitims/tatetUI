@@ -68,7 +68,7 @@ watch(() => route.path, () => (mobileNavOpen.value = false))
       службовий компонент. Якщо власну документацію незручно збирати зі
       своїх же компонентів, з бібліотекою щось не так.
     -->
-    <UiDrawer v-model="mobileNavOpen" position="left" size="xs" title="Навігація" close-on-backdrop>
+    <UiDrawer v-model="mobileNavOpen" position="left" size="xs" title="Навігація" close-on-backdrop swipe-to-close-side>
       <DocsSidebar @navigate="mobileNavOpen = false" />
     </UiDrawer>
   </div>

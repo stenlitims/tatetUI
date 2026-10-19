@@ -7,10 +7,12 @@ const props = withDefaults(
   defineProps<{
     /**
      * Візуальна вага. `solid` — головна дія на екрані, вона має бути одна.
-     * `link` — виглядає як посилання в тексті, але лишається кнопкою:
+     * `tonal` — звичайна вторинна дія поруч із головною («Скасувати»,
+     * «Назад»): нейтральна напівпрозора заливка без рамки, як типова кнопка
+     * GNOME. `link` — виглядає як посилання в тексті, але лишається кнопкою:
      * «Показати ще», «Скинути фільтри» посеред абзацу чи підвалу картки.
      */
-    variant?: 'solid' | 'soft' | 'outline' | 'ghost' | 'danger' | 'link'
+    variant?: 'solid' | 'soft' | 'tonal' | 'outline' | 'ghost' | 'danger' | 'link'
     /**
      * Висота кнопки. На мобільному ієрархія лишається: `sm` 9, `md` 10,
      * `lg` 12 (у rem за кореня 15px), а точність дотику тримає невидима
@@ -86,11 +88,20 @@ defineSlots<{
  * -webkit-tap-highlight-color у прозорий, а :hover на дотику не настає
  * взагалі — без явного стану натискання кнопка на телефоні не дає ЖОДНОГО
  * відгуку, і користувач тисне вдруге, бо не зрозумів, чи спрацювало.
+ *
+ * `tonal` — `ink` під 10% альфи, а не непрозорий токен поверхні. Заливка
+ * бере відтінок того, на чому лежить (картка, тло сторінки, підкладка
+ * алерту), і однаково читається в обох темах без `dark:`. `outline` тримає
+ * форму рамкою і непрозорим `bg-card`: у вікні це ще одна лінія, а на будь-
+ * якому тлі, крім картки, — окрема біла коробка. Кроки 10 → 15 → 20 ті самі,
+ * що в хрестика UiModal і UiDrawer: вторинна кнопка й хрестик одного вікна
+ * відгукуються однаково.
  */
 const variants: Record<Variant, string> = {
   solid:
     'bg-accent-solid text-accent-contrast hover:bg-accent-solid-hover active:bg-accent-solid-hover shadow-card',
   soft: 'bg-primary-50 text-accent hover:bg-primary-100 active:bg-primary-100 border border-primary-200',
+  tonal: 'bg-ink/10 text-ink hover:bg-ink/15 active:bg-ink/20',
   outline: 'border border-line bg-card text-ink hover:border-line-strong hover:bg-hover active:bg-hover',
   ghost: 'text-muted hover:text-ink hover:bg-hover active:bg-hover active:text-ink',
   danger:

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { h, nextTick, reactive } from 'vue'
 import UiContextMenu from '~/components/ui/UiContextMenu.vue'
+import UiDrawer from '~/components/ui/UiDrawer.vue'
 import UiSwipeActions from '~/components/ui/UiSwipeActions.vue'
 import UiSwipeStack from '~/components/ui/UiSwipeStack.vue'
 import { pushThemeColorSurface, startThemeColor } from '~/utils/themeColor'
@@ -9,7 +10,8 @@ import { mountComponent } from './helpers/mountComponent'
 
 /*
  * Мобільні жести бібліотеки: дії під рядком, стек екранів зі свайпом
- * «назад», тактильний відгук довгого натискання й колір рядка стану.
+ * «назад», бічна шторка, що закривається свайпом до краю, тактильний
+ * відгук довгого натискання й колір рядка стану.
  * Свайп — синтетичними PointerEvent із pointerType touch: саме їх слухає
  * utils/swipe.ts.
  */
@@ -208,6 +210,94 @@ describe('UiSwipeStack', () => {
     swipe(page, 10, window.innerWidth * 0.8)
     vi.advanceTimersByTime(400)
     expect(onBack).not.toHaveBeenCalled()
+  })
+})
+
+/* ------------------------------------------------------------------ */
+
+describe('UiDrawer: свайп бічної панелі', () => {
+  async function drawer(props: Record<string, unknown> = {}, content?: () => unknown) {
+    // happy-dom не верстає: ширина панелі — 300px.
+    vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockReturnValue(300)
+    const state = reactive({ open: true })
+    await mount(() =>
+      h(UiDrawer, {
+        modelValue: state.open,
+        position: 'left',
+        swipeToCloseSide: true,
+        title: 'Меню',
+        'onUpdate:modelValue': (v: boolean) => (state.open = v),
+        ...props,
+      }, { default: content ?? (() => h('button', { id: 'item', type: 'button' }, 'Пункт')) }),
+    )
+    await flush()
+    return { state, panel: () => document.querySelector<HTMLElement>('[role="dialog"]') }
+  }
+
+  it('ліва: свайп ліворуч далі третини ширини закриває', async () => {
+    const { state } = await drawer()
+    swipe(document.getElementById('item')!, 250, 100)
+    await flush()
+    expect(state.open).toBe(false)
+  })
+
+  it('панель іде за пальцем, а короткий рух повертає її на місце', async () => {
+    vi.useFakeTimers()
+    const { state, panel } = await drawer()
+    const item = document.getElementById('item')!
+    const fire = (type: string, x: number) =>
+      item.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 7, isPrimary: true, pointerType: 'touch', clientX: x, clientY: 100 }))
+    fire('pointerdown', 250)
+    for (const x of [240, 225, 210]) fire('pointermove', x)
+    await flush()
+    expect(panel()!.style.transform).toBe('translateX(-40px)')
+    expect(panel()!.style.transition).toBe('none')
+    // Фон світлішає разом із жестом.
+    expect(Number((panel()!.previousElementSibling as HTMLElement).style.opacity)).toBeCloseTo(1 - 40 / 300)
+    fire('pointerup', 210)
+    await flush()
+    expect(state.open).toBe(true)
+    // На місце — з анімацією, а не стрибком.
+    expect(panel()!.style.transform).toBe('translateX(0px)')
+    expect(panel()!.style.transition).not.toBe('none')
+    vi.advanceTimersByTime(400)
+    await flush()
+    expect(panel()!.style.transform).toBe('')
+  })
+
+  it('права закривається свайпом праворуч, а ліворуч — ні', async () => {
+    const { state } = await drawer({ position: 'right' })
+    swipe(document.getElementById('item')!, 100, 20)
+    await flush()
+    expect(state.open).toBe(true)
+    swipe(document.getElementById('item')!, 50, 200)
+    await flush()
+    expect(state.open).toBe(false)
+  })
+
+  it('без swipeToCloseSide бічна панель свайпом не закривається', async () => {
+    const { state, panel } = await drawer({ swipeToCloseSide: undefined })
+    swipe(document.getElementById('item')!, 250, 20)
+    await flush()
+    expect(state.open).toBe(true)
+    expect(panel()!.style.transform).toBe('')
+  })
+
+  it('область, що прокручується вбік, лишається пальцю', async () => {
+    const { state } = await drawer({}, () =>
+      h('div', { id: 'strip', style: 'overflow-x: auto' }, [h('span', { id: 'chip' }, 'Фільтр')]),
+    )
+    Object.defineProperty(document.getElementById('strip')!, 'scrollWidth', { value: 600 })
+    swipe(document.getElementById('chip')!, 250, 20)
+    await flush()
+    expect(state.open).toBe(true)
+  })
+
+  it('closable=false — жесту немає', async () => {
+    const { state } = await drawer({ closable: false })
+    swipe(document.getElementById('item')!, 250, 20)
+    await flush()
+    expect(state.open).toBe(true)
   })
 })
 

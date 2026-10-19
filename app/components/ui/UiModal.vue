@@ -16,6 +16,7 @@ import { useOverlayLayer } from '~/composables/useOverlayStack'
 import { useScrollLock } from '~/composables/useScrollLock'
 import { useFocusTrap } from '~/composables/useFocusTrap'
 import { readDurationToken, useReducedMotion } from '~/composables/useReducedMotion'
+import { useScrollEdges } from '~/composables/useScrollEdges'
 
 defineOptions({ inheritAttrs: false })
 
@@ -120,6 +121,10 @@ const titleId = `${generatedId}-title`
 
 const backdropEl = ref<HTMLElement | null>(null)
 const panelEl = ref<HTMLElement | null>(null)
+const bodyEl = ref<HTMLElement | null>(null)
+
+// Лінії під шапкою й над футером — лише коли вміст справді ховається за ними.
+const { scrolledFromTop, moreBelow } = useScrollEdges(() => bodyEl.value)
 
 // class обробляємо окремо через :class, решту атрибутів прокидаємо на корінь.
 const wrapperAttrs = computed(() => {
@@ -141,10 +146,19 @@ const SIZE_CLASSES: Record<NonNullable<typeof props.size>, string> = {
   full: 'max-w-[96rem]',
 }
 
-// Без футера нижній відступ контенту має враховувати home indicator на iOS.
+/*
+ * Відступи — по одному класу на бік, без `p-*` під `pb-*`.
+ *
+ * Шапка пласка й того ж тла, що вміст, тож відступ над текстом уже дає вона
+ * сама: повний `pt-5` відсував би перший абзац від заголовка далі, ніж абзаци
+ * одне від одного, і заголовок «відривався» б від свого тексту.
+ * Без футера нижній відступ має враховувати home indicator на iOS.
+ */
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
-  return slots.footer ? 'p-4 sm:p-5' : 'p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5'
+  const top = hasHeader.value ? 'pt-1' : 'pt-4 sm:pt-5'
+  const bottom = slots.footer ? 'pb-4 sm:pb-5' : 'pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5'
+  return `px-4 sm:px-5 ${top} ${bottom}`
 })
 
 /*
@@ -362,23 +376,30 @@ onBeforeUnmount(() => {
           :aria-label="ariaLabel || (hasAccessibleHeader ? undefined : uiText('Діалогове вікно'))"
           :aria-describedby="ariaDescribedby"
         >
-          <!-- Ручка свайпу — лише в режимі sheet. Тло шапки, щоб ручка
-               читалася її частиною. touch-none обов'язковий: без нього
-               браузер забирає вертикальний жест собі як прокрутку. -->
+          <!-- Ручка свайпу — лише в режимі sheet. touch-none обов'язковий:
+               без нього браузер забирає вертикальний жест собі як прокрутку. -->
           <div
             v-if="showDragHandle"
             class="flex shrink-0 cursor-grab touch-none justify-center pt-2 pb-0.5 active:cursor-grabbing sm:hidden"
-            :class="hasHeader ? 'bg-subtle' : ''"
             aria-hidden="true"
             @pointerdown="onDragStart"
           >
             <span class="h-1 w-10 rounded-full bg-line-strong" />
           </div>
 
+          <!--
+            Шапка пласка, як у діалогах GNOME: те саме тло, що й вміст, і без
+            постійної лінії. Окрема смуга з власним тлом і межею ділила навіть
+            коротке питання на коробки й робила вікно важчим за його зміст.
+            Лінія з'являється, лише коли вміст прокручено під шапку, — тоді
+            вона показує, що вгорі є ще текст. Колір межі обирається в JS
+            (прозорий ↔ line), а не дописується поверх: два класи кольору межі
+            на одному вузлі вирішував би порядок у CSS.
+          -->
           <div
             v-if="hasHeader"
-            class="flex shrink-0 items-center justify-between gap-3 border-b border-line bg-subtle px-4 py-3 sm:px-5"
-            :class="showDragHandle ? 'touch-none sm:touch-auto' : ''"
+            class="flex shrink-0 items-center justify-between gap-3 border-b py-3 pr-3 pl-4 transition-[border-color] sm:pl-5"
+            :class="[scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none sm:touch-auto' : '']"
             @pointerdown="onHeaderPointerDown"
           >
             <div
@@ -392,23 +413,25 @@ onBeforeUnmount(() => {
               </slot>
             </div>
             <!--
-              Хрестик — того ж розміру, що й кнопки футера (h-10 → md:h-9), тож
-              шапка й футер однакової висоти і вікно виглядає симетрично.
+              Хрестик — велике кругле тло без рамки (як кнопки вікна в GNOME):
+              легка підкладка кольору `ink` під 10% альфи читається в обох
+              темах без `dark:`, а без рамки хрестик не сперечається з назвою.
+              Квадрат у рамці на тлі шапки виглядав окремою дрібною коробкою.
+
               Точність дотику тримає невидима зона 45×45 через
               `pointer-coarse:after:` — той самий патерн, що в UiButton і
-              UiSwitch. Без неї на телефоні єдина кнопка закриття була
-              нижчою за мінімальну ціль у 44px (W3C 2.5.8 Target Size).
-              `relative` тут не декор: без нього `::after` рахував би
-              зміщення від шапки, а не від кнопки.
+              UiSwitch (W3C 2.5.8 Target Size). `relative` тут не декор: без
+              нього `::after` рахував би зміщення від шапки, а не від кнопки.
+              Розмітка однакова з UiDrawer.
             -->
             <button
               v-if="closable"
               type="button"
-              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-control border border-line bg-card text-muted md:h-9 md:w-9 transition-colors hover:bg-hover hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M18 6L6 18M6 6L18 18"
                   stroke="currentColor"
@@ -421,15 +444,19 @@ onBeforeUnmount(() => {
           </div>
 
           <div
+            ref="bodyEl"
             class="scrollbar-thin min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain"
             :class="contentPaddingClass"
           >
             <slot />
           </div>
 
+          <!-- Футер теж плаский: лінія над ним — лише коли під кнопками
+               лишився непрокручений вміст. -->
           <div
             v-if="$slots.footer"
-            class="flex shrink-0 flex-wrap justify-end gap-3 border-t border-line bg-subtle px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-5 sm:pb-3 [&>*]:justify-center sm:[&>*]:min-w-28 max-sm:[&>*]:flex-1"
+            class="flex shrink-0 flex-wrap justify-end gap-3 border-t px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))] transition-[border-color] sm:px-5 sm:pb-5 [&>*]:justify-center sm:[&>*]:min-w-28 max-sm:[&>*]:flex-1"
+            :class="moreBelow ? 'border-line' : 'border-transparent'"
           >
             <slot name="footer" />
           </div>
