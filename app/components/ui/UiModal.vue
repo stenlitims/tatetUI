@@ -147,16 +147,30 @@ const SIZE_CLASSES: Record<NonNullable<typeof props.size>, string> = {
 }
 
 /*
+ * Шапка — як header bar у GNOME: пласка, а назва по центру між хрестиком і
+ * порожньою клітинкою-противагою (без неї назва з'їжджала б від центру на
+ * ширину кнопки). Саме центр відрізняє шапку від вмісту, коли в неї немає ні
+ * власного тла, ні лінії: назва ліворуч над лівим текстом читалася як перший
+ * абзац, а не як назва вікна. Власний слот `header` (поле пошуку, вкладки)
+ * лишається ліворуч на всю ширину. Розмітка однакова з UiDrawer.
+ */
+const centeredTitle = computed(() => !hasCustomHeader.value)
+
+const headerLayoutClass = computed(() => {
+  if (!centeredTitle.value) return 'flex items-center justify-between gap-3 py-2.5 pr-3 pl-4 sm:pl-5'
+  return props.closable
+    ? 'grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2 px-3 py-2.5'
+    : 'flex items-center justify-center px-4 py-2.5'
+})
+
+/*
  * Відступи — по одному класу на бік, без `p-*` під `pb-*`.
- *
- * Шапка пласка й того ж тла, що вміст, тож відступ над текстом уже дає вона
- * сама: повний `pt-5` відсував би перший абзац від заголовка далі, ніж абзаци
- * одне від одного, і заголовок «відривався» б від свого тексту.
+ * Під шапкою відступ менший за бічні: шапка вже дає повітря сама.
  * Без футера нижній відступ має враховувати home indicator на iOS.
  */
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
-  const top = hasHeader.value ? 'pt-1' : 'pt-4 sm:pt-5'
+  const top = hasHeader.value ? 'pt-3' : 'pt-4 sm:pt-5'
   const bottom = slots.footer ? 'pb-4 sm:pb-5' : 'pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5'
   return `px-4 sm:px-5 ${top} ${bottom}`
 })
@@ -392,46 +406,48 @@ onBeforeUnmount(() => {
             постійної лінії. Окрема смуга з власним тлом і межею ділила навіть
             коротке питання на коробки й робила вікно важчим за його зміст.
             Лінія з'являється, лише коли вміст прокручено під шапку, — тоді
-            вона показує, що вгорі є ще текст. Колір межі обирається в JS
-            (прозорий ↔ line), а не дописується поверх: два класи кольору межі
-            на одному вузлі вирішував би порядок у CSS.
+            вона показує, що вгорі є ще текст. Колір межі й розкладка
+            обираються в JS, а не дописуються поверх: два класи однієї
+            властивості на вузлі вирішував би порядок у CSS.
           -->
           <div
             v-if="hasHeader"
-            class="flex shrink-0 items-center justify-between gap-3 border-b py-3 pr-3 pl-4 transition-[border-color] sm:pl-5"
-            :class="[scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none sm:touch-auto' : '']"
+            class="shrink-0 border-b transition-[border-color]"
+            :class="[headerLayoutClass, scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none sm:touch-auto' : '']"
             @pointerdown="onHeaderPointerDown"
           >
+            <span v-if="centeredTitle && closable" aria-hidden="true" />
             <div
               :id="hasAccessibleHeader ? titleId : undefined"
-              class="flex min-w-0 flex-1 items-center gap-3"
+              class="flex min-w-0 items-center gap-3"
+              :class="centeredTitle ? 'justify-center' : 'flex-1'"
             >
               <slot name="header">
-                <h3 class="m-0 truncate text-lg font-semibold tracking-tight text-ink">
+                <h3 class="m-0 truncate text-base font-semibold text-ink">
                   {{ title }}
                 </h3>
               </slot>
             </div>
             <!--
-              Хрестик — велике кругле тло без рамки (як кнопки вікна в GNOME):
-              легка підкладка кольору `ink` під 10% альфи читається в обох
-              темах без `dark:`, а без рамки хрестик не сперечається з назвою.
-              Квадрат у рамці на тлі шапки виглядав окремою дрібною коробкою.
+              Хрестик — кругле тло без рамки (як кнопки вікна в GNOME): легка
+              підкладка кольору `ink` під 10% альфи читається в обох темах без
+              `dark:`, а без рамки хрестик не сперечається з назвою. h-9 —
+              помітний, але не важчий за саму назву: 40px поруч із назвою в
+              15px перетягували увагу на себе.
 
               Точність дотику тримає невидима зона 45×45 через
               `pointer-coarse:after:` — той самий патерн, що в UiButton і
               UiSwitch (W3C 2.5.8 Target Size). `relative` тут не декор: без
               нього `::after` рахував би зміщення від шапки, а не від кнопки.
-              Розмітка однакова з UiDrawer.
             -->
             <button
               v-if="closable"
               type="button"
-              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+              class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M18 6L6 18M6 6L18 18"
                   stroke="currentColor"

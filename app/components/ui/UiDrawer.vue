@@ -126,11 +126,27 @@ const hasAccessibleHeader = computed(() => hasCustomHeader.value || !!props.titl
 // Teleport — з першим відкриттям, без повторного рендеру після монтування.
 const teleportReady = useLazyTeleport(() => props.modelValue)
 
-// По одному класу на бік. Під пласкою шапкою відступ над текстом дає вона
-// сама — як у UiModal; без футера знизу враховуємо home indicator на iOS.
+/*
+ * Шапка — як header bar у GNOME, розмітка однакова з UiModal: назва по
+ * центру між хрестиком і порожньою клітинкою-противагою. У панелі на всю
+ * висоту екрана назва ліворуч над лівим текстом читалася як перший абзац, а
+ * хрестик у кутку — як випадковий елемент; центр робить із шапки шапку без
+ * власного тла й лінії. Власний слот `header` лишається ліворуч.
+ */
+const centeredTitle = computed(() => !hasCustomHeader.value)
+
+const headerLayoutClass = computed(() => {
+  if (!centeredTitle.value) return 'flex items-center justify-between gap-3 py-2.5 pr-3 pl-4 sm:pl-5'
+  return props.closable
+    ? 'grid grid-cols-[2.25rem_minmax(0,1fr)_2.25rem] items-center gap-2 px-3 py-2.5'
+    : 'flex items-center justify-center px-4 py-2.5'
+})
+
+// По одному класу на бік. Під шапкою відступ менший за бічні — повітря дає
+// вона сама; без футера знизу враховуємо home indicator на iOS.
 const contentPaddingClass = computed(() => {
   if (props.noPadding) return ''
-  const top = hasHeader.value ? 'pt-1' : 'pt-4 sm:pt-5'
+  const top = hasHeader.value ? 'pt-3' : 'pt-4 sm:pt-5'
   const bottom = slots.footer ? 'pb-4 sm:pb-5' : 'pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-5'
   return `px-4 sm:px-5 ${top} ${bottom}`
 })
@@ -534,29 +550,31 @@ onBeforeUnmount(() => {
           <!--
             Шапка пласка, як у UiModal і діалогах GNOME: те саме тло, що й
             вміст, а лінія під нею з'являється лише тоді, коли вміст
-            прокручено під шапку. Колір межі обирається в JS, а не
-            дописується поверх: два класи кольору межі на одному вузлі
-            вирішував би порядок у згенерованому CSS.
+            прокручено під шапку. Колір межі й розкладка обираються в JS, а
+            не дописуються поверх: два класи однієї властивості на одному
+            вузлі вирішував би порядок у згенерованому CSS.
           -->
           <div
             v-if="hasHeader"
-            class="flex shrink-0 items-center justify-between gap-3 border-b py-3 pr-3 pl-4 transition-[border-color] sm:pl-5"
-            :class="[scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none' : '']"
+            class="shrink-0 border-b transition-[border-color]"
+            :class="[headerLayoutClass, scrolledFromTop ? 'border-line' : 'border-transparent', showDragHandle ? 'touch-none' : '']"
             @pointerdown="onHeaderPointerDown"
           >
+            <span v-if="centeredTitle && closable" aria-hidden="true" />
             <div
               :id="hasAccessibleHeader ? titleId : undefined"
-              class="flex min-w-0 flex-1 items-center gap-3"
+              class="flex min-w-0 items-center gap-3"
+              :class="centeredTitle ? 'justify-center' : 'flex-1'"
             >
               <slot name="header">
-                <h3 class="m-0 truncate text-lg font-semibold tracking-tight text-ink">
+                <h3 class="m-0 truncate text-base font-semibold text-ink">
                   {{ title }}
                 </h3>
               </slot>
             </div>
             <!--
-              Хрестик — велике кругле тло без рамки, розмітка однакова з
-              UiModal. Раніше він був дрібним квадратом у рамці (30px), щоб не
+              Хрестик — кругле тло без рамки, розмітка однакова з UiModal.
+              Раніше він був дрібним квадратом у рамці (30px), щоб не
               сперечатися з назвою панелі; але сперечалася саме рамка, а не
               розмір: м'яка підкладка кольору `ink` під 10% альфи лишає
               хрестик тихим, і водночас у нього легко влучити.
@@ -568,11 +586,11 @@ onBeforeUnmount(() => {
             <button
               v-if="closable"
               type="button"
-              class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
+              class="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-ink/10 text-muted transition-colors hover:bg-ink/15 hover:text-ink active:bg-ink/20 active:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:after:absolute pointer-coarse:after:top-1/2 pointer-coarse:after:left-1/2 pointer-coarse:after:h-12 pointer-coarse:after:w-12 pointer-coarse:after:-translate-x-1/2 pointer-coarse:after:-translate-y-1/2 pointer-coarse:after:content-['']"
               :aria-label="uiText('Закрити')"
               @click="requestClose('button')"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path
                   d="M18 6L6 18M6 6L18 18"
                   stroke="currentColor"
