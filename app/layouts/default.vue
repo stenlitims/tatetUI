@@ -11,7 +11,7 @@ import DocsThemeToggle from '~/components/docs/DocsThemeToggle.vue'
 const links = [
   { title: 'Приклади', to: '/#examples', mobile: false },
   { title: 'Компоненти', to: '/docs/components/button', mobile: false },
-  { title: 'Roadmap', to: '/docs/roadmap', mobile: false },
+  { title: 'Для AI-агентів', to: '/docs/agents', mobile: false },
   { title: 'Документація', to: '/docs', mobile: true },
 ]
 </script>

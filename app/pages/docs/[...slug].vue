@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DocsComponentDownload from '~/components/docs/DocsComponentDownload.vue'
 import DocsPager from '~/components/docs/DocsPager.vue'
 import DocsToc from '~/components/docs/DocsToc.vue'
 
@@ -50,6 +51,8 @@ provide('docsPageEmitDescriptions', page.value.emitDescriptions ?? {})
     <article class="min-w-0 flex-1">
       <h1 class="text-3xl font-semibold tracking-tight text-ink">{{ page.title }}</h1>
       <p class="mt-2 text-lg text-muted">{{ page.description }}</p>
+
+      <DocsComponentDownload v-if="page.component" :name="route.path.split('/').filter(Boolean).pop()!" />
 
       <!--
         Клас стоїть на самому ContentRenderer, а не на обгортці навколо

@@ -9,6 +9,7 @@ const groups = [
     links: [
       { title: 'Вступ', to: '/docs' },
       { title: 'Як перенести компонент', to: '/docs/copy-guide' },
+      { title: 'Для AI-агентів', to: '/docs/agents' },
       { title: 'Roadmap', to: '/docs/roadmap' },
     ],
   },

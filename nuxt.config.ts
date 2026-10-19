@@ -1,5 +1,9 @@
 import tailwindcss from '@tailwindcss/vite'
 import { shikiRaw } from './build/vite-shiki-raw'
+import { generateRegistry } from './build/component-registry'
+import { fileURLToPath } from 'node:url'
+
+const siteUrl = process.env.NUXT_PUBLIC_SITE_URL || 'https://ui.tatet.net'
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
@@ -71,7 +75,7 @@ export default defineNuxtConfig({
    */
   runtimeConfig: {
     public: {
-      siteUrl: 'https://tatetui.pages.dev',
+      siteUrl,
     },
   },
 
@@ -84,6 +88,10 @@ export default defineNuxtConfig({
   },
 
   hooks: {
+    // Publish sources and complete dependency bundles as static files on every build/dev start.
+    async 'nitro:config'() {
+      await generateRegistry({ root: fileURLToPath(new URL('.', import.meta.url)), siteUrl })
+    },
     /**
      * Демо редактора не префетчимо.
      *
@@ -185,6 +193,8 @@ export default defineNuxtConfig({
         { rel: 'icon', href: '/favicon.ico', sizes: '48x48' },
         { rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+        { rel: 'alternate', type: 'text/plain', title: 'tatetUI for agents', href: '/llms.txt' },
+        { rel: 'alternate', type: 'application/json', title: 'tatetUI component registry', href: '/registry/index.json' },
       ],
       script: [
         {

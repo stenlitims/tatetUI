@@ -76,7 +76,7 @@ const revenue = [42, 48, 45, 53, 51, 60, 58, 66, 71, 69, 78, 84]
               </svg>
             </template>
           </UiButton>
-          <UiButton to="/#examples" variant="outline" size="lg">Дивитися приклади</UiButton>
+          <UiButton to="/docs/agents" variant="outline" size="lg">Використати з AI-агентом</UiButton>
         </div>
 
         <ul class="mt-8 flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted">

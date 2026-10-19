@@ -1,4 +1,4 @@
 User-Agent: *
 Disallow:
 
-Sitemap: https://tatetui.pages.dev/sitemap.xml
+Sitemap: https://ui.tatet.net/sitemap.xml

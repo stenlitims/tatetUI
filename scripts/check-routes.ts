@@ -62,7 +62,20 @@ async function main() {
     process.exit(1)
   }
 
-  const routes = ['/', ...(await collectRoutes(CONTENT_DIR))].sort()
+  const index = JSON.parse(await readFile(join(ROOT, '.output/public/registry/index.json'), 'utf8')) as {
+    components: { docs: string; registry: string; download: string; markdown: string; api: string }[]
+  }
+  const docsRoutes = await collectRoutes(CONTENT_DIR)
+  const distributionRoutes = ['/llms.txt', '/llms-full.txt', '/registry/index.json', '/registry/downloads.json']
+  distributionRoutes.push(...docsRoutes.map(route => `/registry${route}.md`))
+  for (const item of index.components) {
+    distributionRoutes.push(item.registry, item.download, item.markdown, item.api)
+    const entry = JSON.parse(await readFile(join(ROOT, '.output/public', item.registry), 'utf8')) as {
+      files: { url: string }[]
+    }
+    distributionRoutes.push(...entry.files.map(file => file.url))
+  }
+  const routes = [...new Set(['/', ...docsRoutes, ...distributionRoutes])].sort()
   console.log(`Перевіряю ${routes.length} маршрутів на ${BASE}`)
 
   const server = spawn('node', ['.output/server/index.mjs'], {
@@ -79,6 +92,20 @@ async function main() {
       try {
         const res = await fetch(`${BASE}${route}`)
         if (res.status !== 200) failures.push(`${route} → ${res.status}`)
+        else if (route.endsWith('.json') || route.startsWith('/api/component-meta/')) {
+          const data = await res.json()
+          if (route.startsWith('/api/component-meta/') && !data.meta) failures.push(`${route} → missing API metadata`)
+        } else if (route.endsWith('.zip')) {
+          const bytes = new Uint8Array(await res.arrayBuffer())
+          if (bytes[0] !== 0x50 || bytes[1] !== 0x4b) failures.push(`${route} → invalid ZIP`)
+        } else if (index.components.some(item => item.docs === route)) {
+          const item = index.components.find(item => item.docs === route)!
+          const html = await res.text()
+          if (!html.includes(`href="${item.download}"`)) failures.push(`${route} → missing ZIP link in server-rendered HTML`)
+          if (!html.includes(`href="${item.registry}"`)) failures.push(`${route} → missing registry link in server-rendered HTML`)
+        } else if (/\.(md|txt)$/.test(route)) {
+          if (/^\s*<!doctype html/i.test(await res.text())) failures.push(`${route} → HTML instead of text`)
+        }
       } catch (error) {
         failures.push(`${route} → ${error instanceof Error ? error.message : String(error)}`)
       }

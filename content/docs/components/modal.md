@@ -12,7 +12,7 @@ dependsOn:
   - app/composables/useScrollEdges.ts
 emitDescriptions:
   update:modelValue: Зміна стану відкриття. Використовуйте через `v-model`.
-  close: Вікно закрито — будь-яким способом: хрестиком, Escape або кліком по фону.
+  close: Вікно закрито — будь-яким способом — хрестиком, Escape або кліком по фону.
 status: stable
 order: 1
 ---
