@@ -55,6 +55,8 @@ interface LayerEntry {
    */
   passive: boolean
   onEscape?: (event: KeyboardEvent) => void
+  /** Системне «назад», коли шар верхній; без нього «назад» іде як Escape. */
+  onBack?: () => void
   elements?: () => Array<Element | null | undefined>
   onPointerDownOutside?: (event: PointerEvent) => void
   /** Прямі діти <body> на момент відкриття — усе пізніше є шаром над нами. */
@@ -111,7 +113,20 @@ export function useOverlayStack() {
     return OVERLAY_BASE_Z_INDEX + modalIndex * OVERLAY_Z_STEP
   }
 
-  return { stack: readonly(overlayStack), blockingCount: blockingLayerCount, push, remove, indexOf, isTopmost, zIndexFor }
+  /**
+   * Чим верхній шар (пасивні не рахуються) відповідає на системне «назад»,
+   * якщо передав власне — див. OverlayLayerOptions.onBack. `undefined` —
+   * «назад» іде звичайним шляхом Escape.
+   */
+  const topmostBack = (): (() => void) | undefined => {
+    for (let index = overlayStack.value.length - 1; index >= 0; index -= 1) {
+      const entry = layerEntries.get(overlayStack.value[index]!)
+      if (!entry?.passive) return entry?.onBack
+    }
+    return undefined
+  }
+
+  return { stack: readonly(overlayStack), blockingCount: blockingLayerCount, push, remove, indexOf, isTopmost, zIndexFor, topmostBack }
 }
 
 /* ------------------------------------------------------------------ */
@@ -207,6 +222,13 @@ export interface OverlayLayerOptions {
    * рівно один шар — і що підказка чи меню над ним отримають Escape першими.
    */
   onEscape?: (event: KeyboardEvent) => void
+  /**
+   * Системне «назад» (`useSystemBack`), коли цей шар верхній. Без нього
+   * «назад» закриває шар тим самим шляхом, що й Escape. Потрібне шару, який
+   * на Escape не реагує, а на «назад» має: дзвінок на весь екран
+   * згортається у вікно, хоча клавіша Escape його не чіпає.
+   */
+  onBack?: () => void
 }
 
 export interface OverlayLayer {
@@ -238,8 +260,8 @@ export function useOverlayLayer(id?: string, options: OverlayLayerOptions = {}):
 
   const activate = () => {
     frozenZIndex.value = null
-    if (isClient && options.onEscape) {
-      layerEntries.set(layerId, { floating: false, passive: false, onEscape: options.onEscape })
+    if (isClient && (options.onEscape || options.onBack)) {
+      layerEntries.set(layerId, { floating: false, passive: false, onEscape: options.onEscape, onBack: options.onBack })
     }
     stack.push(layerId)
   }

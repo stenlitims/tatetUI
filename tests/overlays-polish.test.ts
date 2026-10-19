@@ -15,6 +15,7 @@ import UiSplitButton from '~/components/ui/UiSplitButton.vue'
 import UiToaster from '~/components/ui/UiToaster.vue'
 import UiTooltip from '~/components/ui/UiTooltip.vue'
 import { useConfirm } from '~/composables/useConfirm'
+import { useFocusTrap } from '~/composables/useFocusTrap'
 import { useFloatingLayer, useOverlayLayer, useOverlayStack } from '~/composables/useOverlayStack'
 import { useToast } from '~/composables/useToast'
 import { mountComponent } from './helpers/mountComponent'
@@ -121,6 +122,34 @@ describe('useFocusTrap — закриття не в порядку LIFO', () => 
     expect(app.host.hasAttribute('inert')).toBe(false)
     expect(app.host.getAttribute('aria-hidden')).toBeNull()
     expect(document.activeElement?.id).toBe('opener')
+  })
+
+  it('cycleTab: false — фон inert, але Tab з останнього елемента не перехоплюється', () => {
+    const background = document.body.appendChild(document.createElement('div'))
+    const panel = document.body.appendChild(document.createElement('div'))
+    panel.tabIndex = -1
+    panel.innerHTML = '<button id="first">1</button><div id="widget" tabindex="0" role="application"></div>'
+    const tab = () => {
+      const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+      document.activeElement!.dispatchEvent(event)
+      return event
+    }
+    for (const cycleTab of [true, false]) {
+      const scope = effectScope()
+      const trap = scope.run(() => useFocusTrap(() => panel, { cycleTab }))!
+      trap.activate()
+      expect(background.hasAttribute('inert')).toBe(true)
+      document.getElementById('widget')!.focus()
+      const event = tab()
+      // Типова пастка зациклює Tab на першу кнопку; без циклу клавіша дістається віджету.
+      expect(event.defaultPrevented).toBe(cycleTab)
+      expect(document.activeElement?.id).toBe(cycleTab ? 'first' : 'widget')
+      trap.deactivate()
+      expect(background.hasAttribute('inert')).toBe(false)
+      scope.stop()
+    }
+    background.remove()
+    panel.remove()
   })
 })
 
@@ -304,6 +333,49 @@ describe('спільний стек: Escape і клік «повз»', () => {
       expect(blockingCount.value).toBe(0)
       tooltip.deactivate()
     })
+    scope.stop()
+  })
+
+  it('onBack: «назад» верхнього шару — його обробник; меню над ним — знову Escape', () => {
+    const scope = effectScope()
+    scope.run(() => {
+      const { topmostBack, blockingCount } = useOverlayStack()
+      const back = vi.fn()
+      const below = useOverlayLayer(undefined, { onEscape: () => undefined })
+      const call = useOverlayLayer(undefined, { onBack: back })
+      const tooltip = useFloatingLayer({ elements: () => [], passive: true })
+      const menu = useFloatingLayer({ elements: () => [] })
+      below.activate()
+      expect(topmostBack()).toBeUndefined()
+      call.activate()
+      // Шар лише з onBack — теж блокуючий: «назад» має до нього дійти.
+      expect(blockingCount.value).toBe(2)
+      tooltip.activate()
+      expect(topmostBack()).toBe(back)
+      menu.activate()
+      expect(topmostBack()).toBeUndefined()
+      menu.deactivate()
+      expect(topmostBack()).toBe(back)
+      call.deactivate()
+      expect(topmostBack()).toBeUndefined()
+      tooltip.deactivate()
+      below.deactivate()
+    })
+    scope.stop()
+  })
+
+  it('шар лише з onBack Escape не закриває і не пропускає до шару під ним', async () => {
+    const scope = effectScope()
+    const below = vi.fn()
+    scope.run(() => {
+      const modal = useOverlayLayer(undefined, { onEscape: below })
+      const call = useOverlayLayer(undefined, { onBack: () => undefined })
+      modal.activate()
+      call.activate()
+    })
+    escape()
+    await flush()
+    expect(below).not.toHaveBeenCalled()
     scope.stop()
   })
 })

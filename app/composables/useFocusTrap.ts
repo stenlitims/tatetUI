@@ -7,7 +7,7 @@
  *
  * Що робить:
  *   - запам'ятовує елемент, з якого відкрили оверлей, і повертає йому фокус;
- *   - зациклює Tab / Shift+Tab у межах панелі;
+ *   - зациклює Tab / Shift+Tab у межах панелі (без `cycleTab: false`);
  *   - помічає решту прямих дітей <body> як inert + aria-hidden, щоб фон не
  *     ловив фокус і не читався скрінрідером.
  *
@@ -36,6 +36,8 @@ const isClient = typeof document !== 'undefined'
 
 interface TrapEntry {
   getContainer: () => HTMLElement | null | undefined;
+  /** Зациклювати Tab у панелі — див. FocusTrapOptions.cycleTab. */
+  cycleTab: boolean;
   /** Елементи фону, які ця пастка тримає прихованими. */
   hidden: HTMLElement[];
   /** Куди повернути фокус після закриття. */
@@ -120,7 +122,7 @@ const onKeyDown = (event: KeyboardEvent): void => {
 
   const entry = topEntry();
   const container = entry?.getContainer();
-  if (!entry || !container) return;
+  if (!entry || !container || !entry.cycleTab) return;
 
   const active = document.activeElement;
   // Фокус у телепортованій випадайці — не заважаємо їй обробляти Tab самій.
@@ -234,13 +236,26 @@ const restoreBackground = (entry: TrapEntry): void => {
   entry.hidden.length = 0;
 };
 
+export interface FocusTrapOptions {
+  /**
+   * Зациклювати Tab у межах панелі (типово так). `false` — Tab обходить
+   * сторінку сам: фон однаково inert, тож браузер проходить лише панель,
+   * шари над нею й тости (через рядок адреси, як нативний `<dialog>`).
+   * Для шару з віджетом, що сам забирає клавіатуру (віддалене керування,
+   * термінал): пастка слухає Tab у фазі захоплення, раніше за віджет, і на
+   * першому чи останньому елементі панелі забрала б клавішу собі.
+   */
+  cycleTab?: boolean;
+}
+
 export interface FocusTrapActivateOptions {
   /** CSS-селектор усередині панелі або готовий елемент. */
   initialFocus?: string | HTMLElement | null;
 }
 
 export const useFocusTrap = (
-  getContainer: () => HTMLElement | null | undefined
+  getContainer: () => HTMLElement | null | undefined,
+  trapOptions: FocusTrapOptions = {}
 ) => {
   let entry: TrapEntry | null = null;
 
@@ -251,6 +266,7 @@ export const useFocusTrap = (
 
     entry = {
       getContainer,
+      cycleTab: trapOptions.cycleTab ?? true,
       hidden: [],
       restoreFocus:
         document.activeElement instanceof HTMLElement ? document.activeElement : null,

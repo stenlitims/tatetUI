@@ -39,8 +39,8 @@ let active: BackGuard | null = null
 
 /**
  * Системне «назад» закриває верхній шар: модалку, drawer, меню, поповер —
- * так само, як Escape, — далі шари застосунку (`layers`), і лише тоді
- * повертає на попередній екран. Кнопка «назад» Android, жест, «назад»
+ * так само, як Escape (або власним `onBack` шару, див. useOverlayLayer), —
+ * далі шари застосунку (`layers`), і лише тоді повертає на попередній екран. Кнопка «назад» Android, жест, «назад»
  * браузера на телефоні.
  *
  * Потребує слухача popstate раніше за роутер — див. `utils/popstateFirst`.
@@ -52,7 +52,7 @@ export function useSystemBack(options: SystemBackOptions = {}): { stop: () => vo
   if (typeof window === 'undefined') return noop
   if ((options.touchOnly ?? true) && !window.matchMedia?.('(pointer: coarse)').matches) return noop
 
-  const { blockingCount } = useOverlayStack()
+  const { blockingCount, topmostBack } = useOverlayStack()
   const layers = options.layers ?? []
   const depth = () => blockingCount.value + layers.filter((layer) => layer.open()).length
 
@@ -62,6 +62,12 @@ export function useSystemBack(options: SystemBackOptions = {}): { stop: () => vo
     depth,
     dismiss: () => {
       if (blockingCount.value > 0) {
+        // Шар зі своїм «назад» (useOverlayLayer({ onBack })) вирішує сам.
+        const back = topmostBack()
+        if (back) {
+          back()
+          return
+        }
         // Той самий шлях, що й клавіша: поле чи список у шарі отримують
         // Escape першими, далі спільний стек закриває верхній шар.
         const target = document.activeElement instanceof HTMLElement ? document.activeElement : document.body
